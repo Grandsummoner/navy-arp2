@@ -38,7 +38,7 @@ public:
     juce::AudioProcessorEditor* createEditor() override;
     bool hasEditor() const override;
 
-    const juce::String PluginProcessor::getName() const override;
+    const juce::String getName() const override;
     bool acceptsMidi() const override;
     bool producesMidi() const override;
     bool isMidiEffect() const override;
@@ -70,7 +70,7 @@ public:
 
     int currentStep = 0;
     std::vector<int> activeHeldNotes;
-    std::vector<int> latchedNotes; // Latch chord memory bank
+    std::vector<int> latchedNotes;
     bool isFirstNoteOfNewChord = true;
 
     juce::AudioProcessorValueTreeState apvts;
@@ -80,7 +80,10 @@ private:
 
     double mSampleRate = 44100.0;
     int mTimeInSamples = 0;
+    
+    // Standard robust integer trackers for active play state
     int mLastNotePlayed = -1;
+    int mNoteOffTime = 0; 
     
     SceneState presets[8];
     bool presetSlotsSaved[8] = { false };

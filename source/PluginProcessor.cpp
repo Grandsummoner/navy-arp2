@@ -20,7 +20,7 @@ bool PluginProcessor::producesMidi() const { return true; }
 
 bool PluginProcessor::isMidiEffect() const
 {
-    return false; // Revert to standard Instrument so Ableton allows multi-track routing
+    return false; // MUST be standard Instrument to allow 2-track routing in Ableton
 }
 
 double PluginProcessor::getTailLengthSeconds() const
@@ -60,6 +60,7 @@ void PluginProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     mSampleRate = sampleRate;
     mTimeInSamples = 0;
     mLastNotePlayed = -1;
+    mNoteOffTime = 0;
     activeHeldNotes.clear();
     latchedNotes.clear();
     isFirstNoteOfNewChord = true;
@@ -81,7 +82,7 @@ bool PluginProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
 }
 
 // ==============================================================================
-// REAL-TIME ARPEGGIATOR MIDI CLOCK ENGINE (WITH LATCH CHORD MEMORY)
+// REAL-TIME ARPEGGIATOR MIDI CLOCK ENGINE (WITH ROBUST DECREMENTING NOTE-OFFS)
 // ==============================================================================
 void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)
 {
@@ -97,7 +98,7 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
     float activeLegato = *apvts.getRawParameterValue (IDs::legato.getParamID());
     bool isLatchActive = *apvts.getRawParameterValue (IDs::latch.getParamID()) > 0.5f;
 
-    // 3. Monitor physical keyboard pressed MIDI keys
+    // 1. Monitor incoming keyboard pressed MIDI keys
     juce::MidiBuffer processedMidi;
     for (const auto metadata : midiMessages)
     {
@@ -145,6 +146,19 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
     // Determine the active chord notes to play from (latch memory vs. active fingers)
     const auto& notesToPlay = isLatchActive ? latchedNotes : activeHeldNotes;
     
+    // 2. Decrement the Note Off Timer if a note is currently playing
+    int numSamples = buffer.getNumSamples();
+    if (mLastNotePlayed != -1)
+    {
+        mNoteOffTime -= numSamples;
+        if (mNoteOffTime <= 0)
+        {
+            processedMidi.addEvent (juce::MidiMessage::noteOff (1, mLastNotePlayed), 0);
+            mLastNotePlayed = -1;
+        }
+    }
+
+    // 3. Increment MIDI Clock and generate new arpeggiated steps
     if (! notesToPlay.empty())
     {
         double bpm = 120.0;
@@ -161,7 +175,6 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
         double samplesPerBeat = mSampleRate * (60.0 / bpm);
         double stepLengthInSamples = samplesPerBeat * 0.25;
 
-        int numSamples = buffer.getNumSamples();
         mTimeInSamples += numSamples;
 
         if (mTimeInSamples >= stepLengthInSamples)
@@ -175,6 +188,7 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
 
             if (shouldPlay && ! isRest)
             {
+                // If another note is currently playing, turn it off immediately
                 if (mLastNotePlayed != -1)
                 {
                     processedMidi.addEvent (juce::MidiMessage::noteOff (1, mLastNotePlayed), 0);
@@ -186,23 +200,21 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
                 
                 processedMidi.addEvent (juce::MidiMessage::noteOn (1, targetNote, static_cast<juce::uint8>(100)), 0);
                 mLastNotePlayed = targetNote;
+                
+                // Calculate the Note Off duration (samples until this note is turned off)
+                mNoteOffTime = static_cast<int>(stepLengthInSamples * activeLegato);
             }
         }
     }
     else
     {
-        if (mLastNotePlayed != -1)
-        {
-            processedMidi.addEvent (juce::MidiMessage::noteOff (1, mLastNotePlayed), 0);
-            mLastNotePlayed = -1;
-        }
         currentStep = 0;
     }
 
     midiMessages.swapWith(processedMidi);
-    juce::ignoreUnused (activeLegato);
 }
 
+// ==============================================================================
 bool PluginProcessor::hasEditor() const { return true; }
 juce::AudioProcessorEditor* PluginProcessor::createEditor() { return new PluginEditor (*this); }
 
