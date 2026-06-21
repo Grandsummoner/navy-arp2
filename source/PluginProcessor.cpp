@@ -109,7 +109,11 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
         if (auto* playhead = getPlayHead())
         {
             if (auto pos = playhead->getPosition())
-                bpm = pos->getBpm().value_or(120.0);
+            {
+                auto bpmOpt = pos->getBpm();
+                if (bpmOpt.hasValue())
+                    bpm = *bpmOpt;
+            }
         }
 
         double samplesPerBeat = mSampleRate * (60.0 / bpm);
@@ -141,7 +145,7 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
                 int pitchIndex = currentStep % activeHeldNotes.size();
                 int targetNote = activeHeldNotes[pitchIndex];
                 
-                processedMidi.addEvent (juce::MidiMessage::noteOn (1, targetNote, (uint8)100), 0);
+                processedMidi.addEvent (juce::MidiMessage::noteOn (1, targetNote, static_cast<juce::uint8>(100)), 0);
                 mLastNotePlayed = targetNote;
             }
         }

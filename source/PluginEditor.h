@@ -97,7 +97,7 @@ private:
     juce::TextButton sceneBButton;
     juce::TextButton presetButtons[8];
 
-    uint32 presetPressStartTime[8] = { 0 };
+    juce::uint32 presetPressStartTime[8] = { 0 };
 
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> fader1Attachment;
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> fader2Attachment;
