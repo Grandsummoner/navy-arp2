@@ -1,9 +1,6 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 
-// ==============================================================================
-// Declare stereo inputs and outputs to satisfy Ableton's Windows VST3 scanner
-// ==============================================================================
 PluginProcessor::PluginProcessor()
     : AudioProcessor (BusesProperties()
                         .withInput  ("Input",  juce::AudioChannelSet::stereo(), true)
@@ -23,7 +20,7 @@ bool PluginProcessor::producesMidi() const { return true; }
 
 bool PluginProcessor::isMidiEffect() const
 {
-    return true; 
+    return false; // Revert to standard Instrument so Ableton allows multi-track routing
 }
 
 double PluginProcessor::getTailLengthSeconds() const
@@ -87,7 +84,6 @@ bool PluginProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
 // ==============================================================================
 void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)
 {
-    // Do NOT clear the audio buffer. Let audio pass through completely untouched
     juce::ignoreUnused (buffer);
 
     // Read parameters
@@ -275,48 +271,3 @@ void PluginProcessor::captureSceneB()
         sceneB.faders[i] = *apvts.getRawParameterValue (juce::String ("fader" + juce::String (i + 1)));
 
     sceneB.rhythmMorph = *apvts.getRawParameterValue (IDs::rhythmMorph.getParamID());
-    sceneB.rest = *apvts.getRawParameterValue (IDs::rest.getParamID());
-    sceneB.legato = *apvts.getRawParameterValue (IDs::legato.getParamID());
-    sceneB.entropy = *apvts.getRawParameterValue (IDs::entropy.getParamID());
-    sceneB.harmony = *apvts.getRawParameterValue (IDs::harmony.getParamID());
-    sceneB.chaos = *apvts.getRawParameterValue (IDs::chaos.getParamID());
-    hasSceneB = true;
-}
-
-void PluginProcessor::diceMelody()
-{
-    auto* random = &juce::Random::getSystemRandom();
-    for (int i = 0; i < 8; ++i)
-    {
-        float randomVal = random->nextFloat();
-        apvts.getParameter (juce::String ("fader" + juce::String (i + 1)))->setValueNotifyingHost (randomVal);
-    }
-}
-
-void PluginProcessor::diceRhythm()
-{
-    auto* random = &juce::Random::getSystemRandom();
-    apvts.getParameter (IDs::rhythmMorph.getParamID())->setValueNotifyingHost (random->nextFloat());
-    apvts.getParameter (IDs::rest.getParamID())->setValueNotifyingHost (random->nextFloat() * 0.7f);
-    apvts.getParameter (IDs::legato.getParamID())->setValueNotifyingHost (0.1f + random->nextFloat() * 0.8f);
-}
-
-juce::AudioProcessorValueTreeState::ParameterLayout PluginProcessor::createParameterLayout()
-{
-    std::vector<std::unique_ptr<juce::RangedAudioParameter>> params;
-    for (int i = 1; i <= 8; ++i)
-        params.push_back (std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("fader" + juce::String (i), 1), "Fader " + juce::String (i), 0.0f, 1.0f, 0.5f));
-
-    params.push_back (std::make_unique<juce::AudioParameterFloat> (IDs::rhythmMorph, "Rhythm Morph", 0.0f, 1.0f, 0.0f));
-    params.push_back (std::make_unique<juce::AudioParameterFloat> (IDs::rest, "Rest", 0.0f, 1.0f, 0.1f));
-    params.push_back (std::make_unique<juce::AudioParameterFloat> (IDs::legato, "Legato", 0.0f, 1.0f, 0.5f));
-    params.push_back (std::make_unique<juce::AudioParameterFloat> (IDs::entropy, "Entropy", 0.0f, 1.0f, 0.0f));
-    params.push_back (std::make_unique<juce::AudioParameterFloat> (IDs::harmony, "Harmony", 0.0f, 1.0f, 0.0f));
-    params.push_back (std::make_unique<juce::AudioParameterFloat> (IDs::chaos, "Chaos", 0.0f, 1.0f, 0.0f));
-    params.push_back (std::make_unique<juce::AudioParameterFloat> (IDs::morph, "Morph Crossfader", 0.0f, 1.0f, 0.0f));
-    params.push_back (std::make_unique<juce::AudioParameterBool> (IDs::latch, "Latch Mode", false));
-
-    return { params.begin(), params.end() };
-}
-
-juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter() { return new PluginProcessor(); }

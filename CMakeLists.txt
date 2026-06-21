@@ -31,8 +31,8 @@ juce_add_plugin("${PROJECT_NAME}"
     PLUGIN_CODE P001
     FORMATS "${FORMATS}"
     PRODUCT_NAME "${PRODUCT_NAME}"
-    IS_SYNTH FALSE
-    IS_MIDI_EFFECT TRUE
+    IS_SYNTH TRUE
+    IS_MIDI_EFFECT FALSE
     NEEDS_MIDI_INPUT TRUE
     NEEDS_MIDI_OUTPUT TRUE
 )
@@ -41,7 +41,7 @@ add_library(SharedCode INTERFACE)
 
 clap_juce_extensions_plugin(TARGET "${PROJECT_NAME}"
     CLAP_ID "${BUNDLE_ID}"
-    CLAP_FEATURES midi-effect)
+    CLAP_FEATURES instrument synthesiser)
 
 include(SharedCodeDefaults)
 
