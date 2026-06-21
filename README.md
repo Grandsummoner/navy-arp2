@@ -1,57 +1,62 @@
-![PAMPLEJUCE](assets/images/pamplejuce.png)
-[![](https://github.com/sudara/pamplejuce/actions/workflows/build_and_test.yml/badge.svg)](https://github.com/sudara/pamplejuce/actions)
+# navy-arp
 
-Pamplejuce is a ~~template~~ lifestyle for creating and building JUCE plugins in 2026.
+`navy-arp` is a modern, performative generative MIDI arpeggiator and step sequencer built with C++ and the JUCE 8 framework. 
 
-Out-of-the-box, it:
+Unlike traditional arpeggiators that rely on tedious grid drawing or tracker-style tables, `navy-arp` is designed as a hands-on, modular-inspired performance utility. It combines scale-quantized note probability with a real-time parameter-morphing crossfader, making it highly expressive and optimized for immediate MIDI controller mapping.
 
-1. Runs C++23
-2. Uses JUCE 8.x as a git submodule (tracking develop).
-3. Uses CPM for dependency management.
-3. Relies on CMake 3.25 and higher for cross-platform building.
-4. Has [Catch2](https://github.com/catchorg/Catch2) v3.7.1 for the test framework and runner.
-5. Includes a `Tests` target and a `Benchmarks` target with examples to get started quickly.
-6. Has [Melatonin Inspector](https://github.com/sudara/melatonin_inspector) installed as a JUCE module to help relieve headaches when building plugin UI.
+---
 
-It also has integration with GitHub Actions, specifically:
+## Key Features
 
-1. Building and testing cross-platform (linux, macOS, Windows) binaries
-2. Running tests and benchmarks in CI
-3. Running [pluginval](http://github.com/tracktion/pluginval) 1.x against the binaries for plugin validation
-4. Config for [installing Intel IPP](https://www.intel.com/content/www/us/en/developer/tools/oneapi/ipp.html)
-5. [Code signing and notarization on macOS](https://melatonin.dev/blog/how-to-code-sign-and-notarize-macos-audio-plugins-in-ci/)
-6. [Windows code signing via Azure Trusted Signing](https://melatonin.dev/blog/code-signing-on-windows-with-azure-trusted-signing/)
+### 1. The Core Brain (Scale-Degree Probability)
+*   **8 Scale-Degree Faders:** Instead of chromatic notes, the faders represent musical scale degrees (1st through 8th notes of your chosen key/scale). This ensures that every fader is always musically active with zero dead space.
+*   **Dynamic Note Reader:** Visual fader labels automatically update in real-time to show the exact musical notes of your selected key (e.g., C, Eb, G).
+*   **Ghost Glow Overlay:** When notes are played on your MIDI keyboard, a smooth visual glow fades in behind the active fader tracks, indicating which notes are currently being held.
 
-It also contains:
+### 2. Symmetrical Sidebar Modules
+*   **Rhythm Module (Left):**
+    *   **Rhythm Morph:** A single knob that morphs your groove from a straight, steady 1/16th pulse to a highly syncopated, stochastic shifting clock (including triplets and dotted notes).
+    *   **Rest & Legato:** Fine-tune step mute probability and note gate lengths on the fly.
+    *   **Latch Mode:** Lock your chord memory so the sequencer loops endlessly, allowing for fully hands-free performance.
+*   **Harmony & Chaos Module (Right):**
+    *   **Entropy:** Introduces a gradual "tape wear" loop decay that slowly mutates your sequence over time.
+    *   **Harmony:** A stochastic polyphony control that dynamically adds random, scale-correct 2-to-3-note chords and pad layers on top of your melody.
+    *   **Chaos:** Controls pitch drift, randomly shifting active notes up or down an octave.
+    *   **DICE MELODY & DICE RHYTHM:** Dedicated momentary randomizer buttons to instantly generate fresh patterns within your probability limits.
 
-1. A `.gitignore` for all platforms.
-2. A `.clang-format` file for keeping code tidy.
-3. A `VERSION` file that will propagate through JUCE and your app.
-4. A ton of useful comments and options around the CMake config.
+### 3. High-Quality OLED display (Center)
+*   Designed to mimic premium boutique hardware displays.
+*   **Active Step Playhead:** Vertical bars representing the active steps pulse instantly on note-triggers with sharp, retro neon-bloom edges, decaying cleanly back to absolute black (`#000000`).
+*   **Interactive Keyboard Brackets:** Two draggable bracket handles display the Lowest Note and Highest Note boundaries of your active pitch zone.
 
-## How does this all work at a high level?
+### 4. Scene Morphing (The Octatrack Crossfader)
+*   A master horizontal crossfader that smoothly interpolates every slider, knob, and probability state between a custom **Scene A** (cyan glow) and **Scene B** (amber glow).
+*   Moving the crossfader glides and rotates all on-screen sliders and knobs in real-time, allowing for dramatic, sweeping transitions with zero abrupt parameter jumps.
 
-Check out the [official Pamplejuce documentation](https://melatonin.dev/manuals/pamplejuce/how-does-this-all-work/).
+### 5. OLED Preset Slots
+*   **8 Tactile Recall Slots:** Clicking a numbered block instantly recalls that preset.
+*   **Hold-to-Save:** Holding down a slot button for **2.0 seconds** writes your current settings to that memory slot, triggering a sharp neon-blue outer-edge glow indicating the slot contains saved data.
 
-[![Arc - 2024-10-01 51@2x](https://github.com/user-attachments/assets/01d19d2d-fbac-481f-8cec-e9325b2abe57)](https://melatonin.dev/manuals/pamplejuce/how-does-this-all-work/)
+---
 
-## Setting up for YOUR project
+## How to Compile (Cloud CI/CD Pipeline)
 
-This is a template repo!
+`navy-arp` is built on top of the modern **Pamplejuce** CMake template. You do not need to install local compilers or IDEs to build it.
 
-That means you can click "[Use this template](https://github.com/sudara/pamplejuce/generate)" here or at the top of the page to get your own copy (not fork) of the repo. Then you can make it private or keep it public, up to you.
+1.  Commit and Push any code changes to your repository.
+2.  GitHub Actions will automatically spin up virtual Windows environments in the cloud.
+3.  Once the build is complete (approx. 2 minutes), go to your **Actions** tab on GitHub.
+4.  Scroll to the **Artifacts** section at the bottom of the completed build to download your ready-to-run **VST3 installer (.exe)**.
 
-Then check out the [documentation](https://melatonin.dev/manuals/pamplejuce/setting-your-project-up/) so you know what to tweak.
+---
 
-**Using an AI coding agent?** The included `CLAUDE.md` / `AGENTS.md` has a first-time setup wizard — just ask your agent to set up the project and it will walk you through naming, CI configuration, and code signing.
+## DAW Setup & MIDI Routing (Ableton Live)
 
-> [!NOTE]
-> Tests will immediately run and fail (go red) until you [set up code signing](https://melatonin.dev/manuals/pamplejuce/getting-started/code-signing/).
+`navy-arp` is compiled as a VST3 Instrument to allow stable multi-track routing in Ableton Live on Windows:
 
-## Having Issues?
-
-Thanks to everyone who has contributed to the repository. 
-
-This repository covers a _lot_ of ground. JUCE itself has a lot of surface area. It's a group effort to maintain the garden and keep things nice!
-
-If something isn't just working out of the box — *it's probably not just you* — others are running into the problem, too, I promise. Check out [the official docs](https://melatonin.dev/manuals/pamplejuce), then please do [open an issue](https://github.com/sudara/pamplejuce/issues/new)!
+1.  Create a MIDI Track (**`2-MIDI`**) and load **Pamplejuce Demo** (navy-arp) onto it.
+2.  Create your software synthesizer track (**`1-Analog Piano`** or any other virtual instrument).
+3.  On your synthesizer track, set the **MIDI From** dropdown list to **`2-MIDI`**.
+4.  Directly below that, change the second dropdown list from `Post FX` to **`Pamplejuce Demo`**.
+5.  Set the **Monitor** on your synthesizer track to **`In`** (orange).
+6.  Select your `2-MIDI` track, hold down a chord on your keyboard, and enjoy your generative arpeggiations!
