@@ -63,6 +63,8 @@ public:
     void captureSceneA();
     void captureSceneB();
 
+    void triggerArpStep (float stepProbability, float activeRest, float activeLegato, const std::vector<int>& notesToPlay, juce::MidiBuffer& processedMidi, double bpm);
+
     SceneState sceneA;
     SceneState sceneB;
     bool hasSceneA = false;
@@ -80,10 +82,10 @@ private:
 
     double mSampleRate = 44100.0;
     
-    // Beat-grid playhead tracking variables
     int mLastStep = -1;
     int mLastNotePlayed = -1;
     int mNoteOffTime = 0; 
+    int mTimeInSamples = 0;
     
     SceneState presets[8];
     bool presetSlotsSaved[8] = { false };

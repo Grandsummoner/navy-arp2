@@ -31,6 +31,7 @@ void PluginProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     mLastStep = -1;
     mLastNotePlayed = -1;
     mNoteOffTime = 0;
+    mTimeInSamples = 0;
     activeHeldNotes.clear();
     latchedNotes.clear();
     isFirstNoteOfNewChord = true;
@@ -49,11 +50,10 @@ bool PluginProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
 }
 
 // ==============================================================================
-// REAL-TIME PPQ-SYNCHRONIZED MIDI SEQUENCER (BLUEARP ARCHITECTURE)
+// REAL-TIME DUAL-CLOCK SEQUENCER ENGINE (BLUEARP & BLEASS STANDARDS)
 // ==============================================================================
 void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)
 {
-    // Clear audio buffer outputs to prevent NaNs/Subnormals
     buffer.clear();
 
     // 1. Query DAW Transport State
@@ -77,19 +77,7 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
         }
     }
 
-    // 2. BLUEARP STANDARD RULE: If DAW is stopped, pass all MIDI notes straight through untouched
-    if (! isPlaying)
-    {
-        // Standalone Latch check: If latch is on, let it run; otherwise, bypass entirely
-        bool isLatchActive = *apvts.getRawParameterValue (IDs::latch.getParamID()) > 0.5f;
-        if (! isLatchActive)
-        {
-            currentStep = 0;
-            return; 
-        }
-    }
-
-    // 3. Intercept & Parse Incoming keyboard MIDI Notes
+    // 2. Read Parameters
     float activeFaderProb[8];
     for (int i = 0; i < 8; ++i)
         activeFaderProb[i] = *apvts.getRawParameterValue (juce::String ("fader" + juce::String (i + 1)));
@@ -98,6 +86,7 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
     float activeLegato = *apvts.getRawParameterValue (IDs::legato.getParamID());
     bool isLatchActive = *apvts.getRawParameterValue (IDs::latch.getParamID()) > 0.5f;
 
+    // 3. Monitor keyboard physical Note-On/Note-Off inputs
     juce::MidiBuffer processedMidi;
     for (const auto metadata : midiMessages)
     {
@@ -137,11 +126,21 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
             }
         }
     }
+
+    // INDUSTRY BYPASS RULE: If DAW is stopped and LATCH is off, pass notes straight through untouched
+    if (! isPlaying && ! isLatchActive)
+    {
+        currentStep = 0;
+        mLastStep = -1;
+        return; // Exits early, leaving midiMessages untouched (clean bypass)
+    }
+
+    // If DAW is running or Latch is active, we take control of MIDI
     midiMessages.clear();
 
     const auto& notesToPlay = isLatchActive ? latchedNotes : activeHeldNotes;
     
-    // 4. Decrement active note-off timers
+    // Decrement active note-off timers
     int numSamples = buffer.getNumSamples();
     if (mLastNotePlayed != -1)
     {
@@ -153,39 +152,36 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
         }
     }
 
-    // 5. PPQ-Grid Step Trigger Logic
+    // 4. Dual-Clock Trigger Logic
     if (! notesToPlay.empty())
     {
-        // 1/16th note step length in PPQ is exactly 0.25 (1 beat = 1.0 PPQ)
-        double stepLengthPPQ = 0.25;
-        int stepIndex = static_cast<int> (std::floor (ppqPosition / stepLengthPPQ)) % 8;
-
-        // Only trigger when the playhead actually crosses a step boundary
-        if (stepIndex != mLastStep)
+        if (isPlaying)
         {
-            mLastStep = stepIndex;
-            currentStep = stepIndex;
+            // Clock 1: PPQ-based DAW Grid Sync (Locks tightly to DAW grid, loops, and timeline)
+            double stepLengthPPQ = 0.25;
+            int stepIndex = static_cast<int> (std::floor (ppqPosition / stepLengthPPQ)) % 8;
 
-            float stepProbability = activeFaderProb[currentStep];
-            bool shouldPlay = (juce::Random::getSystemRandom().nextFloat() <= stepProbability);
-            bool isRest = (juce::Random::getSystemRandom().nextFloat() <= activeRest);
-
-            if (shouldPlay && ! isRest)
+            if (stepIndex != mLastStep)
             {
-                if (mLastNotePlayed != -1)
-                {
-                    processedMidi.addEvent (juce::MidiMessage::noteOff (1, mLastNotePlayed), 0);
-                    mLastNotePlayed = -1;
-                }
+                mLastStep = stepIndex;
+                currentStep = stepIndex;
+                triggerArpStep (activeFaderProb[currentStep], activeRest, activeLegato, notesToPlay, processedMidi, bpm);
+            }
+        }
+        else
+        {
+            // Clock 2: Standalone Free-Running Sample-Clock (Runs standalone when DAW is stopped)
+            double samplesPerBeat = mSampleRate * (60.0 / bpm);
+            double stepLengthInSamples = samplesPerBeat * 0.25;
 
-                int pitchIndex = currentStep % notesToPlay.size();
-                int targetNote = notesToPlay[pitchIndex];
-                
-                processedMidi.addEvent (juce::MidiMessage::noteOn (1, targetNote, static_cast<juce::uint8>(100)), 0);
-                mLastNotePlayed = targetNote;
-                
-                double samplesPerBeat = mSampleRate * (60.0 / bpm);
-                mNoteOffTime = static_cast<int>(samplesPerBeat * stepLengthPPQ * activeLegato);
+            mTimeInSamples += numSamples;
+
+            if (mTimeInSamples >= stepLengthInSamples)
+            {
+                mTimeInSamples = 0;
+                currentStep = (currentStep + 1) % 8;
+                mLastStep = currentStep;
+                triggerArpStep (activeFaderProb[currentStep], activeRest, activeLegato, notesToPlay, processedMidi, bpm);
             }
         }
     }
@@ -195,7 +191,31 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
         currentStep = 0;
     }
 
-    midiMessages.swapWith(processedMidi);
+    midiMessages.swapWith (processedMidi);
+}
+
+void PluginProcessor::triggerArpStep (float stepProbability, float activeRest, float activeLegato, const std::vector<int>& notesToPlay, juce::MidiBuffer& processedMidi, double bpm)
+{
+    bool shouldPlay = (juce::Random::getSystemRandom().nextFloat() <= stepProbability);
+    bool isRest = (juce::Random::getSystemRandom().nextFloat() <= activeRest);
+
+    if (shouldPlay && ! isRest)
+    {
+        if (mLastNotePlayed != -1)
+        {
+            processedMidi.addEvent (juce::MidiMessage::noteOff (1, mLastNotePlayed), 0);
+            mLastNotePlayed = -1;
+        }
+
+        int pitchIndex = currentStep % notesToPlay.size();
+        int targetNote = notesToPlay[pitchIndex];
+        
+        processedMidi.addEvent (juce::MidiMessage::noteOn (1, targetNote, static_cast<juce::uint8>(100)), 0);
+        mLastNotePlayed = targetNote;
+        
+        double samplesPerBeat = mSampleRate * (60.0 / bpm);
+        mNoteOffTime = static_cast<int>(samplesPerBeat * 0.25 * activeLegato);
+    }
 }
 
 // ==============================================================================
