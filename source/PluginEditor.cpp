@@ -113,13 +113,13 @@ PluginEditor::PluginEditor (PluginProcessor& p)
             }
             else if (presetPressStartTime[i] != 0)
             {
-                uint32 elapsed = juce::Time::getMillisecondCounter() - presetPressStartTime[i];
+                uint32_t elapsed = juce::Time::getMillisecondCounter() - presetPressStartTime[i];
                 presetPressStartTime[i] = 0;
 
                 if (elapsed >= 2000) // 2.0s Hold -> Save
                 {
                     processor.savePreset(i);
-                    presetButtons[i].setColour (juce::TextButton::buttonColourId, juce::Colour (0xFF003344));
+                    presetButtons[i].setColour (juce::TextButton::buttonColourId, juce::Colour (0xFF003344)); // Outer edge glow enabled
                 }
                 else // Tap -> Recall
                 {
@@ -151,110 +151,24 @@ PluginEditor::PluginEditor (PluginProcessor& p)
     latchAttachment       = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (processor.apvts, IDs::latch.getParamID(), latchButton);
 
     setSize (750, 480);
-    startTimerHz (30);
+    startTimerHz (30); // Refreshes visual elements like faders gliding in morph mode
 }
 
 PluginEditor::~PluginEditor() { stopTimer(); }
 
 void PluginEditor::timerCallback()
 {
-    float morphValue = morphCrossfader.getValue();
-    
-    // Smoothly glide on-screen controls in real-time when the morph crossfader is moved
-    if (processor.hasSceneA && processor.hasSceneB && morphValue > 0.01f)
+    // If the morph crossfader is moved and we are NOT in edit mode,
+    // smoothly glide the on-screen sliders and knobs in real-time
+    if (! processor.isEditingSceneA && ! processor.isEditingSceneB)
     {
+        float morphValue = morphCrossfader.getValue();
+        
         juce::Slider* faders[] = { &fader1, &fader2, &fader3, &fader4, &fader5, &fader6, &fader7, &fader8 };
         for (int i = 0; i < 8; ++i)
         {
             float targetValue = (processor.sceneA.faders[i] * (1.0f - morphValue)) + (processor.sceneB.faders[i] * morphValue);
-            faders[i]->setValue (targetValue, juce::sendNotificationSync); // Broadcast value change to parameters
+            faders[i]->setValue (targetValue, juce::dontSendNotification);
         }
 
-        rhythmMorphKnob.setValue ((processor.sceneA.rhythmMorph * (1.0f - morphValue)) + (processor.sceneB.rhythmMorph * morphValue), juce::sendNotificationSync);
-        restKnob.setValue ((processor.sceneA.rest * (1.0f - morphValue)) + (processor.sceneB.rest * morphValue), juce::sendNotificationSync);
-        legatoKnob.setValue ((processor.sceneA.legato * (1.0f - morphValue)) + (processor.sceneB.legato * morphValue), juce::sendNotificationSync);
-        entropyKnob.setValue ((processor.sceneA.entropy * (1.0f - morphValue)) + (processor.sceneB.entropy * morphValue), juce::sendNotificationSync);
-        harmonyKnob.setValue ((processor.sceneA.harmony * (1.0f - morphValue)) + (processor.sceneB.harmony * morphValue), juce::sendNotificationSync);
-        chaosKnob.setValue ((processor.sceneA.chaos * (1.0f - morphValue)) + (processor.sceneB.chaos * morphValue), juce::sendNotificationSync);
-    }
-
-    // Keep Preset glow updated
-    for (int i = 0; i < 8; ++i)
-    {
-        if (processor.isPresetSaved (i))
-            presetButtons[i].setColour (juce::TextButton::buttonColourId, juce::Colour (0xFF003344));
-    }
-}
-
-void PluginEditor::paint (juce::Graphics& g)
-{
-    g.fillAll (juce::Colour (0xFF141416));
-    g.setColour (juce::Colour (0xFF232326));
-    g.drawRect (getLocalBounds().toFloat(), 3.0f);
-
-    g.setFont (juce::FontOptions (12.0f).withStyle ("bold"));
-    g.setColour (juce::Colour (0xFF55555c));
-    g.drawText ("RHYTHM", 15, 12, 100, 20, juce::Justification::left);
-    g.drawText ("GENERATOR", getWidth() - 115, 12, 100, 20, juce::Justification::right);
-}
-
-void PluginEditor::resized()
-{
-    auto area = getLocalBounds().reduced (15);
-
-    // 1. Bottom Section: 8 Scale-Degree Faders
-    auto bottomArea = area.removeFromBottom (115);
-    auto faderLabelArea = bottomArea.removeFromBottom (20);
-    int faderWidth = bottomArea.getWidth() / 8;
-    
-    juce::Slider* faders[] = { &fader1, &fader2, &fader3, &fader4, &fader5, &fader6, &fader7, &fader8 };
-    juce::Label* faderLabels[] = { &faderLabel1, &faderLabel2, &faderLabel3, &faderLabel4, &faderLabel5, &faderLabel6, &faderLabel7, &faderLabel8 };
-    
-    for (int i = 0; i < 8; ++i)
-    {
-        auto column = bottomArea.removeFromLeft (faderWidth);
-        faders[i]->setBounds (column.reduced (6, 0));
-        
-        auto labelColumn = faderLabelArea.removeFromLeft (faderWidth);
-        faderLabels[i]->setBounds (labelColumn);
-    }
-
-    area.removeFromBottom (10);
-
-    // 2. Scene Morph Crossfader
-    auto morphArea = area.removeFromBottom (35);
-    sceneAButton.setBounds (morphArea.removeFromLeft (35).reduced (0, 3));
-    sceneBButton.setBounds (morphArea.removeFromRight (35).reduced (0, 3));
-    morphCrossfader.setBounds (morphArea.reduced (10, 5));
-
-    area.removeFromBottom (10);
-
-    // 3. Sidebars
-    auto leftSidebar = area.removeFromLeft (95);
-    auto rightSidebar = area.removeFromRight (95);
-    
-    int leftRowHeight = leftSidebar.getHeight() / 4;
-    rhythmMorphKnob.setBounds (leftSidebar.removeFromTop (leftRowHeight).reduced (2));
-    restKnob.setBounds (leftSidebar.removeFromTop (leftRowHeight).reduced (2));
-    legatoKnob.setBounds (leftSidebar.removeFromTop (leftRowHeight).reduced (2));
-    latchButton.setBounds (leftSidebar.reduced (10, 8));
-
-    int rightRowHeight = rightSidebar.getHeight() / 4;
-    entropyKnob.setBounds (rightSidebar.removeFromTop (rightRowHeight).reduced (2));
-    harmonyKnob.setBounds (rightSidebar.removeFromTop (rightRowHeight).reduced (2));
-    chaosKnob.setBounds (rightSidebar.removeFromTop (rightRowHeight).reduced (2));
-    
-    auto diceArea = rightSidebar;
-    diceMelodyButton.setBounds (diceArea.removeFromLeft (diceArea.getWidth() / 2).reduced (2, 8));
-    diceRhythmButton.setBounds (diceArea.reduced (2, 8));
-
-    // 4. Center Section: OLED Display & 8 Preset Buttons
-    auto presetArea = area.removeFromBottom (32);
-    oledDisplay.setBounds (area.reduced (5, 5));
-
-    int presetWidth = presetArea.getWidth() / 8;
-    for (int i = 0; i < 8; ++i)
-    {
-        presetButtons[i].setBounds (presetArea.removeFromLeft (presetWidth).reduced (4, 3));
-    }
-}
+        rhythmMorphKnob.setValue ((processor.sceneA.rhythmMorph * (1.0f - morphValue)) + (processor.sceneB.r
