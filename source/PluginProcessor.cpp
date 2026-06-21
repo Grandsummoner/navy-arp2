@@ -87,12 +87,12 @@ bool PluginProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
         juce::ignoreUnused (layouts);
         return true;
     #else
-        if (layouts.getMainOutput() != juce::AudioChannelSet::mono()
-         && layouts.getMainOutput() != juce::AudioChannelSet::stereo())
+        if (layouts.getMainOutputChannelSet() != juce::AudioChannelSet::mono()
+         && layouts.getMainOutputChannelSet() != juce::AudioChannelSet::stereo())
             return false;
 
         #if ! JucePlugin_IsSynth
-            if (layouts.getMainOutput() != layouts.getMainInput())
+            if (layouts.getMainOutputChannelSet() != layouts.getMainInputChannelSet())
                 return false;
         #endif
 
