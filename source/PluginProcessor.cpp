@@ -3,12 +3,8 @@
 
 PluginProcessor::PluginProcessor()
     : AudioProcessor (BusesProperties()
-                      #if ! JucePlugin_IsMidiEffect
-                       #if ! JucePlugin_IsSynth
                         .withInput  ("Input",  juce::AudioChannelSet::stereo(), true)
-                       #endif
                         .withOutput ("Output", juce::AudioChannelSet::stereo(), true)
-                      #endif
                       ),
       apvts (*this, nullptr, "PARAMETERS", createParameterLayout())
 {
@@ -22,7 +18,7 @@ PluginProcessor::~PluginProcessor() {}
 const juce::String PluginProcessor::getName() const { return JucePlugin_Name; }
 bool PluginProcessor::acceptsMidi() const { return true; }
 bool PluginProcessor::producesMidi() const { return true; }
-bool PluginProcessor::isMidiEffect() const { return false; }
+bool PluginProcessor::isMidiEffect() const { return false; } // VST3 Instrument format for multi-track Ableton routing
 double PluginProcessor::getTailLengthSeconds() const { return 0.0; }
 int PluginProcessor::getNumPrograms() { return 1; }
 int PluginProcessor::getCurrentProgram() { return 0; }
@@ -275,7 +271,7 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
             bool isRatchetStep = euclidRatchets[currentStep] == 1;
 
             bool shouldPlay = (juce::Random::getSystemRandom().nextFloat() <= faderProb);
-            bool isRest = (juce::Random::getSystemRandom().nextFloat() <= modRest);
+            bool isRest = (juce::Random::getSystemRandom().nextFloat() <= activeRest);
 
             if (shouldPlay && ! isRest)
             {

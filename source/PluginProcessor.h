@@ -54,15 +54,22 @@ public:
     void getStateInformation (juce::MemoryBlock& destData) override;
     void setStateInformation (const void* data, int sizeInBytes) override;
 
+    // Presets & Scenes
     void savePreset (int slotIndex);
     void loadPreset (int slotIndex);
     bool isPresetSaved (int slotIndex) const { return presetSlotsSaved[slotIndex]; }
 
-    void diceMelody();
-    void diceRhythm();
-
     void captureSceneA();
     void captureSceneB();
+    void clearSceneA() { hasSceneA = false; }
+    void clearSceneB() { hasSceneB = false; }
+
+    // Generative triggers (Public declarations)
+    void diceMelody();
+    void diceRhythm();
+    void resetAccumulator();
+    void resetRhythm();
+    void triggerDiatonicChordPad (int padIndex);
 
     void triggerArpStep (float stepProbability, float activeRest, float activeLegato, const std::vector<int>& notesToPlay, juce::MidiBuffer& processedMidi, double bpm);
 
@@ -82,12 +89,14 @@ public:
 
 private:
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
+    void updateLfoModulations (int numSamples, double bpm);
+    std::vector<int> generateEuclideanPattern (int steps, int pulses);
+    void scheduleNoteOff (juce::MidiBuffer& midi, int pitch, int delaySamples);
 
     double mSampleRate = 44100.0;
     int mTimeInSamples = 0;
     double mSongPositionPPQ = 0.0;
     
-    // Core parameters for arpeggiation tracking (Crucial!)
     int mLastStep = -1;
     int mLastNotePlayed = -1;
     int mNoteOffTime = 0; 
