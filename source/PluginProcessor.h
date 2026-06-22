@@ -2,8 +2,6 @@
 
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <vector>
-#include <array>
-#include <cmath>
 
 namespace IDs 
 {
@@ -56,29 +54,23 @@ public:
     void getStateInformation (juce::MemoryBlock& destData) override;
     void setStateInformation (const void* data, int sizeInBytes) override;
 
-    // Presets & Scenes
     void savePreset (int slotIndex);
     void loadPreset (int slotIndex);
     bool isPresetSaved (int slotIndex) const { return presetSlotsSaved[slotIndex]; }
 
-    void captureSceneA();
-    void captureSceneB();
-    void clearSceneA() { hasSceneA = false; }
-    void clearSceneB() { hasSceneB = false; }
-
-    // Generative Triggers
     void diceMelody();
     void diceRhythm();
-    void resetAccumulator();
-    void resetRhythm();
-    void triggerDiatonicChordPad (int padIndex);
+
+    void captureSceneA();
+    void captureSceneB();
+
+    void triggerArpStep (float stepProbability, float activeRest, float activeLegato, const std::vector<int>& notesToPlay, juce::MidiBuffer& processedMidi, double bpm);
 
     SceneState sceneA;
     SceneState sceneB;
     bool hasSceneA = false;
     bool hasSceneB = false;
 
-    // Real-time tracking for UI
     int currentStep = 0;
     int currentBarInCycle = 1;
     juce::String activeChordExtensionText = "TRIAD";
@@ -90,25 +82,23 @@ public:
 
 private:
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
-    void updateLfoModulations (int numSamples, double bpm);
-    std::vector<int> generateEuclideanPattern (int steps, int pulses);
-    void scheduleNoteOff (juce::MidiBuffer& midi, int pitch, int delaySamples);
 
     double mSampleRate = 44100.0;
-    int mLastStep = -1;
     int mTimeInSamples = 0;
     double mSongPositionPPQ = 0.0;
     
-    // Decrementing note-off event queue (Pitch, RemainingSamples)
+    // Core parameters for arpeggiation tracking (Crucial!)
+    int mLastStep = -1;
+    int mLastNotePlayed = -1;
+    int mNoteOffTime = 0; 
+    
     std::vector<std::pair<int, int>> scheduledNoteOffs;
 
-    // LFO internal phases
     double lfoPhaseEntropy = 0.0;
     double lfoPhaseChaos = 0.0;
     double lfoPhaseMorph = 0.0;
     double lfoPhaseLegato = 0.0;
 
-    // Modulated effective parameter values
     float modRest = 0.1f;
     float modLegato = 0.5f;
     float modEntropy = 0.0f;
@@ -116,7 +106,6 @@ private:
     float modChaos = 0.0f;
     float accumulatedPitchOffset = 0.0f;
 
-    // Smart Diatonic Chord voice leading cache
     std::vector<int> lastChordPitches;
 
     SceneState presets[8];

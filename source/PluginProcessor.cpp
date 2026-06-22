@@ -3,8 +3,12 @@
 
 PluginProcessor::PluginProcessor()
     : AudioProcessor (BusesProperties()
+                      #if ! JucePlugin_IsMidiEffect
+                       #if ! JucePlugin_IsSynth
                         .withInput  ("Input",  juce::AudioChannelSet::stereo(), true)
+                       #endif
                         .withOutput ("Output", juce::AudioChannelSet::stereo(), true)
+                      #endif
                       ),
       apvts (*this, nullptr, "PARAMETERS", createParameterLayout())
 {
@@ -18,7 +22,7 @@ PluginProcessor::~PluginProcessor() {}
 const juce::String PluginProcessor::getName() const { return JucePlugin_Name; }
 bool PluginProcessor::acceptsMidi() const { return true; }
 bool PluginProcessor::producesMidi() const { return true; }
-bool PluginProcessor::isMidiEffect() const { return false; } // VST3 Instrument format for multi-track Ableton routing
+bool PluginProcessor::isMidiEffect() const { return false; }
 double PluginProcessor::getTailLengthSeconds() const { return 0.0; }
 int PluginProcessor::getNumPrograms() { return 1; }
 int PluginProcessor::getCurrentProgram() { return 0; }
@@ -30,11 +34,9 @@ void PluginProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
     mSampleRate = sampleRate;
     mLastStep = -1;
+    mLastNotePlayed = -1;
+    mNoteOffTime = 0;
     mTimeInSamples = 0;
-    mSongPositionPPQ = 0.0;
-    lfoPhaseEntropy = 0.0; lfoPhaseChaos = 0.0; lfoPhaseMorph = 0.0; lfoPhaseLegato = 0.0;
-    accumulatedPitchOffset = 0.0f;
-    scheduledNoteOffs.clear();
     activeHeldNotes.clear();
     latchedNotes.clear();
     isFirstNoteOfNewChord = true;
