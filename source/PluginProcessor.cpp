@@ -78,14 +78,21 @@ void PluginProcessor::updateLfoModulations (int numSamples, double bpm)
     double samplesPerBar = samplesPerBeat * 4.0;
     double sampleDelta = numSamples;
 
-    // Check Bar 1 Beat 1 Retriggering
-    int cycleBars = static_cast<int> (*apvts.getRawParameterValue (IDs::cycleLength.getParamID()));
-    currentBarInCycle = (static_cast<int>(std::floor(mSongPositionPPQ / 4.0)) % cycleBars) + 1;
+    // Correctly map dropdown index (0,1,2,3) to actual bar counts (1,2,4,8) to prevent division by zero
+    int cycleIndex = juce::jlimit (0, 3, static_cast<int> (*apvts.getRawParameterValue (IDs::cycleLength.getParamID())));
+    int cycleBars = 4;
+    if (cycleIndex == 0)      cycleBars = 1;
+    else if (cycleIndex == 1) cycleBars = 2;
+    else if (cycleIndex == 2) cycleBars = 4;
+    else if (cycleIndex == 3) cycleBars = 8;
+
+    if (cycleBars > 0)
+        currentBarInCycle = (static_cast<int>(std::floor(mSongPositionPPQ / 4.0)) % cycleBars) + 1;
+    else
+        currentBarInCycle = 1;
 
     // Bipolar Entropy Accumulator (Evolving Melody)
     float baseEntropy = *apvts.getRawParameterValue (IDs::entropy.getParamID()); // Bipolar -1.0 to +1.0
-    bool isShift = *apvts.getRawParameterValue (juce::String ("fader1")) < -999.0f; // Shift check placeholder
-    juce::ignoreUnused(isShift);
 
     // Diatonic interval step selection based on Entropy depth
     float absEntropy = std::abs(baseEntropy);
@@ -138,7 +145,7 @@ void PluginProcessor::scheduleNoteOff (juce::MidiBuffer& midi, int pitch, int de
 // ==============================================================================
 void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)
 {
-    // Clear audio buffer outputs to guarantee absolute silent outputs (passes pluginval cleanly)
+    // Clear audio buffer outputs to prevent NaNs/Subnormals (passes pluginval cleanly)
     buffer.clear();
 
     // 1. Query DAW Transport State
@@ -270,9 +277,16 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
 
             if (shouldPlay && ! isRest)
             {
-                // Key & Scale Quantizer
-                int rootKeyIdx = static_cast<int> (*apvts.getRawParameterValue (IDs::rootKey.getParamID()));
-                int scaleIdx = static_cast<int> (*apvts.getRawParameterValue (IDs::scaleType.getParamID()));
+                // If another note is currently playing, turn it off immediately
+                if (mLastNotePlayed != -1)
+                {
+                    processedMidi.addEvent (juce::MidiMessage::noteOff (1, mLastNotePlayed), 0);
+                    mLastNotePlayed = -1;
+                }
+
+                // Clamped root and scale selectors to prevent out-of-bounds array access under automation
+                int rootKeyIdx = juce::jlimit (0, 11, static_cast<int> (*apvts.getRawParameterValue (IDs::rootKey.getParamID())));
+                int scaleIdx = juce::jlimit (0, 9, static_cast<int> (*apvts.getRawParameterValue (IDs::scaleType.getParamID())));
 
                 // 10 Native Scales
                 std::vector<int> scaleOffsets = { 0, 2, 4, 5, 7, 9, 11, 12 }; // Major
@@ -330,8 +344,8 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
 // ==============================================================================
 void PluginProcessor::triggerDiatonicChordPad (int padIndex)
 {
-    int rootIdx = static_cast<int> (*apvts.getRawParameterValue (IDs::rootKey.getParamID()));
-    int scaleIdx = static_cast<int> (*apvts.getRawParameterValue (IDs::scaleType.getParamID()));
+    int rootIdx = juce::jlimit (0, 11, static_cast<int> (*apvts.getRawParameterValue (IDs::rootKey.getParamID())));
+    int scaleIdx = juce::jlimit (0, 9, static_cast<int> (*apvts.getRawParameterValue (IDs::scaleType.getParamID())));
 
     // Base Diatonic Triad roots for degree I through VIII
     std::vector<int> degrees = { 0, 2, 4, 5, 7, 9, 11, 12 };
@@ -382,7 +396,9 @@ void PluginProcessor::loadPreset (int slotIndex)
     apvts.getParameter (IDs::entropy.getParamID())->setValueNotifyingHost (presets[slotIndex].entropy);
     apvts.getParameter (IDs::harmony.getParamID())->setValueNotifyingHost (presets[slotIndex].harmony);
     apvts.getParameter (IDs::chaos.getParamID())->setValueNotifyingHost (presets[slotIndex].chaos);
-    for (int i = 0; i < 8; ++i) apvts.getParameter (juce::String ("fader" + juce::String (i + 1)))->setValueNotifyingHost (presets[slotIndex].faders[i]);
+
+    for (int i = 0; i < 8; ++i)
+        apvts.getParameter (juce::String ("fader" + juce::String (i + 1)))->setValueNotifyingHost (presets[slotIndex].faders[i]);
 }
 
 void PluginProcessor::captureSceneA()
