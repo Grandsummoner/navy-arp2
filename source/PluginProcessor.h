@@ -3,6 +3,7 @@
 
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <vector>
+#include <atomic>
 
 namespace IDs 
 {
@@ -83,7 +84,9 @@ public:
     int currentBarInCycle = 1;
     juce::String activeChordExtensionText = "TRIAD";
     
-    // Made thread-safe using CriticalSection locks
+    // Thread-safe lock-free visualizer state flag
+    std::atomic<bool> isCurrentlyPlayingUI { false };
+
     std::vector<int> activeHeldNotes;
     std::vector<int> latchedNotes;
     bool isFirstNoteOfNewChord = true;
