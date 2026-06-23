@@ -147,20 +147,7 @@ PluginEditor::PluginEditor (PluginProcessor& p)
         presetButtons[i].addMouseListener (this, false);
     }
 
-    // Configure Key & Scale Dropdowns
-    addAndMakeVisible (rootKeyBox);
-    rootKeyBox.addItemList (juce::StringArray { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "Bb", "B" }, 1);
-    rootKeyBox.setColour (juce::ComboBox::backgroundColourId, juce::Colour (0xFF111111));
-    rootKeyBox.setColour (juce::ComboBox::outlineColourId, juce::Colour (0xFF222222));
-    rootKeyBox.setColour (juce::ComboBox::textColourId, juce::Colour (0xFF00D2FF));
-
-    addAndMakeVisible (scaleTypeBox);
-    scaleTypeBox.addItemList (juce::StringArray { "Major", "Minor", "Pentatonic Minor", "Pentatonic Major", "Dorian", "Phrygian", "Lydian", "Mixolydian", "Harmonic Minor", "Melodic Minor" }, 1);
-    scaleTypeBox.setColour (juce::ComboBox::backgroundColourId, juce::Colour (0xFF111111));
-    scaleTypeBox.setColour (juce::ComboBox::outlineColourId, juce::Colour (0xFF222222));
-    scaleTypeBox.setColour (juce::ComboBox::textColourId, juce::Colour (0xFFFFB300));
-
-    // Parameter Bindings
+    // Bindings
     fader1Attachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (processor.apvts, IDs::fader1.getParamID(), fader1);
     fader2Attachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (processor.apvts, IDs::fader2.getParamID(), fader2);
     fader3Attachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (processor.apvts, IDs::fader3.getParamID(), fader3);
@@ -185,7 +172,13 @@ PluginEditor::PluginEditor (PluginProcessor& p)
     startTimerHz (30);
 }
 
-PluginEditor::~PluginEditor() { stopTimer(); }
+PluginEditor::~PluginEditor() 
+{ 
+    stopTimer(); 
+    // Clean up our button mouse listeners (prevents dangling pointer segfault 139)
+    for (int i = 0; i < 8; ++i)
+        presetButtons[i].removeMouseListener(this);
+}
 
 void PluginEditor::timerCallback()
 {
@@ -208,7 +201,7 @@ void PluginEditor::timerCallback()
         processor.apvts.getParameter (IDs::chaos.getParamID())->setValueNotifyingHost ((processor.sceneA.chaos * (1.0f - morphValue)) + (processor.sceneB.chaos * morphValue));
     }
 
-    // Keep Preset glow updated
+    // Keep the Preset glow updated
     for (int i = 0; i < 8; ++i)
     {
         if (processor.isPresetSaved (i))

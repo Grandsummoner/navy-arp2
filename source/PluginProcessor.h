@@ -72,7 +72,6 @@ public:
     void resetRhythm();
     void triggerDiatonicChordPad (int padIndex);
 
-    // Simplified trigger function (reads LFO states directly from class members)
     void triggerArpStep (float stepProbability, const std::vector<int>& notesToPlay, juce::MidiBuffer& processedMidi, double bpm);
 
     SceneState sceneA;
@@ -83,9 +82,12 @@ public:
     int currentStep = 0;
     int currentBarInCycle = 1;
     juce::String activeChordExtensionText = "TRIAD";
+    
+    // Made thread-safe using CriticalSection locks
     std::vector<int> activeHeldNotes;
     std::vector<int> latchedNotes;
     bool isFirstNoteOfNewChord = true;
+    juce::CriticalSection noteLock;
 
     juce::AudioProcessorValueTreeState apvts;
 
