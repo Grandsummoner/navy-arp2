@@ -119,13 +119,18 @@ private:
     juce::Slider morphCrossfader;
 
     juce::TextButton latchButton;
+    juce::TextButton chordModeButton;
     juce::TextButton diceMelodyButton;
     juce::TextButton diceRhythmButton;
     juce::TextButton sceneAButton;
     juce::TextButton sceneBButton;
     juce::TextButton presetButtons[8];
 
-    // Standard cross-platform integer array (prevents MSVC parser errors)
+    // Key & Scale Dropdowns (Positioned neatly inside the central OLED)
+    juce::ComboBox rootKeyBox;
+    juce::ComboBox scaleTypeBox;
+    juce::ComboBox cycleLengthBox;
+
     int presetPressStartTime[8] = { 0 };
 
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> fader1Attachment;
@@ -147,6 +152,11 @@ private:
 
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> morphAttachment;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> latchAttachment;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> chordModeAttachment;
+
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> rootKeyAttachment;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> scaleTypeAttachment;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> cycleLengthAttachment;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PluginEditor)
 };
