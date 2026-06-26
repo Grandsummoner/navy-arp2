@@ -31,6 +31,7 @@ PluginEditor::PluginEditor (PluginProcessor& p)
     juce::Slider* leftKnobs[] = { &rhythmMorphKnob, &restKnob, &legatoKnob, &rateKnob };
     juce::Label* leftTitles[] = { &rhythmMorphTitle, &restTitle, &legatoTitle, &rateTitle };
     juce::String leftNames[] = { "MORPH", "REST", "LEGATO", "RATE" };
+    juce::String leftPrefixes[] = { "rhythmMorph", "rest", "legato", "rate" };
 
     for (int i = 0; i < 4; ++i)
     {
@@ -38,6 +39,7 @@ PluginEditor::PluginEditor (PluginProcessor& p)
         leftKnobs[i]->setTextBoxStyle (juce::Slider::TextBoxBelow, false, 65, 16);
         leftKnobs[i]->setColour (juce::Slider::rotarySliderFillColourId, juce::Colour (0xFF00D2FF)); 
         leftKnobs[i]->setLookAndFeel (&chromaLookAndFeel); 
+        leftKnobs[i]->setComponentID (leftPrefixes[i]); // Unique programmatic parameter index matching [5]
         leftKnobs[i]->addMouseListener (this, false); // Listen for right clicks [NEW]
         addAndMakeVisible (leftKnobs[i]);
 
@@ -52,6 +54,7 @@ PluginEditor::PluginEditor (PluginProcessor& p)
     juce::Slider* rightKnobs[] = { &entropyKnob, &harmonyKnob, &chaosKnob, &octavesKnob };
     juce::Label* rightTitles[] = { &entropyTitle, &harmonyTitle, &chaosTitle, &octavesTitle };
     juce::String rightNames[] = { "ENTROPY", "HARMONY", "CHAOS", "OCTAVES" };
+    juce::String rightPrefixes[] = { "entropy", "harmony", "chaos", "octaves" };
 
     for (int i = 0; i < 4; ++i)
     {
@@ -59,6 +62,7 @@ PluginEditor::PluginEditor (PluginProcessor& p)
         rightKnobs[i]->setTextBoxStyle (juce::Slider::TextBoxBelow, false, 65, 16);
         rightKnobs[i]->setColour (juce::Slider::rotarySliderFillColourId, juce::Colour (0xFFFFB300)); 
         rightKnobs[i]->setLookAndFeel (&chromaLookAndFeel); 
+        rightKnobs[i]->setComponentID (rightPrefixes[i]); // Unique programmatic parameter index matching [5]
         rightKnobs[i]->addMouseListener (this, false); // Listen for right clicks [NEW]
         addAndMakeVisible (rightKnobs[i]);
 
@@ -227,7 +231,7 @@ void PluginEditor::mouseDown (const juce::MouseEvent& event)
         }
     }
 
-    // 2. Continuous Right-Click Popup Menu handling for PC / Mac mouse users [NEW]
+    // 2. Right-Click LFO Modulation Menu Popup [NEW]
     if (event.mods.isRightButtonDown())
     {
         juce::Slider* clickedSlider = nullptr;
@@ -256,22 +260,22 @@ void PluginEditor::mouseDown (const juce::MouseEvent& event)
                 float currentDepth = depthParam->getValue();
                 
                 menu.addSectionHeader ("LFO MODULATION");
-                menu.addCommandItem (1, "Disable LFO", true, (currentRateChoice == 0));
+                menu.addItem (1, "Disable LFO", true, (currentRateChoice == 0)); // Fixes C2664 [NEW]
                 
                 menu.addSeparator();
                 juce::PopupMenu rateMenu;
-                rateMenu.addCommandItem (10, "1/4 Note", true, (currentRateChoice == 1));
-                rateMenu.addCommandItem (11, "1/8 Note", true, (currentRateChoice == 2));
-                rateMenu.addCommandItem (12, "1/16 Note", true, (currentRateChoice == 3));
-                rateMenu.addCommandItem (13, "1/32 Note", true, (currentRateChoice == 4));
+                rateMenu.addItem (10, "1/4 Note", true, (currentRateChoice == 1));
+                rateMenu.addItem (11, "1/8 Note", true, (currentRateChoice == 2));
+                rateMenu.addItem (12, "1/16 Note", true, (currentRateChoice == 3));
+                rateMenu.addItem (13, "1/32 Note", true, (currentRateChoice == 4));
                 menu.addSubMenu ("LFO Speed / Rate", rateMenu);
                 
                 juce::PopupMenu depthMenu;
-                depthMenu.addCommandItem (20, "Off (0%)", true, (currentDepth == 0.0f));
-                depthMenu.addCommandItem (21, "Slight (10%)", true, (currentDepth > 0.05f && currentDepth <= 0.15f));
-                depthMenu.addCommandItem (22, "Medium (25%)", true, (currentDepth > 0.2f && currentDepth <= 0.3f));
-                depthMenu.addCommandItem (23, "Heavy (50%)", true, (currentDepth > 0.45f && currentDepth <= 0.55f));
-                depthMenu.addCommandItem (24, "Full (100%)", true, (currentDepth > 0.90f));
+                depthMenu.addItem (20, "Off (0%)", true, (currentDepth == 0.0f));
+                depthMenu.addItem (21, "Slight (10%)", true, (currentDepth > 0.05f && currentDepth <= 0.15f));
+                depthMenu.addItem (22, "Medium (25%)", true, (currentDepth > 0.2f && currentDepth <= 0.3f));
+                depthMenu.addItem (23, "Heavy (50%)", true, (currentDepth > 0.45f && currentDepth <= 0.55f));
+                depthMenu.addItem (24, "Full (100%)", true, (currentDepth > 0.90f));
                 menu.addSubMenu ("LFO Depth", depthMenu);
 
                 menu.showMenuAsync (juce::PopupMenu::Options(), [rateParam, depthParam](int result) {
@@ -398,7 +402,7 @@ void PluginEditor::resized()
     int totalWidth = getWidth();
     int totalHeight = getHeight();
 
-    // 1. Bottom Section: 8 Scale-Degree Faders (Faders vertical scale reduced by 20%) [1]
+    // 1. Bottom Section: 8 Scale-Degree Faders (Faders vertical scale reduced by 20%)
     int bottomHeight = static_cast<int>(totalHeight * 0.17f); 
     auto bottomArea = area.removeFromBottom (bottomHeight);
     auto faderLabelArea = bottomArea.removeFromBottom (16);

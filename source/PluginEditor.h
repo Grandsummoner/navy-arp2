@@ -38,10 +38,11 @@ public:
         g.setGradientFill (grad);
         g.fillEllipse (toX - radius, toY - radius, radius * 2.0f, radius * 2.0f);
 
+        // 3. Highlighted outer lip edge of the cap
         g.setColour (juce::Colour (0xFF2D313D));
         g.drawEllipse (toX - radius, toY - radius, radius * 2.0f, radius * 2.0f, 1.0f);
 
-        // 3. Colored rubber indicator pointer strip [5]
+        // 4. Colored rubber indicator pointer strip [5]
         float angle = rotaryStartAngle + sliderPos * (rotaryEndAngle - rotaryStartAngle);
         auto accentCol = slider.findColour (juce::Slider::rotarySliderFillColourId);
 
@@ -63,17 +64,17 @@ public:
         g.setColour (rubberBaseCol.darker (0.5f));
         g.fillEllipse (toX - centerRadius, toY - centerRadius, centerRadius * 2.0f, centerRadius * 2.0f);
 
-        // 4. Circular 15-LED rings with real-time modulation visual updates [5] [NEW]
+        // 5. Circular 15-LED rings with real-time modulation visual updates [5]
         float ledRingRadius = radius + 9.5f; 
         int numLeds = 15;
         juce::Colour ledActiveCol = accentCol;
         float visualValue = sliderPos;
         bool lfoActive = false;
 
-        auto* param = slider.getAssociatedParameter();
-        if (param != nullptr)
+        // Safely identify the rotary slider using the component ID [5]
+        juce::String pId = slider.getComponentID();
+        if (pId.isNotEmpty())
         {
-            juce::String pId = param->getParameterID();
             int lfoRateVal = 0;
             
             if (pId == "rhythmMorph") {
@@ -86,17 +87,20 @@ public:
             }
             else if (pId == "legato") {
                 lfoRateVal = static_cast<int> (*processor.apvts.getRawParameterValue (IDs::legatoLfoRate.getParamID()));
-                float rawLegato = (lfoRateVal > 0) ? processor.activeLegato : *processor.apvts.getRawParameterValue (IDs::legato.getParamID());
+                float baseLegato = static_cast<float> (*processor.apvts.getRawParameterValue (IDs::legato.getParamID()));
+                float rawLegato = (lfoRateVal > 0) ? processor.activeLegato : baseLegato;
                 visualValue = (rawLegato - 0.1f) / 0.9f;
             }
             else if (pId == "rate") {
                 lfoRateVal = static_cast<int> (*processor.apvts.getRawParameterValue (IDs::rateLfoRate.getParamID()));
-                float rawRate = (lfoRateVal > 0) ? static_cast<float>(processor.activeRateIdx) : *processor.apvts.getRawParameterValue (IDs::rate.getParamID());
+                float baseRate = static_cast<float> (*processor.apvts.getRawParameterValue (IDs::rate.getParamID()));
+                float rawRate = (lfoRateVal > 0) ? static_cast<float>(processor.activeRateIdx) : baseRate;
                 visualValue = rawRate / 3.0f;
             }
             else if (pId == "entropy") {
                 lfoRateVal = static_cast<int> (*processor.apvts.getRawParameterValue (IDs::entropyLfoRate.getParamID()));
-                float rawEntropy = (lfoRateVal > 0) ? processor.activeEntropy : *processor.apvts.getRawParameterValue (IDs::entropy.getParamID());
+                float baseEntropy = static_cast<float> (*processor.apvts.getRawParameterValue (IDs::entropy.getParamID()));
+                float rawEntropy = (lfoRateVal > 0) ? processor.activeEntropy : baseEntropy;
                 visualValue = (rawEntropy + 1.0f) * 0.5f;
             }
             else if (pId == "harmony") {
@@ -109,13 +113,14 @@ public:
             }
             else if (pId == "octaves") {
                 lfoRateVal = static_cast<int> (*processor.apvts.getRawParameterValue (IDs::octavesLfoRate.getParamID()));
-                float rawOctaves = (lfoRateVal > 0) ? static_cast<float>(processor.activeOctavesVal) : *processor.apvts.getRawParameterValue (IDs::octaves.getParamID());
+                float baseOctaves = static_cast<float> (*processor.apvts.getRawParameterValue (IDs::octaves.getParamID()));
+                float rawOctaves = (lfoRateVal > 0) ? static_cast<float>(processor.activeOctavesVal) : baseOctaves;
                 visualValue = (rawOctaves - 1.0f) / 3.0f;
             }
             
             lfoActive = (lfoRateVal > 0);
             
-            // Shift neon LED colors to indicate focus [NEW]
+            // Shift neon LED colors to indicate focus
             if (lfoActive)
             {
                 ledActiveCol = (pId == "rhythmMorph" || pId == "rest" || pId == "legato" || pId == "rate") 
@@ -124,7 +129,7 @@ public:
             }
         }
 
-        // Draw 15 discrete circular LED dots [NEW]
+        // Draw 15 discrete circular LED dots [5]
         for (int i = 0; i < numLeds; ++i)
         {
             float pct = static_cast<float>(i) / static_cast<float>(numLeds - 1);
@@ -145,7 +150,7 @@ public:
             }
             else
             {
-                g.setColour (juce::Colour (0xFF1C1E24)); // Dim unlit bulb
+                g.setColour (juce::Colour (0xFF1C1E24)); 
                 g.fillEllipse (ledX - 1.5f, ledY - 1.5f, 3.0f, 3.0f);
             }
         }
@@ -155,7 +160,7 @@ public:
                            float sliderPos, float minSliderPos, float maxSliderPos,
                            const juce::Slider::SliderStyle style, juce::Slider& slider) override
     {
-        // Custom vertical mixer-style faders to match Chroma style [5] [NEW]
+        // Custom vertical mixer-style faders [5]
         if (style == juce::Slider::LinearVertical)
         {
             auto trackWidth = 4.0f;
@@ -245,7 +250,7 @@ public:
         g.drawText ("KEY: " + keyName + " | SCALE: " + scaleName + " | EXT: " + extText + " | RATE: " + speedRate + " | OCT: " + activeOcts, 
                     10, 25, getWidth() - 20, 15, juce::Justification::centred);
 
-        // Symmetrical grid areas [NEW]
+        // Grid Area Calculations
         auto area = getLocalBounds().reduced (15);
         area.removeFromTop (35); 
         
@@ -275,9 +280,9 @@ public:
             // 2. Draw dynamic step bars
             if (i == processor.currentStep && isPlaying)
             {
-                if (i == 0)      g.setColour (juce::Colour (0xFF4CFF4C)); // Beat 1: Green
-                else if (i == 4) g.setColour (juce::Colour (0xFFFF4C4C)); // Beat 5: Red
-                else             g.setColour (juce::Colour (0xFF00FFFF)); // Others: Cyan
+                if (i == 0)      g.setColour (juce::Colour (0xFF4CFF4C)); 
+                else if (i == 4) g.setColour (juce::Colour (0xFFFF4C4C)); 
+                else             g.setColour (juce::Colour (0xFF00FFFF)); 
                 g.fillRect (bar.expanded(1, 1));
             }
             else
@@ -288,7 +293,7 @@ public:
                 g.fillRect (bar);
             }
 
-            // 3. Symmetrical Sequencer Step indicators [NEW]
+            // 3. Symmetrical Sequencer Step indicators
             juce::String stepNumStr = juce::String (i + 1);
             g.setFont (juce::Font ("Consolas", 10.0f, juce::Font::bold));
             
