@@ -91,11 +91,11 @@ public:
                            float sliderPos, const float rotaryStartAngle, const float rotaryEndAngle, 
                            juce::Slider& slider) override
     {
-        auto bounds = bounds.reduced (16.0f); 
-        auto knobBounds = juce::Rectangle<int> (x, y, width, height).toFloat().reduced (16.0f); // Leave room on boundaries for the 15 LEDs [5]
+        auto bounds = juce::Rectangle<int> (x, y, width, height).toFloat();
+        auto knobBounds = bounds.reduced (16.0f); // Leave room on boundaries for the 15 LEDs [5]
         auto radius = juce::jmin (knobBounds.getWidth(), knobBounds.getHeight()) / 2.0f;
-        auto toX = knobBounds.getCentreX();
-        auto toY = knobBounds.getCentreY();
+        auto toX = bounds.getCentreX();
+        auto toY = bounds.getCentreY();
 
         // Load active theme colors dynamically [NEW]
         int themeIdx = static_cast<int> (processor.apvts.getRawParameterValue ("panelTheme")->load());
@@ -112,11 +112,11 @@ public:
         g.setGradientFill (grad);
         g.fillEllipse (toX - radius, toY - radius, radius * 2.0f, radius * 2.0f);
 
-        // Highlighted outer lip edge of the cap
+        // 3. Highlighted outer lip edge of the cap
         g.setColour (juce::Colour (0xFF2D313D));
         g.drawEllipse (toX - radius, toY - radius, radius * 2.0f, radius * 2.0f, 1.0f);
 
-        // 3. Colored rubber indicator pointer strip [5]
+        // 4. Colored rubber indicator pointer strip [5]
         float angle = rotaryStartAngle + sliderPos * (rotaryEndAngle - rotaryStartAngle);
         
         // Symmetrically map accents based on left and right slider columns
@@ -142,14 +142,14 @@ public:
         g.setColour (rubberBaseCol.darker (0.5f));
         g.fillEllipse (toX - centerRadius, toY - centerRadius, centerRadius * 2.0f, centerRadius * 2.0f);
 
-        // 4. Circular 15-LED rings with real-time modulation visual updates [5]
+        // 5. Circular 15-LED rings with real-time modulation visual updates [5]
         float ledRingRadius = radius + 9.5f; 
         int numLeds = 15;
         juce::Colour ledActiveCol = accentCol;
         float visualValue = sliderPos;
         bool lfoActive = false;
 
-        // Safely identify the rotary slider using the component ID [5] [NEW]
+        // Safely identify the rotary slider using the component ID [5]
         juce::String pId = slider.getComponentID();
         if (pId.isNotEmpty())
         {
@@ -198,12 +198,12 @@ public:
             
             lfoActive = (lfoRateVal > 0);
             
-            // Shift neon LED colors to indicate focus [NEW]
+            // Shift neon LED colors to indicate focus
             if (lfoActive)
             {
                 ledActiveCol = (pId == "rhythmMorph" || pId == "rest" || pId == "legato" || pId == "rate") 
-                               ? juce::Colour (0xFFFF00D2)  // Neon Magenta
-                               : juce::Colour (0xFF9933FF); // Deep Purple
+                               ? juce::Colour (0xFFFF00D2)  // Neon Magenta (Left)
+                               : juce::Colour (0xFF9933FF); // Deep Purple (Right)
             }
         }
 
