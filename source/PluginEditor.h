@@ -30,7 +30,7 @@ struct AppTheme
             t.border        = juce::Colour (0xFFB8B5AB);
             t.leftAccent    = juce::Colour (0xFFFF3B30); // Eurorack Red LED
             t.rightAccent   = juce::Colour (0xFF3A3A38); // Matte Charcoal
-            t.textDim       = juce::Colour (0xFF1A1A18); // Calibrated dark grey for high contrast
+            t.textDim       = juce::Colour (0xFF1A1A18); // Calibrated dark grey for high contrast [NEW]
             t.trackBg       = juce::Colour (0xFFD4D1C9);
             t.slotOutline   = juce::Colour (0xFFA8A59C);
             t.faderCap      = juce::Colour (0xFF1E1E1E);
@@ -331,7 +331,73 @@ public:
         }
     }
 
+    // ==============================================================================
+    // Custom Vector Dice Renderer (Eliminates OS Unicode Font Limitations) [NEW]
+    // ==============================================================================
+    void drawButtonText (juce::Graphics& g, juce::TextButton& button, bool shouldDrawButtonAsHighlighted, bool shouldDrawButtonAsDown) override
+    {
+        juce::String id = button.getComponentID();
+        int themeIdx = static_cast<int> (processor.apvts.getRawParameterValue ("panelTheme")->load());
+        auto t = AppTheme::get (themeIdx);
+        
+        if (id == "dice_scene_a" || id == "dice_scene_b")
+        {
+            auto bounds = button.getLocalBounds().toFloat();
+            juce::Colour pipCol = (id == "dice_scene_a") ? t.leftAccent : t.rightAccent;
+            if (shouldDrawButtonAsDown) pipCol = pipCol.brighter (0.2f);
+            drawVectorDice (g, bounds, pipCol);
+        }
+        else if (id == "dice_melody" || id == "dice_rhythm")
+        {
+            auto bounds = button.getLocalBounds().toFloat();
+            auto diceBounds = bounds.removeFromLeft (bounds.getHeight()); // Make square for vector dice placement
+            
+            juce::Colour pipCol = t.rightAccent;
+            if (shouldDrawButtonAsDown) pipCol = pipCol.brighter (0.2f);
+            drawVectorDice (g, diceBounds.reduced (4.0f), pipCol);
+            
+            // Draw text dynamically next to it
+            g.setColour (button.findColour (juce::TextButton::textColourOffId));
+            g.setFont (getTextButtonFont (button, button.getHeight()));
+            g.drawFittedText (button.getButtonText(), bounds.toNearestInt(), juce::Justification::centred, 1);
+        }
+        else
+        {
+            juce::LookAndFeel_V4::drawButtonText (g, button, shouldDrawButtonAsHighlighted, shouldDrawButtonAsDown);
+        }
+    }
+
 private:
+    void drawVectorDice (juce::Graphics& g, juce::Rectangle<float> bounds, juce::Colour pipColour)
+    {
+        auto diceFace = bounds.reduced (bounds.getWidth() * 0.22f);
+        
+        // Face background
+        g.setColour (pipColour.withAlpha (0.12f));
+        g.fillRoundedRectangle (diceFace, 4.0f);
+        
+        // Face border
+        g.setColour (pipColour.withAlpha (0.75f));
+        g.drawRoundedRectangle (diceFace, 4.0f, 1.2f);
+        
+        // Symmetrical pips
+        float pipSize = juce::jmax (1.5f, diceFace.getWidth() * 0.16f);
+        float cx = diceFace.getCentreX();
+        float cy = diceFace.getCentreY();
+        float w = diceFace.getWidth();
+        float h = diceFace.getHeight();
+        float offset = 0.25f; 
+        
+        g.setColour (pipColour);
+        
+        // Render 5 pips
+        g.fillEllipse (cx - pipSize * 0.5f, cy - pipSize * 0.5f, pipSize, pipSize); // Center
+        g.fillEllipse (cx - w * offset - pipSize * 0.5f, cy - h * offset - pipSize * 0.5f, pipSize, pipSize); // Top-Left
+        g.fillEllipse (cx + w * offset - pipSize * 0.5f, cy - h * offset - pipSize * 0.5f, pipSize, pipSize); // Top-Right
+        g.fillEllipse (cx - w * offset - pipSize * 0.5f, cy + h * offset - pipSize * 0.5f, pipSize, pipSize); // Bottom-Left
+        g.fillEllipse (cx + w * offset - pipSize * 0.5f, cy + h * offset - pipSize * 0.5f, pipSize, pipSize); // Bottom-Right
+    }
+
     PluginProcessor& processor;
 };
 
@@ -588,6 +654,10 @@ private:
     // Symmetrical time trackers for hold-to-save logic [5]
     uint32_t sceneAPressStartTime[4] = { 0 };
     uint32_t sceneBPressStartTime[4] = { 0 };
+
+    // Symmetrical holds state tracker for real-time saving [NEW]
+    bool sceneAAlreadySaved[4] = { false };
+    bool sceneBAlreadySaved[4] = { false };
 
     // Flash counters for visual confirm [5]
     int sceneAFlashTimer[4] = { 0 };

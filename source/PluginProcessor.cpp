@@ -289,19 +289,53 @@ void PluginProcessor::diceRhythm() {
     apvts.getParameter (IDs::legato.getParamID())->setValueNotifyingHost (0.2f + r->nextFloat() * 0.8f);
 }
 
-void PluginProcessor::diceActiveScene()
+// Symmetrical Direct background randomizers (No focus state variables) [NEW]
+void PluginProcessor::diceActiveSceneA()
 {
     auto* random = &juce::Random::getSystemRandom();
-    int focusedA = activeSceneAIndex.load(), focusedB = activeSceneBIndex.load(), focusSide = editFocusSide.load();
-    auto randomizeScene = [&](SceneState& scene) {
-        for (int i = 0; i < 8; ++i) scene.faders[i] = random->nextFloat();
-        scene.rhythmMorph = random->nextFloat(); scene.rest = random->nextFloat() * 0.5f; scene.legato = 0.2f + random->nextFloat() * 0.8f;
-        scene.entropy = -1.0f + random->nextFloat() * 2.0f; scene.harmony = random->nextFloat(); scene.chaos = random->nextFloat();
-        scene.rate = static_cast<float> (random->nextInt (4)); scene.octaves = static_cast<float> (random->nextInt (6) - 2); // Random -2 to +3 [NEW]
-        for (int i = 0; i < 8; ++i) { scene.lfoRates[i] = random->nextInt (5); scene.lfoDepths[i] = random->nextFloat() * 0.5f; }
-    };
-    if (focusSide == 0) { randomizeScene (sceneAPresets[focusedA]); sceneASlotsSaved[focusedA] = true; loadSceneA (focusedA); }
-    else { randomizeScene (sceneBPresets[focusedB]); sceneBSlotsSaved[focusedB] = true; loadSceneB (focusedB); }
+    int focusedA = activeSceneAIndex.load();
+    
+    for (int i = 0; i < 8; ++i) sceneAPresets[focusedA].faders[i] = random->nextFloat();
+    sceneAPresets[focusedA].rhythmMorph = random->nextFloat(); 
+    sceneAPresets[focusedA].rest = random->nextFloat() * 0.5f; 
+    sceneAPresets[focusedA].legato = 0.2f + random->nextFloat() * 0.8f;
+    sceneAPresets[focusedA].entropy = -1.0f + random->nextFloat() * 2.0f; 
+    sceneAPresets[focusedA].harmony = random->nextFloat(); 
+    sceneAPresets[focusedA].chaos = random->nextFloat();
+    sceneAPresets[focusedA].rate = static_cast<float> (random->nextInt (4)); 
+    sceneAPresets[focusedA].octaves = static_cast<float> (random->nextInt (6) - 2); 
+    
+    for (int i = 0; i < 8; ++i) { 
+        sceneAPresets[focusedA].lfoRates[i] = random->nextInt (5); 
+        sceneAPresets[focusedA].lfoDepths[i] = random->nextFloat() * 0.5f; 
+    }
+    
+    sceneASlotsSaved[focusedA] = true; 
+    loadSceneA (focusedA);
+}
+
+void PluginProcessor::diceActiveSceneB()
+{
+    auto* random = &juce::Random::getSystemRandom();
+    int focusedB = activeSceneBIndex.load();
+    
+    for (int i = 0; i < 8; ++i) sceneBPresets[focusedB].faders[i] = random->nextFloat();
+    sceneBPresets[focusedB].rhythmMorph = random->nextFloat(); 
+    sceneBPresets[focusedB].rest = random->nextFloat() * 0.5f; 
+    sceneBPresets[focusedB].legato = 0.2f + random->nextFloat() * 0.8f;
+    sceneBPresets[focusedB].entropy = -1.0f + random->nextFloat() * 2.0f; 
+    sceneBPresets[focusedB].harmony = random->nextFloat(); 
+    sceneBPresets[focusedB].chaos = random->nextFloat();
+    sceneBPresets[focusedB].rate = static_cast<float> (random->nextInt (4)); 
+    sceneBPresets[focusedB].octaves = static_cast<float> (random->nextInt (6) - 2); 
+    
+    for (int i = 0; i < 8; ++i) { 
+        sceneBPresets[focusedB].lfoRates[i] = random->nextInt (5); 
+        sceneBPresets[focusedB].lfoDepths[i] = random->nextFloat() * 0.5f; 
+    }
+    
+    sceneBSlotsSaved[focusedB] = true; 
+    loadSceneB (focusedB);
 }
 
 void PluginProcessor::saveScene (int slotIndex, int side) {
@@ -460,7 +494,8 @@ juce::AudioProcessorValueTreeState::ParameterLayout PluginProcessor::createParam
     params.push_back (std::make_unique<juce::AudioParameterChoice> (IDs::rate, "Rate", juce::StringArray { "1/4", "1/8", "1/16", "1/32" }, 2)); 
     params.push_back (std::make_unique<juce::AudioParameterInt> (IDs::octaves, "Octaves", -2, 3, 0)); // Scaled symmetrically from -2 to +3 [NEW]
 
-    params.push_back (std::make_unique<juce::AudioParameterChoice> (IDs::panelTheme, "Panel Theme", juce::StringArray { "Navy Cyber", "Skyline Eurorack", "Monochrome Minimal", "Matrix Terminal" }, 0));
+    // Default choice index changed to 1 (Skyline Eurorack) [NEW]
+    params.push_back (std::make_unique<juce::AudioParameterChoice> (IDs::panelTheme, "Panel Theme", juce::StringArray { "Navy Cyber", "Skyline Eurorack", "Monochrome Minimal", "Matrix Terminal" }, 1));
 
     auto registerLfoParams = [&](juce::ParameterID rateId, juce::ParameterID depthId, juce::String name) {
         params.push_back (std::make_unique<juce::AudioParameterChoice> (rateId, name + " LFO Speed", juce::StringArray { "Off", "1/4", "1/8", "1/16", "1/32" }, 0));

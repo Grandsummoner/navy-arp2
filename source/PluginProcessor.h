@@ -96,7 +96,11 @@ public:
     // Generative triggers
     void diceMelody();
     void diceRhythm();
-    void diceActiveScene(); // Background-focused target randomizer [5]
+    
+    // Explicit background dice randomizers (No secret focus variables) [NEW]
+    void diceActiveSceneA(); 
+    void diceActiveSceneB(); 
+
     void resetAccumulator();
     void resetRhythm();
     void triggerDiatonicChordPad (int padIndex);
@@ -114,7 +118,6 @@ public:
     
     std::atomic<int> activeSceneAIndex { 0 }; 
     std::atomic<int> activeSceneBIndex { 0 }; 
-    std::atomic<int> editFocusSide { 0 }; // 0 = A, 1 = B [5]
 
     int currentStep = 0;
     int currentBarInCycle = 1;
