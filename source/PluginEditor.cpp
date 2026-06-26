@@ -24,7 +24,7 @@ PluginEditor::PluginEditor (PluginProcessor& p)
         addAndMakeVisible (faders[i]);
 
         faderLabels[i]->setText (scaleNotes[i], juce::dontSendNotification);
-        faderLabels[i]->setFont (juce::Font (juce::FontOptions (14.0f).withStyle (juce::FontStyleHelpers::bold)));
+        faderLabels[i]->setFont (juce::Font (juce::FontOptions (14.0f).withStyle ("Bold"))); // Corrected for JUCE 8 [NEW]
         faderLabels[i]->setJustificationType (juce::Justification::centred);
         faderLabels[i]->setColour (juce::Label::textColourId, juce::Colour (0xFF888888));
         addAndMakeVisible (faderLabels[i]);
@@ -47,7 +47,7 @@ PluginEditor::PluginEditor (PluginProcessor& p)
         addAndMakeVisible (leftKnobs[i]);
 
         leftTitles[i]->setText (leftNames[i], juce::dontSendNotification);
-        leftTitles[i]->setFont (juce::Font (juce::FontOptions (10.0f).withStyle (juce::FontStyleHelpers::bold)));
+        leftTitles[i]->setFont (juce::Font (juce::FontOptions (10.0f).withStyle ("Bold"))); // Corrected for JUCE 8 [NEW]
         leftTitles[i]->setJustificationType (juce::Justification::centred);
         leftTitles[i]->setColour (juce::Label::textColourId, juce::Colour (0xFF55555C));
         addAndMakeVisible (leftTitles[i]);
@@ -70,7 +70,7 @@ PluginEditor::PluginEditor (PluginProcessor& p)
         addAndMakeVisible (rightKnobs[i]);
 
         rightTitles[i]->setText (rightNames[i], juce::dontSendNotification);
-        rightTitles[i]->setFont (juce::Font (juce::FontOptions (10.0f).withStyle (juce::FontStyleHelpers::bold)));
+        rightTitles[i]->setFont (juce::Font (juce::FontOptions (10.0f).withStyle ("Bold"))); // Corrected for JUCE 8 [NEW]
         rightTitles[i]->setJustificationType (juce::Justification::centred);
         rightTitles[i]->setColour (juce::Label::textColourId, juce::Colour (0xFF55555C));
         addAndMakeVisible (rightTitles[i]);
@@ -94,7 +94,7 @@ PluginEditor::PluginEditor (PluginProcessor& p)
     chordModeButton.setButtonText ("CHORDS");
     chordModeButton.setClickingTogglesState (true);
 
-    // DICE Buttons with LookAndFeel Vector Drawings
+    // DICE Buttons with LookAndFeel Vector Drawings [NEW]
     addAndMakeVisible (diceMelodyButton);
     diceMelodyButton.setComponentID ("dice_melody");
     diceMelodyButton.setButtonText ("MELODY");
@@ -135,9 +135,9 @@ PluginEditor::PluginEditor (PluginProcessor& p)
     diceSceneBButton.setButtonText (""); // Vector icon drawn in LookAndFeel
     diceSceneBButton.setColour (juce::TextButton::buttonColourId, juce::Colour (0xFF221100));
     diceSceneBButton.setLookAndFeel (&chromaLookAndFeel);
-    diceSceneBButton.onClick = [this] { processor.diceActiveSceneB(); }; 
+    diceSceneBButton.onClick = [this] { processor.diceActiveSceneB(); }; // Direct B-routing [NEW]
 
-    // Save & Recall utility toggles
+    // Save & Recall utility toggles (Left-sidebar bottom placement) [5]
     addAndMakeVisible (saveButton);
     saveButton.setButtonText ("SAVE");
     saveButton.setClickingTogglesState (true);
@@ -847,7 +847,7 @@ void PluginEditor::timerCallback()
         }
         else if (processor.isPresetSaved (i))
         {
-            presetButtons[i].setColour (juce::TextButton::buttonColourId, t.leftAccent.withAlpha (0.22f));
+            presetButtons[i].setColour (juce::TextButton::buttonColourId, t.leftAccent.withAlpha(0.22f));
             presetButtons[i].setColour (juce::TextButton::textColourOffId, t.leftAccent);
         }
         else
@@ -857,7 +857,7 @@ void PluginEditor::timerCallback()
         }
     }
 
-    // Force-repaint the 8 rotary knobs at 30Hz so the LFO visual "breathing" is smooth
+    // Force-repaint the 8 rotary knobs at 30Hz so the LFO visual "breathing" is smooth [CRITICAL FIX]
     rhythmMorphKnob.repaint();
     restKnob.repaint();
     legatoKnob.repaint();
@@ -879,7 +879,7 @@ void PluginEditor::paint (juce::Graphics& g)
     g.drawRect (getLocalBounds().toFloat(), 3.0f);
     g.drawHorizontalLine (getHeight() - static_cast<int>(getHeight() * 0.22f), 15.0f, getWidth() - 15.0f);
 
-    g.setFont (juce::Font (juce::FontOptions (12.0f).withStyle (juce::FontStyleHelpers::bold)));
+    g.setFont (juce::Font (juce::FontOptions (12.0f).withStyle (juce::Font::bold))); // Corrected FontOptions syntax [NEW]
     g.setColour (t.textDim.withAlpha (0.7f));
     g.drawText ("RHYTHM", 15, 12, 100, 20, juce::Justification::left);
     g.drawText ("GENERATOR", getWidth() - 115, 12, 100, 20, juce::Justification::right);
