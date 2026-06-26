@@ -266,7 +266,7 @@ void PluginProcessor::loadSceneA (int slotIndex)
     apvts.getParameter (IDs::entropyLfoDepth.getParamID())->setValueNotifyingHost (sceneAPresets[slotIndex].lfoDepths[4]);
     apvts.getParameter (IDs::harmonyLfoRate.getParamID())->setValueNotifyingHost (static_cast<float>(sceneAPresets[slotIndex].lfoRates[5]) / 4.0f);
     apvts.getParameter (IDs::harmonyLfoDepth.getParamID())->setValueNotifyingHost (sceneAPresets[slotIndex].lfoDepths[5]);
-    apvts.getParameter (IDs::chaosLfoRate.getParamID())->setValueNotifyingHost (static_cast<float>(sceneBPresets[slotIndex].lfoRates[6]) / 4.0f);
+    apvts.getParameter (IDs::chaosLfoRate.getParamID())->setValueNotifyingHost (static_cast<float>(sceneAPresets[slotIndex].lfoRates[6]) / 4.0f);
     apvts.getParameter (IDs::chaosLfoDepth.getParamID())->setValueNotifyingHost (sceneAPresets[slotIndex].lfoDepths[6]);
     apvts.getParameter (IDs::octavesLfoRate.getParamID())->setValueNotifyingHost (static_cast<float>(sceneAPresets[slotIndex].lfoRates[7]) / 4.0f);
     apvts.getParameter (IDs::octavesLfoDepth.getParamID())->setValueNotifyingHost (sceneAPresets[slotIndex].lfoDepths[7]);
@@ -392,20 +392,6 @@ void PluginProcessor::captureSceneB()
     sceneB.harmony = *apvts.getRawParameterValue (IDs::harmony.getParamID());
     sceneB.chaos = *apvts.getRawParameterValue (IDs::chaos.getParamID());
     hasSceneB = true;
-}
-
-void PluginProcessor::diceMelody()
-{
-    auto* random = &juce::Random::getSystemRandom();
-    for (int i = 1; i <= 8; ++i) apvts.getParameter ("fader" + juce::String(i))->setValueNotifyingHost (random->nextFloat());
-}
-
-void PluginProcessor::diceRhythm()
-{
-    auto* random = &juce::Random::getSystemRandom();
-    apvts.getParameter (IDs::rhythmMorph.getParamID())->setValueNotifyingHost (random->nextFloat());
-    apvts.getParameter (IDs::rest.getParamID())->setValueNotifyingHost (random->nextFloat() * 0.5f);
-    apvts.getParameter (IDs::legato.getParamID())->setValueNotifyingHost (0.2f + random->nextFloat() * 0.8f);
 }
 
 // Background-focused scene randomization [NEW]
@@ -886,4 +872,10 @@ juce::AudioProcessorValueTreeState::ParameterLayout PluginProcessor::createParam
     registerLfoParams (IDs::octavesLfoRate,     IDs::octavesLfoDepth,     "Octaves");
 
     return { params.begin(), params.end() };
+}
+
+// JUCE Entry Point [5] [NEW]
+juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter() 
+{ 
+    return new PluginProcessor(); 
 }
