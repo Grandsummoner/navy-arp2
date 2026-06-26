@@ -207,6 +207,286 @@ void PluginProcessor::updateLfoModulations (int numSamples, double bpm)
     activeOctavesVal = juce::jlimit (1, 4, static_cast<int> (std::round (rawOctaves)));
 }
 
+void PluginProcessor::scheduleNoteOff (juce::MidiBuffer& midi, int pitch, int delaySamples)
+{
+    if (delaySamples <= 0)
+    {
+        midi.addEvent (juce::MidiMessage::noteOff (1, pitch), 0);
+    }
+    else
+    {
+        scheduledNoteOffs.push_back ({ pitch, delaySamples });
+    }
+}
+
+void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)
+{
+    buffer.clear();
+
+    bool isPlaying = false;
+    double bpm = 120.0;
+    mSongPositionPPQ = 0.0;
+
+#if JUCE_MAJOR_VERSION >= 7
+    if (auto* playhead = getPlayHead())
+    {
+        if (auto pos = playhead->getPosition())
+        {
+            isPlaying = pos->getIsPlaying();
+            auto bpmOpt = pos->getBpm();
+            if (bpmOpt.hasValue()) bpm = *bpmOpt;
+            auto ppqOpt = pos->getPpqPosition();
+            if (ppqOpt.hasValue()) mSongPositionPPQ = *ppqOpt;
+        }
+    }
+#else
+    if (auto* playhead = getPlayHead())
+    {
+        juce::AudioPlayHead::CurrentPositionInfo info;
+        if (playhead->getCurrentPositionInfo (info))
+        {
+            isPlaying = info.isPlaying;
+            bpm = info.bpm;
+            mSongPositionPPQ = info.ppqPosition;
+        }
+    }
+#endif
+
+    int numSamples = buffer.getNumSamples();
+    updateLfoModulations (numSamples, bpm);
+
+    bool isLatchActive = *apvts.getRawParameterValue (IDs::latch.getParamID()) > 0.5f;
+
+    float activeFaderProb[8];
+    for (int i = 0; i < 8; ++i)
+        activeFaderProb[i] = *apvts.getRawParameterValue (juce::String ("fader" + juce::String (i + 1)));
+
+    // 1. Process Decrementing Note-Off Queue
+    juce::MidiBuffer processedMidi;
+    for (auto it = scheduledNoteOffs.begin(); it != scheduledNoteOffs.end();)
+    {
+        it->second -= numSamples;
+        if (it->second <= 0)
+        {
+            processedMidi.addEvent (juce::MidiMessage::noteOff (1, it->first), 0);
+            it = scheduledNoteOffs.erase(it);
+        }
+        else ++it;
+    }
+
+    // 2. Monitor physical keyboard pressed MIDI keys
+    for (const auto metadata : midiMessages)
+    {
+        auto msg = metadata.getMessage();
+        if (msg.isNoteOn())
+        {
+            int note = msg.getNoteNumber();
+            if (std::find (activeHeldNotes.begin(), activeHeldNotes.end(), note) == activeHeldNotes.end())
+            {
+                activeHeldNotes.push_back (note);
+                std::sort (activeHeldNotes.begin(), activeHeldNotes.end());
+            }
+
+            if (isLatchActive)
+            {
+                if (isFirstNoteOfNewChord)
+                {
+                    for (int n : latchedNotes) scheduleNoteOff (processedMidi, n, 0);
+                    latchedNotes.clear();
+                    isFirstNoteOfNewChord = false;
+                }
+                if (std::find (latchedNotes.begin(), latchedNotes.end(), note) == latchedNotes.end())
+                {
+                    latchedNotes.push_back (note);
+                    std::sort (latchedNotes.begin(), latchedNotes.end());
+                }
+            }
+        }
+        else if (msg.isNoteOff())
+        {
+            int note = msg.getNoteNumber();
+            activeHeldNotes.erase (std::remove (activeHeldNotes.begin(), activeHeldNotes.end(), note), activeHeldNotes.end());
+            if (activeHeldNotes.empty()) isFirstNoteOfNewChord = true;
+        }
+    }
+    midiMessages.clear();
+
+    const auto& notesToPlay = isLatchActive ? latchedNotes : activeHeldNotes;
+    
+    isCurrentlyPlayingUI.store (!notesToPlay.empty());
+
+    // 3. Dual-Clock Step Generation
+    if (! notesToPlay.empty())
+    {
+        bool stepTriggered = false;
+        double samplesPerBeat = mSampleRate * (60.0 / (bpm > 0 ? bpm : 120.0));
+        
+        // Compute active step rate dynamically scaling with continuous modulated LFO
+        double stepLengthPPQ = 0.25; 
+        if (activeRateIdx == 0)      stepLengthPPQ = 1.0;   // 1/4 Note
+        else if (activeRateIdx == 1) stepLengthPPQ = 0.5;   // 1/8 Note
+        else if (activeRateIdx == 2) stepLengthPPQ = 0.25;  // 1/16 Note
+        else if (activeRateIdx == 3) stepLengthPPQ = 0.125; // 1/32 Note
+
+        double stepSamples = samplesPerBeat * stepLengthPPQ;
+
+        if (isPlaying)
+        {
+            int stepIndex = static_cast<int> (std::floor (mSongPositionPPQ / stepLengthPPQ)) % 8;
+            if (stepIndex != mLastStep)
+            {
+                mLastStep = stepIndex;
+                currentStep = stepIndex;
+                stepTriggered = true;
+            }
+        }
+        else
+        {
+            mTimeInSamples += numSamples;
+            if (mTimeInSamples >= stepSamples)
+            {
+                mTimeInSamples = 0;
+                currentStep = (currentStep + 1) % 8;
+                mLastStep = currentStep;
+                stepTriggered = true;
+            }
+        }
+
+        // 4. Arpeggiator Step & Euclidean Execution
+        if (stepTriggered)
+        {
+            float faderProb = activeFaderProb[currentStep];
+            
+            int ratchetPulses = static_cast<int>(std::round(activeMorph * 8.0f));
+            std::vector<int> euclidRatchets = generateEuclideanPattern (8, ratchetPulses);
+            bool isRatchetStep = euclidRatchets[currentStep] == 1;
+            juce::ignoreUnused(isRatchetStep);
+
+            bool shouldPlay = (juce::Random::getSystemRandom().nextFloat() <= faderProb);
+            bool isRest = (juce::Random::getSystemRandom().nextFloat() <= modRest);
+
+            if (shouldPlay && ! isRest)
+            {
+                if (mLastNotePlayed != -1)
+                {
+                    processedMidi.addEvent (juce::MidiMessage::noteOff (1, mLastNotePlayed), 0);
+                    mLastNotePlayed = -1;
+                }
+
+                int rootKeyIdx = juce::jlimit (0, 11, static_cast<int> (*apvts.getRawParameterValue (IDs::rootKey.getParamID())));
+                int scaleIdx = juce::jlimit (0, 9, static_cast<int> (*apvts.getRawParameterValue (IDs::scaleType.getParamID())));
+
+                std::vector<int> scaleOffsets = { 0, 2, 4, 5, 7, 9, 11, 12 }; 
+                if (scaleIdx == 1)      scaleOffsets = { 0, 2, 3, 5, 7, 8, 10, 12 }; 
+                else if (scaleIdx == 2) scaleOffsets = { 0, 3, 5, 7, 10, 12, 15, 17 }; 
+                else if (scaleIdx == 3) scaleOffsets = { 0, 2, 4, 7, 9, 12, 14, 16 };  
+                else if (scaleIdx == 4) scaleOffsets = { 0, 2, 3, 5, 7, 9, 10, 12 };  
+                else if (scaleIdx == 5) scaleOffsets = { 0, 1, 3, 5, 7, 8, 10, 12 };  
+                else if (scaleIdx == 6) scaleOffsets = { 0, 2, 4, 6, 7, 9, 11, 12 };  
+                else if (scaleIdx == 7) scaleOffsets = { 0, 2, 4, 5, 7, 9, 10, 12 };  
+                else if (scaleIdx == 8) scaleOffsets = { 0, 2, 3, 5, 7, 8, 11, 12 };  
+                else if (scaleIdx == 9) scaleOffsets = { 0, 2, 3, 5, 7, 9, 11, 12 };  
+
+                int rawPitch = notesToPlay[currentStep % notesToPlay.size()];
+                int octave = (rawPitch / 12) * 12;
+
+                // Modulate active arpeggiation octave limit continuously
+                int octaveShiftCount = (currentStep / 2) % activeOctavesVal;
+
+                int targetPitch = octave + rootKeyIdx + scaleOffsets[currentStep] + static_cast<int>(accumulatedPitchOffset) + (octaveShiftCount * 12);
+
+                if (modChaos > 0.2f && juce::Random::getSystemRandom().nextFloat() <= modChaos)
+                    targetPitch += (juce::Random::getSystemRandom().nextBool() ? 12 : -12);
+
+                targetPitch = juce::jlimit(0, 127, targetPitch);
+                int durationSamples = static_cast<int>(stepSamples * modLegato);
+
+                processedMidi.addEvent (juce::MidiMessage::noteOn (1, targetPitch, static_cast<juce::uint8>(100)), 0);
+                mLastNotePlayed = targetPitch;
+                mNoteOffTime = durationSamples;
+                
+                scheduleNoteOff (processedMidi, targetPitch, durationSamples);
+            }
+        }
+    }
+    else 
+    { 
+        if (mLastStep != -1)
+        {
+            if (mLastNotePlayed != -1)
+            {
+                processedMidi.addEvent (juce::MidiMessage::noteOff (1, mLastNotePlayed), 0);
+                mLastNotePlayed = -1;
+            }
+            mLastStep = -1; 
+        }
+        currentStep = 0; 
+    }
+
+    midiMessages.swapWith (processedMidi);
+}
+
+void PluginProcessor::triggerDiatonicChordPad (int padIndex)
+{
+    int rootIdx = juce::jlimit (0, 11, static_cast<int> (*apvts.getRawParameterValue (IDs::rootKey.getParamID())));
+    int scaleIdx = juce::jlimit (0, 9, static_cast<int> (*apvts.getRawParameterValue (IDs::scaleType.getParamID())));
+
+    std::vector<int> scaleOffsets;
+    switch (scaleIdx)
+    {
+        case 1:  scaleOffsets = { 0, 2, 3, 5, 7, 8, 10 }; break; 
+        case 2:  scaleOffsets = { 0, 3, 5, 7, 10, 12, 14 }; break; 
+        case 3:  scaleOffsets = { 0, 2, 4, 7, 9, 12, 14 }; break; 
+        case 4:  scaleOffsets = { 0, 2, 3, 5, 7, 9, 10 }; break; 
+        case 5:  scaleOffsets = { 0, 1, 3, 5, 7, 8, 10 }; break; 
+        case 6:  scaleOffsets = { 0, 2, 4, 6, 7, 9, 11 }; break; 
+        case 7:  scaleOffsets = { 0, 2, 4, 5, 7, 9, 10 }; break; 
+        case 8:  scaleOffsets = { 0, 2, 3, 5, 7, 8, 11 }; break; 
+        case 9:  scaleOffsets = { 0, 2, 3, 5, 7, 9, 11 }; break; 
+        default: scaleOffsets = { 0, 2, 4, 5, 7, 9, 11 }; break; 
+    }
+
+    auto getScalePitch = [&](int degree) -> int {
+        int octaveShift = (degree / 7) * 12;
+        return scaleOffsets[degree % 7] + octaveShift;
+    };
+
+    int baseRoot = 48 + rootIdx;
+    int r = getScalePitch (padIndex);
+    int t = getScalePitch (padIndex + 2); 
+    int f = getScalePitch (padIndex + 4); 
+
+    // Apply modulated continuous LFO parameter
+    std::vector<int> newChord;
+    if (activeHarmony >= 0.34f && activeHarmony < 0.67f)
+    {
+        t = getScalePitch (padIndex + 3); 
+        newChord = { baseRoot + r, baseRoot + t, baseRoot + f };
+    }
+    else if (activeHarmony >= 0.67f)
+    {
+        int s = getScalePitch (padIndex + 6); 
+        newChord = { baseRoot + r, baseRoot + t, baseRoot + f, baseRoot + s };
+    }
+    else
+    {
+        newChord = { baseRoot + r, baseRoot + t, baseRoot + f }; 
+    }
+
+    if (! lastChordPitches.empty() && newChord.size() == lastChordPitches.size())
+    {
+        int pitchDiff = newChord[2] - lastChordPitches[2];
+        if (pitchDiff > 5) newChord[2] -= 12; 
+        else if (pitchDiff < -5) newChord[0] += 12; 
+    }
+    
+    std::sort(newChord.begin(), newChord.end());
+    lastChordPitches = newChord;
+
+    latchedNotes = newChord;
+    apvts.getParameter(IDs::latch.getParamID())->setValueNotifyingHost(1.0f); 
+}
+
 void PluginProcessor::saveSceneA (int slotIndex)
 {
     if (slotIndex < 0 || slotIndex >= 4) return;
@@ -551,274 +831,6 @@ void PluginProcessor::setStateInformation (const void* data, int sizeInBytes)
             }
         }
     }
-}
-
-void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)
-{
-    buffer.clear();
-
-    bool isPlaying = false;
-    double bpm = 120.0;
-    mSongPositionPPQ = 0.0;
-
-#if JUCE_MAJOR_VERSION >= 7
-    if (auto* playhead = getPlayHead())
-    {
-        if (auto pos = playhead->getPosition())
-        {
-            isPlaying = pos->getIsPlaying();
-            auto bpmOpt = pos->getBpm();
-            if (bpmOpt.hasValue()) bpm = *bpmOpt;
-            auto ppqOpt = pos->getPpqPosition();
-            if (ppqOpt.hasValue()) mSongPositionPPQ = *ppqOpt;
-        }
-    }
-#else
-    if (auto* playhead = getPlayHead())
-    {
-        juce::AudioPlayHead::CurrentPositionInfo info;
-        if (playhead->getCurrentPositionInfo (info))
-        {
-            isPlaying = info.isPlaying;
-            bpm = info.bpm;
-            mSongPositionPPQ = info.ppqPosition;
-        }
-    }
-#endif
-
-    int numSamples = buffer.getNumSamples();
-    updateLfoModulations (numSamples, bpm);
-
-    bool isLatchActive = *apvts.getRawParameterValue (IDs::latch.getParamID()) > 0.5f;
-
-    float activeFaderProb[8];
-    for (int i = 0; i < 8; ++i)
-        activeFaderProb[i] = *apvts.getRawParameterValue (juce::String ("fader" + juce::String (i + 1)));
-
-    // 1. Process Decrementing Note-Off Queue
-    juce::MidiBuffer processedMidi;
-    for (auto it = scheduledNoteOffs.begin(); it != scheduledNoteOffs.end();)
-    {
-        it->second -= numSamples;
-        if (it->second <= 0)
-        {
-            processedMidi.addEvent (juce::MidiMessage::noteOff (1, it->first), 0);
-            it = scheduledNoteOffs.erase(it);
-        }
-        else ++it;
-    }
-
-    // 2. Monitor physical keyboard pressed MIDI keys
-    for (const auto metadata : midiMessages)
-    {
-        auto msg = metadata.getMessage();
-        if (msg.isNoteOn())
-        {
-            int note = msg.getNoteNumber();
-            if (std::find (activeHeldNotes.begin(), activeHeldNotes.end(), note) == activeHeldNotes.end())
-            {
-                activeHeldNotes.push_back (note);
-                std::sort (activeHeldNotes.begin(), activeHeldNotes.end());
-            }
-
-            if (isLatchActive)
-            {
-                if (isFirstNoteOfNewChord)
-                {
-                    for (int n : latchedNotes) scheduleNoteOff (processedMidi, n, 0);
-                    latchedNotes.clear();
-                    isFirstNoteOfNewChord = false;
-                }
-                if (std::find (latchedNotes.begin(), latchedNotes.end(), note) == latchedNotes.end())
-                {
-                    latchedNotes.push_back (note);
-                    std::sort (latchedNotes.begin(), latchedNotes.end());
-                }
-            }
-        }
-        else if (msg.isNoteOff())
-        {
-            int note = msg.getNoteNumber();
-            activeHeldNotes.erase (std::remove (activeHeldNotes.begin(), activeHeldNotes.end(), note), activeHeldNotes.end());
-            if (activeHeldNotes.empty()) isFirstNoteOfNewChord = true;
-        }
-    }
-    midiMessages.clear();
-
-    const auto& notesToPlay = isLatchActive ? latchedNotes : activeHeldNotes;
-    
-    isCurrentlyPlayingUI.store (!notesToPlay.empty());
-
-    // 3. Dual-Clock Step Generation
-    if (! notesToPlay.empty())
-    {
-        bool stepTriggered = false;
-        double samplesPerBeat = mSampleRate * (60.0 / (bpm > 0 ? bpm : 120.0));
-        
-        // Compute active step rate dynamically scaling with continuous modulated LFO
-        double stepLengthPPQ = 0.25; 
-        if (activeRateIdx == 0)      stepLengthPPQ = 1.0;   // 1/4 Note
-        else if (activeRateIdx == 1) stepLengthPPQ = 0.5;   // 1/8 Note
-        else if (activeRateIdx == 2) stepLengthPPQ = 0.25;  // 1/16 Note
-        else if (activeRateIdx == 3) stepLengthPPQ = 0.125; // 1/32 Note
-
-        double stepSamples = samplesPerBeat * stepLengthPPQ;
-
-        if (isPlaying)
-        {
-            int stepIndex = static_cast<int> (std::floor (mSongPositionPPQ / stepLengthPPQ)) % 8;
-            if (stepIndex != mLastStep)
-            {
-                mLastStep = stepIndex;
-                currentStep = stepIndex;
-                stepTriggered = true;
-            }
-        }
-        else
-        {
-            mTimeInSamples += numSamples;
-            if (mTimeInSamples >= stepSamples)
-            {
-                mTimeInSamples = 0;
-                currentStep = (currentStep + 1) % 8;
-                mLastStep = currentStep;
-                stepTriggered = true;
-            }
-        }
-
-        // 4. Arpeggiator Step & Euclidean Execution
-        if (stepTriggered)
-        {
-            float faderProb = activeFaderProb[currentStep];
-            
-            int ratchetPulses = static_cast<int>(std::round(activeMorph * 8.0f));
-            std::vector<int> euclidRatchets = generateEuclideanPattern (8, ratchetPulses);
-            bool isRatchetStep = euclidRatchets[currentStep] == 1;
-            juce::ignoreUnused(isRatchetStep);
-
-            bool shouldPlay = (juce::Random::getSystemRandom().nextFloat() <= faderProb);
-            bool isRest = (juce::Random::getSystemRandom().nextFloat() <= modRest);
-
-            if (shouldPlay && ! isRest)
-            {
-                if (mLastNotePlayed != -1)
-                {
-                    processedMidi.addEvent (juce::MidiMessage::noteOff (1, mLastNotePlayed), 0);
-                    mLastNotePlayed = -1;
-                }
-
-                int rootKeyIdx = juce::jlimit (0, 11, static_cast<int> (*apvts.getRawParameterValue (IDs::rootKey.getParamID())));
-                int scaleIdx = juce::jlimit (0, 9, static_cast<int> (*apvts.getRawParameterValue (IDs::scaleType.getParamID())));
-
-                std::vector<int> scaleOffsets = { 0, 2, 4, 5, 7, 9, 11, 12 }; 
-                if (scaleIdx == 1)      scaleOffsets = { 0, 2, 3, 5, 7, 8, 10, 12 }; 
-                else if (scaleIdx == 2) scaleOffsets = { 0, 3, 5, 7, 10, 12, 15, 17 }; 
-                else if (scaleIdx == 3) scaleOffsets = { 0, 2, 4, 7, 9, 12, 14, 16 };  
-                else if (scaleIdx == 4) scaleOffsets = { 0, 2, 3, 5, 7, 9, 10, 12 };  
-                else if (scaleIdx == 5) scaleOffsets = { 0, 1, 3, 5, 7, 8, 10, 12 };  
-                else if (scaleIdx == 6) scaleOffsets = { 0, 2, 4, 6, 7, 9, 11, 12 };  
-                else if (scaleIdx == 7) scaleOffsets = { 0, 2, 4, 5, 7, 9, 10, 12 };  
-                else if (scaleIdx == 8) scaleOffsets = { 0, 2, 3, 5, 7, 8, 11, 12 };  
-                else if (scaleIdx == 9) scaleOffsets = { 0, 2, 3, 5, 7, 9, 11, 12 };  
-
-                int rawPitch = notesToPlay[currentStep % notesToPlay.size()];
-                int octave = (rawPitch / 12) * 12;
-
-                // Modulate active arpeggiation octave limit continuously
-                int octaveShiftCount = (currentStep / 2) % activeOctavesVal;
-
-                int targetPitch = octave + rootKeyIdx + scaleOffsets[currentStep] + static_cast<int>(accumulatedPitchOffset) + (octaveShiftCount * 12);
-
-                if (modChaos > 0.2f && juce::Random::getSystemRandom().nextFloat() <= modChaos)
-                    targetPitch += (juce::Random::getSystemRandom().nextBool() ? 12 : -12);
-
-                targetPitch = juce::jlimit(0, 127, targetPitch);
-                int durationSamples = static_cast<int>(stepSamples * modLegato);
-
-                processedMidi.addEvent (juce::MidiMessage::noteOn (1, targetPitch, static_cast<juce::uint8>(100)), 0);
-                mLastNotePlayed = targetPitch;
-                mNoteOffTime = durationSamples;
-                
-                scheduleNoteOff (processedMidi, targetPitch, durationSamples);
-            }
-        }
-    }
-    else 
-    { 
-        if (mLastStep != -1)
-        {
-            if (mLastNotePlayed != -1)
-            {
-                processedMidi.addEvent (juce::MidiMessage::noteOff (1, mLastNotePlayed), 0);
-                mLastNotePlayed = -1;
-            }
-            mLastStep = -1; 
-        }
-        currentStep = 0; 
-    }
-
-    midiMessages.swapWith (processedMidi);
-}
-
-void PluginProcessor::triggerDiatonicChordPad (int padIndex)
-{
-    int rootIdx = juce::jlimit (0, 11, static_cast<int> (*apvts.getRawParameterValue (IDs::rootKey.getParamID())));
-    int scaleIdx = juce::jlimit (0, 9, static_cast<int> (*apvts.getRawParameterValue (IDs::scaleType.getParamID())));
-
-    std::vector<int> scaleOffsets;
-    switch (scaleIdx)
-    {
-        case 1:  scaleOffsets = { 0, 2, 3, 5, 7, 8, 10 }; break; 
-        case 2:  scaleOffsets = { 0, 3, 5, 7, 10, 12, 14 }; break; 
-        case 3:  scaleOffsets = { 0, 2, 4, 7, 9, 12, 14 }; break; 
-        case 4:  scaleOffsets = { 0, 2, 3, 5, 7, 9, 10 }; break; 
-        case 5:  scaleOffsets = { 0, 1, 3, 5, 7, 8, 10 }; break; 
-        case 6:  scaleOffsets = { 0, 2, 4, 6, 7, 9, 11 }; break; 
-        case 7:  scaleOffsets = { 0, 2, 4, 5, 7, 9, 10 }; break; 
-        case 8:  scaleOffsets = { 0, 2, 3, 5, 7, 8, 11 }; break; 
-        case 9:  scaleOffsets = { 0, 2, 3, 5, 7, 9, 11 }; break; 
-        default: scaleOffsets = { 0, 2, 4, 5, 7, 9, 11 }; break; 
-    }
-
-    auto getScalePitch = [&](int degree) -> int {
-        int octaveShift = (degree / 7) * 12;
-        return scaleOffsets[degree % 7] + octaveShift;
-    };
-
-    int baseRoot = 48 + rootIdx;
-    int r = getScalePitch (padIndex);
-    int t = getScalePitch (padIndex + 2); 
-    int f = getScalePitch (padIndex + 4); 
-
-    // Apply modulated continuous LFO parameter
-    std::vector<int> newChord;
-    if (activeHarmony >= 0.34f && activeHarmony < 0.67f)
-    {
-        t = getScalePitch (padIndex + 3); 
-        newChord = { baseRoot + r, baseRoot + t, baseRoot + f };
-    }
-    else if (activeHarmony >= 0.67f)
-    {
-        int s = getScalePitch (padIndex + 6); 
-        newChord = { baseRoot + r, baseRoot + t, baseRoot + f, baseRoot + s };
-    }
-    else
-    {
-        newChord = { baseRoot + r, baseRoot + t, baseRoot + f }; 
-    }
-
-    if (! lastChordPitches.empty() && newChord.size() == lastChordPitches.size())
-    {
-        int pitchDiff = newChord[2] - lastChordPitches[2];
-        if (pitchDiff > 5) newChord[2] -= 12; 
-        else if (pitchDiff < -5) newChord[0] += 12; 
-    }
-    
-    std::sort(newChord.begin(), newChord.end());
-    lastChordPitches = newChord;
-
-    latchedNotes = newChord;
-    apvts.getParameter(IDs::latch.getParamID())->setValueNotifyingHost(1.0f); 
 }
 
 juce::AudioProcessorValueTreeState::ParameterLayout PluginProcessor::createParameterLayout()
