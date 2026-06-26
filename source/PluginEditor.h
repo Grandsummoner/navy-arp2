@@ -7,7 +7,7 @@
 #include "PluginProcessor.h"
 
 // ==============================================================================
-// Custom DJ TechTools / Chroma Caps Style Rotary LookAndFeel [5]
+// Custom DJ TechTools / Chroma Caps Style Rotary & Linear LookAndFeel [5]
 // ==============================================================================
 class ChromaCapsLookAndFeel : public juce::LookAndFeel_V4
 {
@@ -57,7 +57,7 @@ public:
         g.setColour (accentCol);
         g.fillPath (pointerPath);
         
-        // Glossy Highlights on Pointer Cap (Using strokePath instead of drawPath) [5]
+        // Glossy Highlights on Pointer Cap [5]
         g.setColour (juce::Colours::white.withAlpha (0.35f));
         g.strokePath (pointerPath, juce::PathStrokeType (0.7f)); 
         g.restoreState();
@@ -68,6 +68,56 @@ public:
         g.fillEllipse (toX - centerRadius, toY - centerRadius, centerRadius * 2.0f, centerRadius * 2.0f);
         g.setColour (juce::Colours::white.withAlpha (0.05f));
         g.fillEllipse (toX - centerRadius, toY - centerRadius - 2.0f, centerRadius * 2.0f, centerRadius * 1.5f);
+    }
+
+    void drawLinearSlider (juce::Graphics& g, int x, int y, int width, int height,
+                           float sliderPos, float minSliderPos, float maxSliderPos,
+                           const juce::Slider::SliderStyle style, juce::Slider& slider) override
+    {
+        // Custom vertical mixer-style faders to match Chroma style [5]
+        if (style == juce::Slider::LinearVertical)
+        {
+            auto trackWidth = 4.0f;
+            auto trackX = x + width * 0.5f - trackWidth * 0.5f;
+            
+            // 1. Draw Recessed Fader Slot/Track [5]
+            g.setColour (juce::Colour (0xFF090A0D));
+            g.fillRoundedRectangle (trackX, (float)y, trackWidth, (float)height, trackWidth * 0.5f);
+            
+            g.setColour (juce::Colour (0xFF242835));
+            g.drawRoundedRectangle (trackX - 1.0f, (float)y, trackWidth + 2.0f, (float)height, trackWidth * 0.5f, 1.0f);
+
+            // 2. Draw Chroma Fader Cap [5]
+            float capWidth = juce::jmin (26.0f, width * 0.8f);
+            float capHeight = 14.0f;
+            float capX = x + width * 0.5f - capWidth * 0.5f;
+            float capY = sliderPos - capHeight * 0.5f;
+
+            // Fader shadow [5]
+            g.setColour (juce::Colour (0x45000000));
+            g.fillRoundedRectangle (capX + 1.0f, capY + 3.0f, capWidth, capHeight, 2.0f);
+
+            // Tactile Rubberized Fader Cap Body [5]
+            juce::Colour capBaseCol = juce::Colour (0xFF1E212A);
+            juce::ColourGradient capGrad (capBaseCol.brighter (0.1f), capX, capY,
+                                         capBaseCol.darker (0.2f), capX, capY + capHeight, false);
+            g.setGradientFill (capGrad);
+            g.fillRoundedRectangle (capX, capY, capWidth, capHeight, 2.0f);
+
+            // Outer cap bezel highlights
+            g.setColour (juce::Colour (0xFF3A3F4E));
+            g.drawRoundedRectangle (capX, capY, capWidth, capHeight, 2.0f, 1.0f);
+
+            // Colored central neon strip indicator [5]
+            g.setColour (slider.findColour (juce::Slider::thumbColourId));
+            float stripeHeight = 2.0f;
+            g.fillRect (capX + 2.0f, capY + capHeight * 0.5f - stripeHeight * 0.5f, capWidth - 4.0f, stripeHeight);
+        }
+        else
+        {
+            // Fallback for horizontal sliders
+            juce::LookAndFeel_V4::drawLinearSlider (g, x, y, width, height, sliderPos, minSliderPos, maxSliderPos, style, slider);
+        }
     }
 };
 
@@ -112,28 +162,40 @@ public:
         g.drawText ("KEY: " + keyName + " | SCALE: " + scaleName + " | EXT: " + extText + " | RATE: " + speedRate + " | OCT: " + activeOcts, 
                     10, 25, getWidth() - 20, 15, juce::Justification::centred);
 
-        // Real-time Step VU-meter pulse lines
+        // Grid Area Calculations
         auto area = getLocalBounds().reduced (15);
         area.removeFromTop (35); 
+        
+        // 1. Subtle horizontal level lines under the meters (25%, 50%, 75% thresholds)
+        g.setColour (juce::Colour (0xFF141822));
+        for (float pct : { 0.25f, 0.50f, 0.75f })
+        {
+            float gridY = area.getBottom() - 15.0f - (area.getHeight() - 15.0f) * pct * 0.75f;
+            g.drawHorizontalLine (static_cast<int>(gridY), (float)area.getX(), (float)area.getRight());
+        }
+
         int barWidth = area.getWidth() / 8;
         int spacing = 6;
 
         for (int i = 0; i < 8; ++i)
         {
             float faderProb = *processor.apvts.getRawParameterValue ("fader" + juce::String (i + 1));
-            int barHeight = static_cast<int>(area.getHeight() * faderProb * 0.75f);
+            
+            // Scaled down vertically to fit step markers neatly underneath the bars
+            int barHeight = static_cast<int>((area.getHeight() - 15) * faderProb * 0.75f);
             
             juce::Rectangle<int> bar (area.getX() + (i * barWidth) + spacing, 
-                                      area.getBottom() - barHeight - 5, 
+                                      area.getBottom() - barHeight - 15, 
                                       barWidth - (spacing * 2), 
                                       barHeight);
 
             bool isPlaying = processor.isCurrentlyPlayingUI.load();
 
+            // 2. Draw dynamic meter bars
             if (i == processor.currentStep && isPlaying)
             {
-                if (i == 0)      g.setColour (juce::Colour (0xFF4CFF4C)); // Beat 1: Neon Green
-                else if (i == 4) g.setColour (juce::Colour (0xFFFF4C4C)); // Beat 2: Neon Red
+                if (i == 0)      g.setColour (juce::Colour (0xFF4CFF4C)); // Beat 1: Green
+                else if (i == 4) g.setColour (juce::Colour (0xFFFF4C4C)); // Beat 5: Red
                 else             g.setColour (juce::Colour (0xFF00FFFF)); // Others: Cyan
                 g.fillRect (bar.expanded(1, 1));
             }
@@ -144,6 +206,24 @@ public:
                 else                 g.setColour (juce::Colour (0xFFFFAA00)); 
                 g.fillRect (bar);
             }
+
+            // 3. Symmetrical Dim Sequencer Step LED Labels [NEW]
+            juce::String stepNumStr = juce::String (i + 1);
+            g.setFont (juce::Font ("Consolas", 10.0f, juce::Font::bold));
+            
+            if (i == processor.currentStep && isPlaying)
+            {
+                if (i == 0)      g.setColour (juce::Colour (0xFF4CFF4C)); 
+                else if (i == 4) g.setColour (juce::Colour (0xFFFF4C4C)); 
+                else             g.setColour (juce::Colour (0xFF00FFFF));
+            }
+            else
+            {
+                g.setColour (juce::Colour (0xFF3A3F4E));
+            }
+            
+            int numX = area.getX() + (i * barWidth);
+            g.drawText (stepNumStr, numX, area.getBottom() - 12, barWidth, 12, juce::Justification::centred);
         }
     }
 
@@ -180,7 +260,7 @@ public:
 private:
     PluginProcessor& processor;
     OledDisplay oledDisplay;
-    ChromaCapsLookAndFeel chromaLookAndFeel; // Custom rubber-cap style pointer knobs [5]
+    ChromaCapsLookAndFeel chromaLookAndFeel; // Custom rubber-cap style controls [5]
 
     juce::Slider fader1, fader2, fader3, fader4, fader5, fader6, fader7, fader8;
     juce::Label faderLabel1, faderLabel2, faderLabel3, faderLabel4, faderLabel5, faderLabel6, faderLabel7, faderLabel8;
