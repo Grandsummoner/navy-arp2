@@ -698,3 +698,5 @@ juce::AudioProcessorValueTreeState::ParameterLayout PluginProcessor::createParam
 
     return { params.begin(), params.end() };
 }
+
+juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter() { return new PluginProcessor(); }
