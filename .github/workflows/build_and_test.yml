@@ -82,7 +82,7 @@ jobs:
           mv "packaging/Output/${{ env.ARTIFACT_NAME }}.exe" "${{ env.ARTIFACTS_PATH }}/"
 
       - name: Upload Exe (Windows)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.ARTIFACT_NAME }}
           path: "${{ env.ARTIFACTS_PATH }}/${{ env.ARTIFACT_NAME }}.exe"
