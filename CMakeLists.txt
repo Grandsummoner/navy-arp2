@@ -24,7 +24,8 @@ add_subdirectory(modules/clap-juce-extensions EXCLUDE_FROM_ALL)
 add_subdirectory(modules/melatonin_inspector)
 
 juce_add_plugin("${PROJECT_NAME}"
-    ICON_BIG "${CMAKE_CURRENT_SOURCE_DIR}/packaging/icon.png"
+    # Relocated icon path to allow safe deletion of the packaging/ directory
+    ICON_BIG "${CMAKE_CURRENT_SOURCE_DIR}/assets/images/icon.png"
     COMPANY_NAME "${COMPANY_NAME}"
     BUNDLE_ID "${BUNDLE_ID}"
     COPY_PLUGIN_AFTER_BUILD TRUE
@@ -78,6 +79,4 @@ target_link_libraries(SharedCode
 target_link_libraries("${PROJECT_NAME}" PRIVATE SharedCode)
 
 include(PamplejuceIPP)
-include(Tests)
-include(Benchmarks)
-include(GitHubENV)
+# Removed Tests, Benchmarks, and GitHubENV includes to cleanly match the deleted modular folders
