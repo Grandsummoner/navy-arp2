@@ -317,18 +317,4 @@ void PluginEditor::resized()
 void PluginEditor::timerCallback()
 {
     uint32_t now = juce::Time::getMillisecondCounter();
-    bool isArp = *processor.apvts.getRawParameterValue (IDs::arpSeq.getParamID()) > 0.5f; arpSeqButton.setButtonText (isArp ? "Arp" : "Seq");
-
-    static bool lastAnchorB = false; bool currentAnchorB = processor.isSceneBActiveAnchor.load();
-    if (currentAnchorB != lastAnchorB) { lastAnchorB = currentAnchorB; sceneAButton.repaint(); sceneBButton.repaint(); }
-
-    if (sceneAFlashTimer > 0) { sceneAFlashTimer--; if (sceneAFlashTimer == 0) sceneAButton.repaint(); }
-    if (sceneBFlashTimer > 0) { sceneBFlashTimer--; if (sceneBFlashTimer == 0) sceneBButton.repaint(); }
-    if (saveFlashTimer > 0) { saveFlashTimer--; if (saveFlashTimer == 0) saveButton.repaint(); }
-    if (recallFlashTimer > 0) { recallFlashTimer--; if (recallFlashTimer == 0) recallButton.repaint(); }
-    if (copyFlashTimer > 0) { copyFlashTimer--; if (copyFlashTimer == 0) copyButton.repaint(); }
-    if (initFlashTimer > 0) { initFlashTimer--; if (initFlashTimer == 0) initButton.repaint(); }
-
-    for (int i = 0; i < 8; ++i) {
-        if (presetButtons[i].isMouseButtonDown() && presetPressStartTime[i] != 0 && !presetAlreadySaved[i]) {
-      
+    bool isArp = *processor.apvts.getRawParamet
