@@ -100,7 +100,7 @@ PluginEditor::PluginEditor (PluginProcessor& p)
     freezeButton.setButtonText ("Freeze");
     freezeButton.setClickingTogglesState (true);
 
-    // Symmetrical Octatrack Scene Buttons (Just bold "A" and "B" as manual anchor toggles)
+    // Symmetrical Octatrack Scene Buttons
     addAndMakeVisible (sceneAButton);
     sceneAButton.setButtonText ("A");
     sceneAButton.setColour (juce::TextButton::buttonColourId, juce::Colour (0xFF151515));
@@ -340,7 +340,19 @@ void PluginEditor::mouseDown (const juce::MouseEvent& event)
         initAlreadySaved = false;
     }
 
-    // 3. Sequential Latching Modifier Actions [NEW - Corrected braces and IDs parsing]
+    // Symmetrical hold trackers for scene buttons
+    if (event.eventComponent == &sceneAButton)
+    {
+        sceneAPressStartTime = juce::Time::getMillisecondCounter();
+        sceneAAlreadySaved = false;
+    }
+    else if (event.eventComponent == &sceneBButton)
+    {
+        sceneBPressStartTime = juce::Time::getMillisecondCounter();
+        sceneBAlreadySaved = false;
+    }
+
+    // 3. Sequential Latching Modifier Actions
     if (initButton.getToggleState())
     {
         bool actionTriggered = false;
@@ -459,4 +471,289 @@ void PluginEditor::mouseDown (const juce::MouseEvent& event)
                 depthMenu.addItem (21, "Slight (10%)", true, (currentDepth > 0.05f && currentDepth <= 0.15f));
                 depthMenu.addItem (22, "Medium (25%)", true, (currentDepth > 0.2f && currentDepth <= 0.3f));
                 depthMenu.addItem (23, "Heavy (50%)", true, (currentDepth > 0.45f && currentDepth <= 0.55f));
-                depthMenu.addItem (24, "Full (1
+                depthMenu.addItem (24, "Full (100%)", true, (currentDepth > 0.95f));
+                menu.addSubMenu ("LFO Depth / Range", depthMenu);
+                
+                int result = menu.showAt (clickedSlider);
+                if (result == 1) // Disable LFO
+                {
+                    rateParam->setValueNotifyingHost (0.0f);
+                    depthParam->setValueNotifyingHost (0.0f);
+                }
+                else if (result >= 10 && result <= 13) // Speed Choices
+                {
+                    float rateVal = static_cast<float> (result - 9) / 4.0f;
+                    rateParam->setValueNotifyingHost (rateVal);
+                    if (depthParam->getValue() == 0.0f) {
+                        depthParam->setValueNotifyingHost (0.25f); // Default to 25% depth
+                    }
+                }
+                else if (result >= 20 && result <= 24) // Depth Choices
+                {
+                    float depthVal = 0.0f;
+                    if (result == 21)      depthVal = 0.1f;
+                    else if (result == 22) depthVal = 0.25f;
+                    else if (result == 23) depthVal = 0.5f;
+                    else if (result == 24) depthVal = 1.0f;
+                    depthParam->setValueNotifyingHost (depthVal);
+                    
+                    if (rateParam->getValue() == 0.0f) {
+                        rateParam->setValueNotifyingHost (0.5f); // Default speed
+                    }
+                }
+            }
+        }
+    }
+}
+
+void PluginEditor::mouseUp (const juce::MouseEvent& event)
+{
+    // Reset press start times on release to prevent repeat triggers
+    for (int i = 0; i < 8; ++i)
+    {
+        if (event.eventComponent == &presetButtons[i])
+        {
+            presetPressStartTime[i] = 0;
+            presetAlreadySaved[i] = false;
+        }
+    }
+
+    if (event.eventComponent == &sceneAButton)   { sceneAPressStartTime = 0; sceneAAlreadySaved = false; }
+    if (event.eventComponent == &sceneBButton)   { sceneBPressStartTime = 0; sceneBAlreadySaved = false; }
+    if (event.eventComponent == &saveButton)     { savePressStartTime = 0; saveAlreadySaved = false; }
+    if (event.eventComponent == &recallButton)   { recallPressStartTime = 0; recallAlreadySaved = false; }
+    if (event.eventComponent == &copyButton)     { copyPressStartTime = 0; copyAlreadySaved = false; }
+    if (event.eventComponent == &initButton)     { initPressStartTime = 0; initAlreadySaved = false; }
+}
+
+void PluginEditor::paint (juce::Graphics& g)
+{
+    int themeIdx = static_cast<int> (processor.apvts.getRawParameterValue ("panelTheme")->load());
+    auto t = AppTheme::get (themeIdx);
+
+    g.fillAll (t.background);
+
+    // Subtle outline
+    g.setColour (t.border);
+    g.drawRect (getLocalBounds().toFloat(), 3.0f);
+
+    // Section outlines
+    auto bounds = getLocalBounds().toFloat();
+    
+    // Left Sidebar panel border
+    g.drawRoundedRectangle (10.0f, 10.0f, 170.0f, bounds.getHeight() - 210.0f, 4.0f, 1.5f);
+    
+    // Right Sidebar panel border
+    g.drawRoundedRectangle (bounds.getWidth() - 180.0f, 10.0f, 170.0f, bounds.getHeight() - 210.0f, 4.0f, 1.5f);
+
+    // Bottom faders panel border
+    g.drawRoundedRectangle (10.0f, bounds.getHeight() - 190.0f, bounds.getWidth() - 20.0f, 180.0f, 4.0f, 1.5f);
+}
+
+void PluginEditor::resized()
+{
+    auto area = getLocalBounds();
+    int bottomY = getHeight() - 180;
+    int leftPanelHeight = getHeight() - 210;
+
+    // Bottom Faders layout
+    int faderWidth = (getWidth() - 40) / 8;
+    juce::Slider* faders[] = { &fader1, &fader2, &fader3, &fader4, &fader5, &fader6, &fader7, &fader8 };
+    juce::Label* faderLabels[] = { &faderLabel1, &faderLabel2, &faderLabel3, &faderLabel4, &faderLabel5, &faderLabel6, &faderLabel7, &faderLabel8 };
+    
+    for (int i = 0; i < 8; ++i)
+    {
+        int faderX = 20 + i * faderWidth;
+        faders[i]->setBounds (faderX + 10, bottomY + 10, faderWidth - 20, 130);
+        faderLabels[i]->setBounds (faderX, bottomY + 145, faderWidth, 20);
+    }
+
+    // Left sidebar layout
+    juce::Slider* leftKnobs[] = { &rhythmMorphKnob, &restKnob, &legatoKnob, &rateKnob };
+    juce::Label* leftTitles[] = { &rhythmMorphTitle, &restTitle, &legatoTitle, &rateTitle };
+    int knobHeight = (leftPanelHeight - 20) / 4;
+    for (int i = 0; i < 4; ++i)
+    {
+        int knobY = 15 + i * knobHeight;
+        leftKnobs[i]->setBounds (20, knobY + 12, 150, knobHeight - 16);
+        leftTitles[i]->setBounds (20, knobY, 150, 14);
+    }
+
+    // Right sidebar layout
+    juce::Slider* rightKnobs[] = { &entropyKnob, &harmonyKnob, &chaosKnob, &octavesKnob };
+    juce::Label* rightTitles[] = { &entropyTitle, &harmonyTitle, &chaosTitle, &octavesTitle };
+    int rightX = getWidth() - 180;
+    for (int i = 0; i < 4; ++i)
+    {
+        int knobY = 15 + i * knobHeight;
+        rightKnobs[i]->setBounds (rightX + 10, knobY + 12, 150, knobHeight - 16);
+        rightTitles[i]->setBounds (rightX + 10, knobY, 150, 14);
+    }
+
+    // Center layout calculations
+    int centerWidth = getWidth() - 370;
+    
+    // Dropdowns
+    int dropWidth = (centerWidth - 20) / 3;
+    rootKeyBox.setBounds (190, 15, dropWidth, 24);
+    scaleTypeBox.setBounds (190 + dropWidth + 10, 15, dropWidth, 24);
+    cycleLengthBox.setBounds (190 + (dropWidth + 10) * 2, 15, dropWidth, 24);
+
+    // OLED Display
+    int oledY = 50;
+    int oledHeight = 150;
+    oledDisplay.setBounds (190, oledY, centerWidth, oledHeight);
+
+    // Crossfader and Scene Anchors
+    int crossfaderY = oledY + oledHeight + 15;
+    sceneAButton.setBounds (190, crossfaderY, 40, 24);
+    morphCrossfader.setBounds (235, crossfaderY, centerWidth - 90, 24);
+    sceneBButton.setBounds (190 + centerWidth - 40, crossfaderY, 40, 24);
+
+    // Utility & Performance Grid Section
+    int deckY = crossfaderY + 35;
+    int deckHeight = leftPanelHeight - deckY;
+    
+    // Left-hand 2x2 Utility Grid
+    int utilWidth = 90;
+    int btnW = (utilWidth - 5) / 2;
+    int btnH = (deckHeight - 5) / 2;
+    saveButton.setBounds (190, deckY, btnW, btnH);
+    recallButton.setBounds (190 + btnW + 5, deckY, btnW, btnH);
+    copyButton.setBounds (190, deckY + btnH + 5, btnW, btnH);
+    initButton.setBounds (190 + btnW + 5, deckY + btnH + 5, btnW, btnH);
+
+    // Right-hand 2x2 Dice Grid
+    int diceX = 190 + centerWidth - utilWidth;
+    diceMeloButton.setBounds (diceX, deckY, btnW, btnH);
+    diceArtiButton.setBounds (diceX + btnW + 5, deckY, btnW, btnH);
+    diceTimeButton.setBounds (diceX, deckY + btnH + 5, btnW, btnH);
+    diceNavyButton.setBounds (diceX + btnW + 5, deckY + btnH + 5, btnW, btnH);
+
+    // Performance Deck (Center 4 Buttons)
+    int perfX = 190 + utilWidth + 10;
+    int perfWidth = centerWidth - (utilWidth * 2) - 20;
+    int perfBtnW = (perfWidth - 15) / 4;
+    
+    latchButton.setBounds (perfX, deckY, perfBtnW, btnH);
+    arpSeqButton.setBounds (perfX + perfBtnW + 5, deckY, perfBtnW, btnH);
+    polyButton.setBounds (perfX + (perfBtnW + 5) * 2, deckY, perfBtnW, btnH);
+    freezeButton.setBounds (perfX + (perfBtnW + 5) * 3, deckY, perfBtnW, btnH);
+
+    // 8 Preset Buttons below center buttons
+    int presetY = deckY + btnH + 5;
+    int presetBtnW = (perfWidth - 35) / 8;
+    for (int i = 0; i < 8; ++i)
+    {
+        presetButtons[i].setBounds (perfX + i * (presetBtnW + 5), presetY, presetBtnW, btnH);
+    }
+}
+
+void PluginEditor::timerCallback()
+{
+    uint32_t now = juce::Time::getMillisecondCounter();
+    
+    // Arp/Seq dynamic label updates
+    bool isArp = *processor.apvts.getRawParameterValue (IDs::arpSeq.getParamID()) > 0.5f;
+    arpSeqButton.setButtonText (isArp ? "Arp" : "Seq");
+
+    // Flash timer decays
+    if (sceneAFlashTimer > 0) { sceneAFlashTimer--; if (sceneAFlashTimer == 0) sceneAButton.repaint(); }
+    if (sceneBFlashTimer > 0) { sceneBFlashTimer--; if (sceneBFlashTimer == 0) sceneBButton.repaint(); }
+    if (saveFlashTimer > 0) { saveFlashTimer--; if (saveFlashTimer == 0) saveButton.repaint(); }
+    if (recallFlashTimer > 0) { recallFlashTimer--; if (recallFlashTimer == 0) recallButton.repaint(); }
+    if (copyFlashTimer > 0) { copyFlashTimer--; if (copyFlashTimer == 0) copyButton.repaint(); }
+    if (initFlashTimer > 0) { initFlashTimer--; if (initFlashTimer == 0) initButton.repaint(); }
+
+    // Preset Slot hold-to-save checks and decays
+    for (int i = 0; i < 8; ++i)
+    {
+        if (presetButtons[i].isMouseButtonDown() && presetPressStartTime[i] != 0 && !presetAlreadySaved[i])
+        {
+            if (now - presetPressStartTime[i] >= 1000)
+            {
+                processor.savePreset (i);
+                presetAlreadySaved[i] = true;
+                presetFlashTimer[i] = 24;
+                presetFlashType[i] = 1; // Amber confirmation flash
+                
+                if (saveButton.getToggleState())
+                    saveButton.setToggleState (false, juce::dontSendNotification);
+            }
+        }
+        
+        if (presetFlashTimer[i] > 0)
+        {
+            presetFlashTimer[i]--;
+            if (presetFlashTimer[i] == 0)
+                presetButtons[i].repaint();
+        }
+    }
+
+    // Scene long-press check
+    if (sceneAButton.isMouseButtonDown() && sceneAPressStartTime != 0 && !sceneAAlreadySaved)
+    {
+        if (now - sceneAPressStartTime >= 1000)
+        {
+            processor.saveSceneA();
+            sceneAAlreadySaved = true;
+            sceneAFlashTimer = 24;
+        }
+    }
+    if (sceneBButton.isMouseButtonDown() && sceneBPressStartTime != 0 && !sceneBAlreadySaved)
+    {
+        if (now - sceneBPressStartTime >= 1000)
+        {
+            processor.saveSceneB();
+            sceneBAlreadySaved = true;
+            sceneBFlashTimer = 24;
+        }
+    }
+
+    // Utility 2x2 long press checks
+    if (saveButton.isMouseButtonDown() && savePressStartTime != 0 && !saveAlreadySaved)
+    {
+        if (now - savePressStartTime >= 1000)
+        {
+            int activeSlot = processor.activePresetIndex.load();
+            processor.savePreset (activeSlot);
+            saveAlreadySaved = true;
+            saveFlashTimer = 24;
+            saveButton.setToggleState (false, juce::dontSendNotification);
+        }
+    }
+    if (recallButton.isMouseButtonDown() && recallPressStartTime != 0 && !recallAlreadySaved)
+    {
+        if (now - recallPressStartTime >= 1000)
+        {
+            int activeSlot = processor.activePresetIndex.load();
+            processor.loadPreset (activeSlot);
+            recallAlreadySaved = true;
+            recallFlashTimer = 24;
+            recallButton.setToggleState (false, juce::dontSendNotification);
+        }
+    }
+    if (copyButton.isMouseButtonDown() && copyPressStartTime != 0 && !copyAlreadySaved)
+    {
+        if (now - copyPressStartTime >= 1000)
+        {
+            processor.sceneB = processor.sceneA;
+            processor.hasSceneB = processor.hasSceneA;
+            copyAlreadySaved = true;
+            copyFlashTimer = 24;
+            copyButton.setToggleState (false, juce::dontSendNotification);
+        }
+    }
+    if (initButton.isMouseButtonDown() && initPressStartTime != 0 && !initAlreadySaved)
+    {
+        if (now - initPressStartTime >= 1000)
+        {
+            auto& apvts = processor.apvts;
+            for (auto& param : apvts.getProcessor().getParameters())
+                param->setValueNotifyingHost (param->getDefaultValue());
+            initAlreadySaved = true;
+            initFlashTimer = 24;
+            initButton.setToggleState (false, juce::dontSendNotification);
+        }
+    }
+}

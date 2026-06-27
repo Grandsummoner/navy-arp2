@@ -5,8 +5,14 @@ PluginProcessor::PluginProcessor()
     : AudioProcessor (BusesProperties().withInput("Input", juce::AudioChannelSet::stereo(), true).withOutput("Output", juce::AudioChannelSet::stereo(), true)),
       apvts (*this, nullptr, "PARAMETERS", createParameterLayout())
 {
-    sceneA = SceneState(); sceneB = SceneState(); lastChordPitches = { 60, 64, 67 }; 
-    for (int i = 0; i < 8; ++i) { sceneAPresets[i] = SceneState(); sceneBPresets[i] = SceneState(); }
+    sceneA = SceneState(); 
+    sceneB = SceneState(); 
+    lastChordPitches = { 60, 64, 67 }; 
+    for (int i = 0; i < 8; ++i) 
+    { 
+        sceneAPresets[i] = SceneState(); 
+        sceneBPresets[i] = SceneState(); 
+    }
 }
 
 PluginProcessor::~PluginProcessor() {}
@@ -21,6 +27,7 @@ int PluginProcessor::getCurrentProgram() { return 0; }
 void PluginProcessor::setCurrentProgram (int index) { juce::ignoreUnused (index); }
 const juce::String PluginProcessor::getProgramName (int index) { juce::ignoreUnused (index); return {}; }
 void PluginProcessor::changeProgramName (int index, const juce::String& newName) { juce::ignoreUnused (index, newName); }
+
 juce::AudioProcessorEditor* PluginProcessor::createEditor()
 {
     return new PluginEditor (*this);
@@ -28,10 +35,17 @@ juce::AudioProcessorEditor* PluginProcessor::createEditor()
 
 void PluginProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
-    mSampleRate = sampleRate; mLastStep = -1; mLastNotePlayed = -1; mNoteOffTime = 0; mTimeInSamples = 0;
-    activeHeldNotes.clear(); latchedNotes.clear(); scheduledNoteOffs.clear();
+    mSampleRate = sampleRate; 
+    mLastStep = -1; 
+    mLastNotePlayed = -1; 
+    mNoteOffTime = 0; 
+    mTimeInSamples = 0;
+    activeHeldNotes.clear(); 
+    latchedNotes.clear(); 
+    scheduledNoteOffs.clear();
     std::fill (std::begin (lfoPhases), std::end (lfoPhases), 0.0);
-    isFirstNoteOfNewChord = true; juce::ignoreUnused (samplesPerBlock);
+    isFirstNoteOfNewChord = true; 
+    juce::ignoreUnused (samplesPerBlock);
 
     // Initialize slew smoothing values to prevent jumps
     std::fill (std::begin (currentSlewValue), std::end (currentSlewValue), 0.5f);
@@ -39,20 +53,47 @@ void PluginProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 }
 
 void PluginProcessor::releaseResources() {}
-bool PluginProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const { return layouts.getMainOutputChannelSet() == juce::AudioChannelSet::mono() || layouts.getMainOutputChannelSet() == juce::AudioChannelSet::stereo(); }
+
+bool PluginProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const 
+{ 
+    return layouts.getMainOutputChannelSet() == juce::AudioChannelSet::mono() || 
+           layouts.getMainOutputChannelSet() == juce::AudioChannelSet::stereo(); 
+}
 
 std::vector<int> PluginProcessor::generateEuclideanPattern (int steps, int pulses)
 {
-    std::vector<int> pattern(steps, 0); if (pulses <= 0) return pattern;
+    std::vector<int> pattern(steps, 0); 
+    if (pulses <= 0) return pattern;
     if (pulses >= steps) { std::fill(pattern.begin(), pattern.end(), 1); return pattern; }
     int bucket = 0;
-    for (int i = 0; i < steps; ++i) { bucket += pulses; if (bucket >= steps) { bucket -= steps; pattern[i] = 1; } }
+    for (int i = 0; i < steps; ++i) 
+    { 
+        bucket += pulses; 
+        if (bucket >= steps) 
+        { 
+            bucket -= steps; 
+            pattern[i] = 1; 
+        } 
+    }
     return pattern;
+}
+
+void PluginProcessor::scheduleNoteOff (juce::MidiBuffer& midi, int pitch, int delaySamples)
+{
+    if (delaySamples <= 0)
+    {
+        midi.addEvent (juce::MidiMessage::noteOff (1, pitch), 0);
+    }
+    else
+    {
+        scheduledNoteOffs.push_back ({ pitch, delaySamples });
+    }
 }
 
 void PluginProcessor::updateLfoModulations (int numSamples, double bpm)
 {
-    double samplesPerBeat = mSampleRate * (60.0 / (bpm > 0 ? bpm : 120.0)); double sampleDelta = numSamples;
+    double samplesPerBeat = mSampleRate * (60.0 / (bpm > 0 ? bpm : 120.0)); 
+    double sampleDelta = numSamples;
     int cycleIndex = juce::jlimit (0, 3, static_cast<int> (*apvts.getRawParameterValue (IDs::cycleLength.getParamID())));
     int cycleBars = (cycleIndex == 0) ? 1 : (cycleIndex == 1) ? 2 : (cycleIndex == 2) ? 4 : 8;
     currentBarInCycle = (static_cast<int>(std::floor(mSongPositionPPQ / 4.0)) % cycleBars) + 1;
@@ -78,7 +119,8 @@ void PluginProcessor::updateLfoModulations (int numSamples, double bpm)
         if (rateChoice == 0) return baseVal;
         double divPPQ = (rateChoice == 1) ? 1.0 : (rateChoice == 2) ? 0.5 : (rateChoice == 3) ? 0.25 : 0.125;
         double periodSamples = samplesPerBeat * divPPQ;
-        lfoPhases[index] += (sampleDelta / periodSamples); if (lfoPhases[index] >= 1.0) lfoPhases[index] -= 1.0;
+        lfoPhases[index] += (sampleDelta / periodSamples); 
+        if (lfoPhases[index] >= 1.0) lfoPhases[index] -= 1.0;
         float sineVal = static_cast<float> (std::sin (lfoPhases[index] * juce::MathConstants<double>::twoPi));
         return juce::jlimit (minVal, maxVal, baseVal + (sineVal * depth * ((maxVal - minVal) * 0.5f)));
     };
@@ -101,9 +143,12 @@ void PluginProcessor::updateLfoModulations (int numSamples, double bpm)
 
     float rawRate = applyLfo (3, baseRate, IDs::rateLfoRate, IDs::rateLfoDepth, 0.0f, 3.0f);
     activeRateIdx = juce::jlimit (0, 3, static_cast<int> (std::round (rawRate)));
-    activeEntropy = applyLfo (4, baseEntropy, IDs::entropyLfoRate, IDs::entropyLfoDepth, -1.0f, 1.0f); modEntropy = activeEntropy;
-    activeHarmony = applyLfo (5, baseHarmony, IDs::harmonyLfoRate, IDs::harmonyLfoDepth, 0.0f, 1.0f); modHarmony = activeHarmony;
-    activeChaos   = applyLfo (6, baseChaos,   IDs::chaosLfoRate,   IDs::chaosLfoDepth,   0.0f, 1.0f); modChaos = activeChaos;
+    activeEntropy = applyLfo (4, baseEntropy, IDs::entropyLfoRate, IDs::entropyLfoDepth, -1.0f, 1.0f); 
+    modEntropy = activeEntropy;
+    activeHarmony = applyLfo (5, baseHarmony, IDs::harmonyLfoRate, IDs::harmonyLfoDepth, 0.0f, 1.0f); 
+    modHarmony = activeHarmony;
+    activeChaos   = applyLfo (6, baseChaos,   IDs::chaosLfoRate,   IDs::chaosLfoDepth,   0.0f, 1.0f); 
+    modChaos = activeChaos;
 
     // Symmetrical 7-point Octaves selection (-3 to +3)
     float rawOctaves = applyLfo (7, baseOctaves, IDs::octavesLfoRate, IDs::octavesLfoDepth, -3.0f, 3.0f);
@@ -112,7 +157,11 @@ void PluginProcessor::updateLfoModulations (int numSamples, double bpm)
 
 void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)
 {
-    buffer.clear(); bool isPlaying = false; double bpm = 120.0; mSongPositionPPQ = 0.0;
+    buffer.clear(); 
+    bool isPlaying = false; 
+    double bpm = 120.0; 
+    mSongPositionPPQ = 0.0;
+
 #if JUCE_MAJOR_VERSION >= 7
     if (auto* playhead = getPlayHead()) {
         if (auto pos = playhead->getPosition()) {
@@ -124,10 +173,16 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
 #else
     if (auto* playhead = getPlayHead()) {
         juce::AudioPlayHead::CurrentPositionInfo info;
-        if (playhead->getCurrentPositionInfo (info)) { isPlaying = info.isPlaying; bpm = info.bpm; mSongPositionPPQ = info.ppqPosition; }
+        if (playhead->getCurrentPositionInfo (info)) { 
+            isPlaying = info.isPlaying; 
+            bpm = info.bpm; 
+            mSongPositionPPQ = info.ppqPosition; 
+        }
     }
 #endif
-    int numSamples = buffer.getNumSamples(); updateLfoModulations (numSamples, bpm);
+
+    int numSamples = buffer.getNumSamples(); 
+    updateLfoModulations (numSamples, bpm);
     
     // Parameter Slew calculations over ~150ms window
     float slewFactor = static_cast<float>(1.0 - std::exp (-1.0 / (0.15 * mSampleRate)));
@@ -136,21 +191,31 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
     }
 
     bool isLatchActive = *apvts.getRawParameterValue (IDs::latch.getParamID()) > 0.5f;
-    bool isArpActive = *apvts.getRawParameterValue (IDs::arpSeq.getParamID()) > 0.5f; // SEQ/ARP dynamic switcher
-    bool isPolyActive = *apvts.getRawParameterValue (IDs::poly.getParamID()) > 0.5f; // POLY mode
-    bool isFreezeActive = *apvts.getRawParameterValue (IDs::freeze.getParamID()) > 0.5f; // FREEZE mode
+    bool isArpActive = *apvts.getRawParameterValue (IDs::arpSeq.getParamID()) > 0.5f; 
+    bool isPolyActive = *apvts.getRawParameterValue (IDs::poly.getParamID()) > 0.5f; 
+    bool isFreezeActive = *apvts.getRawParameterValue (IDs::freeze.getParamID()) > 0.5f; 
 
-    float activeFaderProb[8]; for (int i = 0; i < 8; ++i) activeFaderProb[i] = *apvts.getRawParameterValue (juce::String ("fader" + juce::String (i + 1)));
+    float activeFaderProb[8]; 
+    for (int i = 0; i < 8; ++i) 
+    {
+        activeFaderProb[i] = *apvts.getRawParameterValue (juce::String ("fader" + juce::String (i + 1)));
+    }
 
-    // Corrected Local Midi Buffer Signature Alignment [NEW - FIXES LNK2001]
     juce::MidiBuffer processedMidi;
     for (auto it = scheduledNoteOffs.begin(); it != scheduledNoteOffs.end();) {
         it->second -= numSamples;
-        if (it->second <= 0) { processedMidi.addEvent (juce::MidiMessage::noteOff (1, it->first), 0); it = scheduledNoteOffs.erase(it); }
-        else ++it;
+        if (it->second <= 0) 
+        { 
+            processedMidi.addEvent (juce::MidiMessage::noteOff (1, it->first), 0); 
+            it = scheduledNoteOffs.erase(it); 
+        }
+        else 
+        {
+            ++it;
+        }
     }
 
-    // Latch Active keyboard sync catcher (Instantly populates latch buffer to avoid silent start dropouts) [NEW]
+    // Latch Active keyboard sync catcher
     if (isLatchActive && latchedNotes.empty() && !activeHeldNotes.empty())
     {
         latchedNotes = activeHeldNotes;
@@ -159,15 +224,28 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
 
     for (const auto metadata : midiMessages) {
         auto msg = metadata.getMessage();
-        if (msg.isNoteOn() && !isFreezeActive) { // Ignore new keyboard events when FREEZE is armed
+        if (msg.isNoteOn() && !isFreezeActive) { 
             int note = msg.getNoteNumber();
-            if (std::find (activeHeldNotes.begin(), activeHeldNotes.end(), note) == activeHeldNotes.end()) { activeHeldNotes.push_back (note); std::sort (activeHeldNotes.begin(), activeHeldNotes.end()); }
+            if (std::find (activeHeldNotes.begin(), activeHeldNotes.end(), note) == activeHeldNotes.end()) 
+            { 
+                activeHeldNotes.push_back (note); 
+                std::sort (activeHeldNotes.begin(), activeHeldNotes.end()); 
+            }
             if (isLatchActive) {
-                if (isFirstNoteOfNewChord) { for (int n : latchedNotes) scheduleNoteOff (processedMidi, n, 0); latchedNotes.clear(); isFirstNoteOfNewChord = false; }
-                if (std::find (latchedNotes.begin(), latchedNotes.end(), note) == latchedNotes.end()) { latchedNotes.push_back (note); std::sort (latchedNotes.begin(), latchedNotes.end()); }
+                if (isFirstNoteOfNewChord) { 
+                    for (int n : latchedNotes) scheduleNoteOff (processedMidi, n, 0); 
+                    latchedNotes.clear(); 
+                    isFirstNoteOfNewChord = false; 
+                }
+                if (std::find (latchedNotes.begin(), latchedNotes.end(), note) == latchedNotes.end()) 
+                { 
+                    latchedNotes.push_back (note); 
+                    std::sort (latchedNotes.begin(), latchedNotes.end()); 
+                }
             }
         } else if (msg.isNoteOff() && !isFreezeActive) {
-            int note = msg.getNoteNumber(); activeHeldNotes.erase (std::remove (activeHeldNotes.begin(), activeHeldNotes.end(), note), activeHeldNotes.end());
+            int note = msg.getNoteNumber(); 
+            activeHeldNotes.erase (std::remove (activeHeldNotes.begin(), activeHeldNotes.end(), note), activeHeldNotes.end());
             if (activeHeldNotes.empty()) isFirstNoteOfNewChord = true;
         }
     }
@@ -177,8 +255,9 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
     std::vector<int> notesToPlay = isLatchActive ? latchedNotes : activeHeldNotes;
     isCurrentlyPlayingUI.store (!notesToPlay.empty() || isFreezeActive);
 
-    if (! notesToPlay.empty() || isFreezeActive) {
-        bool stepTriggered = false; double samplesPerBeat = mSampleRate * (60.0 / (bpm > 0 ? bpm : 120.0));
+    if (!notesToPlay.empty() || isFreezeActive) {
+        bool stepTriggered = false; 
+        double samplesPerBeat = mSampleRate * (60.0 / (bpm > 0 ? bpm : 120.0));
         double stepLengthPPQ = (activeRateIdx == 0) ? 1.0 : (activeRateIdx == 1) ? 0.5 : (activeRateIdx == 2) ? 0.25 : 0.125;
         double stepSamples = samplesPerBeat * stepLengthPPQ;
 
@@ -264,16 +343,16 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
                     octaveBase = ((rawPitch - rootKeyIdx) / 12) * 12 + rootKeyIdx;
                 }
 
-                // 2. Diatonic Note Thinning (Harmony knob filters chords from 5 down to 1 note, works polyphonically) [NEW]
+                // 2. Diatonic Note Thinning
                 std::vector<int> pitchList;
                 pitchList.push_back (rawPitch);
                 
-                if (isPolyActive) // Polyphonic Cluster Mode [NEW - DIATONIC HARMONY ENGAGED]
+                if (isPolyActive) 
                 {
                     int maxAllowedNotes = 1;
-                    if (modHarmony > 0.25f && modHarmony < 0.5f)       maxAllowedNotes = 2; // Intervals
-                    else if (modHarmony >= 0.5f && modHarmony < 0.75f) maxAllowedNotes = 3; // Triads
-                    else if (modHarmony >= 0.75f)                      maxAllowedNotes = 4; // Chords (Root + 3rd + 5th + 7th)
+                    if (modHarmony > 0.25f && modHarmony < 0.5f)       maxAllowedNotes = 2; 
+                    else if (modHarmony >= 0.5f && modHarmony < 0.75f) maxAllowedNotes = 3; 
+                    else if (modHarmony >= 0.75f)                      maxAllowedNotes = 4; 
                     
                     if (maxAllowedNotes > 1)
                     {
@@ -286,13 +365,12 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
                     }
                 }
 
-                // 3. Symmetrical Scale-locking semitone quantizer (Snaps Eb -> E inside C Major) 
+                // 3. Symmetrical Scale-locking semitone quantizer
                 for (auto& pitch : pitchList)
                 {
                     int noteOffset = (pitch - rootKeyIdx) % 12;
                     int octBase = ((pitch - rootKeyIdx) / 12) * 12 + rootKeyIdx;
                     
-                    // Simple round-to-nearest semitone quantizer 
                     int nearestVal = scaleOffsets[0];
                     int minDiff = 12;
                     for (int offset : scaleOffsets)
@@ -303,7 +381,7 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
                     pitch = octBase + nearestVal;
                 }
 
-                // 4. Intellijel Metropolis Range additions (Octaves, ratchets, slides, etc.) 
+                // 4. Intellijel Metropolis Range additions
                 int rangeShift = activeOctavesVal; 
                 int octaveShiftCount = 0;
                 if (rangeShift > 0) octaveShiftCount = (currentStep / 2) % (rangeShift + 1); 
@@ -319,12 +397,22 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
                     int durationSamples = static_cast<int>(stepSamples * modLegato);
 
                     processedMidi.addEvent (juce::MidiMessage::noteOn (1, targetPitch, static_cast<juce::uint8>(100)), 0);
-                    mLastNotePlayed = targetPitch; mNoteOffTime = durationSamples; 
+                    mLastNotePlayed = targetPitch; 
+                    mNoteOffTime = durationSamples; 
                     scheduleNoteOff (processedMidi, targetPitch, durationSamples);
                 }
             }
         }
-    } else { if (mLastStep != -1) { if (mLastNotePlayed != -1) { processedMidi.addEvent (juce::MidiMessage::noteOff (1, mLastNotePlayed), 0); mLastNotePlayed = -1; } mLastStep = -1; } currentStep = 0; }
+    } else { 
+        if (mLastStep != -1) { 
+            if (mLastNotePlayed != -1) { 
+                processedMidi.addEvent (juce::MidiMessage::noteOff (1, mLastNotePlayed), 0); 
+                mLastNotePlayed = -1; 
+            } 
+            mLastStep = -1; 
+        } 
+        currentStep = 0; 
+    }
     midiMessages.swapWith (processedMidi);
 }
 
@@ -352,19 +440,20 @@ void PluginProcessor::triggerDiatonicChordPad (int padIndex)
     else if (activeHarmony >= 0.67f) { int s = getScalePitch (padIndex + 6); newChord = { baseRoot + r, baseRoot + t, baseRoot + f, baseRoot + s }; }
     else { newChord = { baseRoot + r, baseRoot + t, baseRoot + f }; }
 
-    if (! lastChordPitches.empty() && newChord.size() == lastChordPitches.size()) {
+    if (!lastChordPitches.empty() && newChord.size() == lastChordPitches.size()) {
         int pitchDiff = newChord[2] - lastChordPitches[2];
         if (pitchDiff > 5) newChord[2] -= 12; else if (pitchDiff < -5) newChord[0] += 12; 
     }
-    std::sort(newChord.begin(), newChord.end()); lastChordPitches = newChord;
-    latchedNotes = newChord; apvts.getParameter(IDs::latch.getParamID())->setValueNotifyingHost(1.0f); 
+    std::sort(newChord.begin(), newChord.end()); 
+    lastChordPitches = newChord;
+    latchedNotes = newChord; 
+    apvts.getParameter(IDs::latch.getParamID())->setValueNotifyingHost(1.0f); 
 }
 
 void PluginProcessor::savePreset (int slotIndex) 
 { 
     if (slotIndex >= 0 && slotIndex < 8) 
     { 
-        // Save the active scene profiles directly into the Project 
         sceneAPresets[slotIndex] = sceneA;
         sceneBPresets[slotIndex] = sceneB;
         sceneASlotsSaved[slotIndex] = hasSceneA;
@@ -379,7 +468,7 @@ void PluginProcessor::savePreset (int slotIndex)
         presets[slotIndex].harmony = *apvts.getRawParameterValue (IDs::harmony.getParamID()); 
         presets[slotIndex].chaos = *apvts.getRawParameterValue (IDs::chaos.getParamID()); 
         presets[slotIndex].rate = *apvts.getRawParameterValue (IDs::rate.getParamID());
-        presets[slotIndex].octaves = *apvts.getRawParameterValue (IDs::octaves.getParamID());
+        presets[slotIndex].octaves = static_cast<float> (*apvts.getRawParameterValue (IDs::octaves.getParamID()));
         
         juce::ParameterID rates[] = { IDs::rhythmMorphLfoRate, IDs::restLfoRate, IDs::legatoLfoRate, IDs::rateLfoRate, IDs::entropyLfoRate, IDs::harmonyLfoRate, IDs::chaosLfoRate, IDs::octavesLfoRate };
         juce::ParameterID depths[] = { IDs::rhythmMorphLfoDepth, IDs::restLfoDepth, IDs::legatoLfoDepth, IDs::rateLfoDepth, IDs::entropyLfoDepth, IDs::harmonyLfoDepth, IDs::chaosLfoDepth, IDs::octavesLfoDepth };
@@ -397,7 +486,6 @@ void PluginProcessor::loadPreset (int slotIndex)
 { 
     if (slotIndex >= 0 && slotIndex < 8 && presetSlotsSaved[slotIndex]) 
     { 
-        // Load the stored project scenes into the active buffers 
         sceneA = sceneAPresets[slotIndex];
         sceneB = sceneBPresets[slotIndex];
         hasSceneA = sceneASlotsSaved[slotIndex];
@@ -411,7 +499,7 @@ void PluginProcessor::loadPreset (int slotIndex)
         apvts.getParameter (IDs::harmony.getParamID())->setValueNotifyingHost (presets[slotIndex].harmony); 
         apvts.getParameter (IDs::chaos.getParamID())->setValueNotifyingHost (presets[slotIndex].chaos); 
         apvts.getParameter (IDs::rate.getParamID())->setValueNotifyingHost (presets[slotIndex].rate / 3.0f);
-        apvts.getParameter (IDs::octaves.getParamID())->setValueNotifyingHost ((presets[slotIndex].octaves + 3.0f) / 6.0f); // -3 to 3 normalizer 
+        apvts.getParameter (IDs::octaves.getParamID())->setValueNotifyingHost ((presets[slotIndex].octaves + 3.0f) / 6.0f); 
 
         juce::ParameterID rates[] = { IDs::rhythmMorphLfoRate, IDs::restLfoRate, IDs::legatoLfoRate, IDs::rateLfoRate, IDs::entropyLfoRate, IDs::harmonyLfoRate, IDs::chaosLfoRate, IDs::octavesLfoRate };
         juce::ParameterID depths[] = { IDs::rhythmMorphLfoDepth, IDs::restLfoDepth, IDs::legatoLfoDepth, IDs::rateLfoDepth, IDs::entropyLfoDepth, IDs::harmonyLfoDepth, IDs::chaosLfoDepth, IDs::octavesLfoDepth };
@@ -438,7 +526,7 @@ void PluginProcessor::captureScene (int side)
     s.harmony = *apvts.getRawParameterValue (IDs::harmony.getParamID()); 
     s.chaos = *apvts.getRawParameterValue (IDs::chaos.getParamID()); 
     s.rate = *apvts.getRawParameterValue (IDs::rate.getParamID());
-    s.octaves = *apvts.getRawParameterValue (IDs::octaves.getParamID());
+    s.octaves = static_cast<float> (*apvts.getRawParameterValue (IDs::octaves.getParamID()));
     
     juce::ParameterID rates[] = { IDs::rhythmMorphLfoRate, IDs::restLfoRate, IDs::legatoLfoRate, IDs::rateLfoRate, IDs::entropyLfoRate, IDs::harmonyLfoRate, IDs::chaosLfoRate, IDs::octavesLfoRate };
     juce::ParameterID depths[] = { IDs::rhythmMorphLfoDepth, IDs::restLfoDepth, IDs::legatoLfoDepth, IDs::rateLfoDepth, IDs::entropyLfoDepth, IDs::harmonyLfoDepth, IDs::chaosLfoDepth, IDs::octavesLfoDepth };
@@ -457,7 +545,6 @@ void PluginProcessor::diceMelody() {
     for (int i = 1; i <= 8; ++i) apvts.getParameter ("fader" + juce::String(i))->setValueNotifyingHost (r->nextFloat());
 }
 
-// Scoped LFO-protected randomizers
 void PluginProcessor::diceArticulation() {
     auto* r = &juce::Random::getSystemRandom();
     apvts.getParameter (IDs::rest.getParamID())->setValueNotifyingHost (r->nextFloat() * 0.5f);
@@ -467,7 +554,7 @@ void PluginProcessor::diceArticulation() {
 void PluginProcessor::diceTime() {
     auto* r = &juce::Random::getSystemRandom();
     apvts.getParameter (IDs::rate.getParamID())->setValueNotifyingHost (static_cast<float>(r->nextInt(4)) / 3.0f);
-    apvts.getParameter (IDs::octaves.getParamID())->setValueNotifyingHost (static_cast<float>(r->nextInt(7)) / 6.0f); // -3 to 3 
+    apvts.getParameter (IDs::octaves.getParamID())->setValueNotifyingHost (static_cast<float>(r->nextInt(7)) / 6.0f); 
     apvts.getParameter (IDs::cycleLength.getParamID())->setValueNotifyingHost (static_cast<float>(r->nextInt(4)) / 3.0f);
 }
 
@@ -479,7 +566,6 @@ void PluginProcessor::diceNavy() {
     apvts.getParameter (IDs::chaos.getParamID())->setValueNotifyingHost (r->nextFloat());
 }
 
-// Active Anchor Direct background Scene Randomizers
 void PluginProcessor::diceActiveSceneA()
 {
     auto* random = &juce::Random::getSystemRandom();
@@ -491,7 +577,7 @@ void PluginProcessor::diceActiveSceneA()
     sceneA.harmony = random->nextFloat(); 
     sceneA.chaos = random->nextFloat();
     sceneA.rate = static_cast<float> (random->nextInt (4)); 
-    sceneA.octaves = static_cast<float> (random->nextInt (7) - 3); // -3 to 3 
+    sceneA.octaves = static_cast<float> (random->nextInt (7) - 3); 
     hasSceneA = true;
 }
 
@@ -506,7 +592,7 @@ void PluginProcessor::diceActiveSceneB()
     sceneB.harmony = random->nextFloat(); 
     sceneB.chaos = random->nextFloat();
     sceneB.rate = static_cast<float> (random->nextInt (4)); 
-    sceneB.octaves = static_cast<float> (random->nextInt (7) - 3); // -3 to 3 
+    sceneB.octaves = static_cast<float> (random->nextInt (7) - 3); 
     hasSceneB = true;
 }
 
@@ -594,18 +680,18 @@ void PluginProcessor::setStateInformation (const void* data, int sizeInBytes)
                 if (auto* childA = presetsNodeA->getChildByName ("SLOT_" + juce::String (i))) {
                     sceneASlotsSaved[i] = childA->getBoolAttribute ("saved");
                     if (sceneASlotsSaved[i]) {
-                        sceneAPresets[i].rhythmMorph = childA->getDoubleAttribute ("morph");
-                        sceneAPresets[i].rest = childA->getDoubleAttribute ("rest");
-                        sceneAPresets[i].legato = childA->getDoubleAttribute ("legato");
-                        sceneAPresets[i].rate = childA->getDoubleAttribute ("rate");
-                        sceneAPresets[i].entropy = childA->getDoubleAttribute ("entropy");
-                        sceneAPresets[i].harmony = childA->getDoubleAttribute ("harmony");
-                        sceneAPresets[i].chaos = childA->getDoubleAttribute ("chaos");
-                        sceneAPresets[i].octaves = childA->getDoubleAttribute ("octaves");
-                        for (int f = 0; f < 8; ++f) sceneAPresets[i].faders[f] = childA->getDoubleAttribute ("fader_" + juce::String (f));
+                        sceneAPresets[i].rhythmMorph = static_cast<float> (childA->getDoubleAttribute ("morph"));
+                        sceneAPresets[i].rest = static_cast<float> (childA->getDoubleAttribute ("rest"));
+                        sceneAPresets[i].legato = static_cast<float> (childA->getDoubleAttribute ("legato"));
+                        sceneAPresets[i].rate = static_cast<float> (childA->getDoubleAttribute ("rate"));
+                        sceneAPresets[i].entropy = static_cast<float> (childA->getDoubleAttribute ("entropy"));
+                        sceneAPresets[i].harmony = static_cast<float> (childA->getDoubleAttribute ("harmony"));
+                        sceneAPresets[i].chaos = static_cast<float> (childA->getDoubleAttribute ("chaos"));
+                        sceneAPresets[i].octaves = static_cast<float> (childA->getDoubleAttribute ("octaves"));
+                        for (int f = 0; f < 8; ++f) sceneAPresets[i].faders[f] = static_cast<float> (childA->getDoubleAttribute ("fader_" + juce::String (f)));
                         for (int l = 0; l < 8; ++l) {
                             sceneAPresets[i].lfoRates[l] = childA->getIntAttribute ("lfo_r_" + juce::String (l));
-                            sceneAPresets[i].lfoDepths[l] = childA->getDoubleAttribute ("lfo_d_" + juce::String (l));
+                            sceneAPresets[i].lfoDepths[l] = static_cast<float> (childA->getDoubleAttribute ("lfo_d_" + juce::String (l)));
                         }
                     }
                 }
@@ -618,18 +704,18 @@ void PluginProcessor::setStateInformation (const void* data, int sizeInBytes)
                 if (auto* childB = presetsNodeB->getChildByName ("SLOT_" + juce::String (i))) {
                     sceneBSlotsSaved[i] = childB->getBoolAttribute ("saved");
                     if (sceneBSlotsSaved[i]) {
-                        sceneBPresets[i].rhythmMorph = childB->getDoubleAttribute ("morph");
-                        sceneBPresets[i].rest = childB->getDoubleAttribute ("rest");
-                        sceneBPresets[i].legato = childB->getDoubleAttribute ("legato");
-                        sceneBPresets[i].rate = childB->getDoubleAttribute ("rate");
-                        sceneBPresets[i].entropy = childB->getDoubleAttribute ("entropy");
-                        sceneBPresets[i].harmony = childB->getDoubleAttribute ("harmony");
-                        sceneBPresets[i].chaos = childB->getDoubleAttribute ("chaos");
-                        sceneBPresets[i].octaves = childB->getDoubleAttribute ("octaves");
-                        for (int f = 0; f < 8; ++f) sceneBPresets[i].faders[f] = childB->getDoubleAttribute ("fader_" + juce::String (f));
+                        sceneBPresets[i].rhythmMorph = static_cast<float> (childB->getDoubleAttribute ("morph"));
+                        sceneBPresets[i].rest = static_cast<float> (childB->getDoubleAttribute ("rest"));
+                        sceneBPresets[i].legato = static_cast<float> (childB->getDoubleAttribute ("legato"));
+                        sceneBPresets[i].rate = static_cast<float> (childB->getDoubleAttribute ("rate"));
+                        sceneBPresets[i].entropy = static_cast<float> (childB->getDoubleAttribute ("entropy"));
+                        sceneBPresets[i].harmony = static_cast<float> (childB->getDoubleAttribute ("harmony"));
+                        sceneBPresets[i].chaos = static_cast<float> (childB->getDoubleAttribute ("chaos"));
+                        sceneBPresets[i].octaves = static_cast<float> (childB->getDoubleAttribute ("octaves"));
+                        for (int f = 0; f < 8; ++f) sceneBPresets[i].faders[f] = static_cast<float> (childB->getDoubleAttribute ("fader_" + juce::String (f)));
                         for (int l = 0; l < 8; ++l) {
                             sceneBPresets[i].lfoRates[l] = childB->getIntAttribute ("lfo_r_" + juce::String (l));
-                            sceneBPresets[i].lfoDepths[l] = childB->getDoubleAttribute ("lfo_d_" + juce::String (l));
+                            sceneBPresets[i].lfoDepths[l] = static_cast<float> (childB->getDoubleAttribute ("lfo_d_" + juce::String (l)));
                         }
                     }
                 }
@@ -642,18 +728,18 @@ void PluginProcessor::setStateInformation (const void* data, int sizeInBytes)
                 if (auto* childBank = banksNode->getChildByName ("BANK_" + juce::String (i))) {
                     presetSlotsSaved[i] = childBank->getBoolAttribute ("saved");
                     if (presetSlotsSaved[i]) {
-                        presets[i].rhythmMorph = childBank->getDoubleAttribute ("morph");
-                        presets[i].rest = childBank->getDoubleAttribute ("rest");
-                        presets[i].legato = childBank->getDoubleAttribute ("legato");
-                        presets[i].rate = childBank->getDoubleAttribute ("rate");
-                        presets[i].entropy = childBank->getDoubleAttribute ("entropy");
-                        presets[i].harmony = childBank->getDoubleAttribute ("harmony");
-                        presets[i].chaos = childBank->getDoubleAttribute ("chaos");
-                        presets[i].octaves = childBank->getDoubleAttribute ("octaves");
-                        for (int f = 0; f < 8; ++f) presets[i].faders[f] = childBank->getDoubleAttribute ("fader_" + juce::String (f));
+                        presets[i].rhythmMorph = static_cast<float> (childBank->getDoubleAttribute ("morph"));
+                        presets[i].rest = static_cast<float> (childBank->getDoubleAttribute ("rest"));
+                        presets[i].legato = static_cast<float> (childBank->getDoubleAttribute ("legato"));
+                        presets[i].rate = static_cast<float> (childBank->getDoubleAttribute ("rate"));
+                        presets[i].entropy = static_cast<float> (childBank->getDoubleAttribute ("entropy"));
+                        presets[i].harmony = static_cast<float> (childBank->getDoubleAttribute ("harmony"));
+                        presets[i].chaos = static_cast<float> (childBank->getDoubleAttribute ("chaos"));
+                        presets[i].octaves = static_cast<float> (childBank->getDoubleAttribute ("octaves"));
+                        for (int f = 0; f < 8; ++f) presets[i].faders[f] = static_cast<float> (childBank->getDoubleAttribute ("fader_" + juce::String (f)));
                         for (int l = 0; l < 8; ++l) {
                             presets[i].lfoRates[l] = childBank->getIntAttribute ("lfo_r_" + juce::String (l));
-                            presets[i].lfoDepths[l] = childBank->getDoubleAttribute ("lfo_d_" + juce::String (l));
+                            presets[i].lfoDepths[l] = static_cast<float> (childBank->getDoubleAttribute ("lfo_d_" + juce::String (l)));
                         }
                     }
                 }
