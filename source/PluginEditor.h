@@ -240,7 +240,7 @@ public:
     void mouseUp (const juce::MouseEvent& event) override;
     void parameterChanged (const juce::String& parameterID, float newValue) override;
 
-    // Grant look and feel engine direct access to private animation timers
+    // Direct access to private preset saving/loading indicators
     friend class ChromaCapsLookAndFeel;
 
 private:
@@ -284,4 +284,4 @@ private:
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> rootKeyAttachment, scaleTypeAttachment, cycleLengthAttachment;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PluginEditor)
-}; // Semicolon explicitly present to prevent cascading C++ syntax errors
+};
