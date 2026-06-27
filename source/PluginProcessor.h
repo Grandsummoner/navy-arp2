@@ -14,12 +14,8 @@ namespace IDs
     DECLARE_ID(entropy); DECLARE_ID(harmony); DECLARE_ID(chaos);
     DECLARE_ID(morph); DECLARE_ID(latch); DECLARE_ID(arpSeq); DECLARE_ID(poly); DECLARE_ID(freeze);
     DECLARE_ID(rootKey); DECLARE_ID(scaleType); DECLARE_ID(cycleLength);
-    DECLARE_ID(rate); DECLARE_ID(octaves); 
+    DECLARE_ID(rate); DECLARE_ID(octaves); DECLARE_ID(panelTheme);
 
-    // Dynamic Panel Theme selector parameter
-    DECLARE_ID(panelTheme);
-
-    // LFO Parameters
     DECLARE_ID(rhythmMorphLfoRate); DECLARE_ID(rhythmMorphLfoDepth);
     DECLARE_ID(restLfoRate);        DECLARE_ID(restLfoDepth);
     DECLARE_ID(legatoLfoRate);      DECLARE_ID(legatoLfoDepth);
@@ -33,18 +29,9 @@ namespace IDs
 
 struct SceneState {
     float faders[8] = { 0.5f, 0.5f, 0.5f, 0.5f, 0.5f, 0.5f, 0.5f, 0.5f };
-    float rhythmMorph = 0.0f;
-    float rest = 0.1f;
-    float legato = 0.5f;
-    float rate = 2.0f; // Standard index (1/16)
-    float entropy = 0.0f;
-    float harmony = 0.0f;
-    float chaos = 0.0f;
-    float octaves = 0.0f; // Default 0 (no octave shift)
-
-    // Full 16-channel LFO parameter states
-    int lfoRates[8] = { 0 };
-    float lfoDepths[8] = { 0.0f };
+    float rhythmMorph = 0.0f, rest = 0.1f, legato = 0.5f, rate = 2.0f;
+    float entropy = 0.0f, harmony = 0.0f, chaos = 0.0f, octaves = 0.0f;
+    int lfoRates[8] = { 0 }; float lfoDepths[8] = { 0.0f };
 };
 
 class PluginProcessor : public juce::AudioProcessor
@@ -54,29 +41,28 @@ public:
     ~PluginProcessor() override;
 
     void prepareToPlay (double sampleRate, int samplesPerBlock) override;
-    void releaseResources() override;
-    bool isBusesLayoutSupported (const BusesLayout& layouts) const override;
+    void releaseResources() override {}
+    bool isBusesLayoutSupported (const BusesLayout& layouts) const override { return layouts.getMainOutputChannelSet() == juce::AudioChannelSet::mono() || layouts.getMainOutputChannelSet() == juce::AudioChannelSet::stereo(); }
     void processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
 
     juce::AudioProcessorEditor* createEditor() override;
     bool hasEditor() const override { return true; }
 
-    const juce::String getName() const override;
-    bool acceptsMidi() const override;
-    bool producesMidi() const override;
-    bool isMidiEffect() const override;
-    double getTailLengthSeconds() const override;
-
-    int getNumPrograms() override;
-    int getCurrentProgram() override;
-    void setCurrentProgram (int index) override;
-    const juce::String getProgramName (int index) override;
-    void changeProgramName (int index, const juce::String& newName) override;
+    // Boilerplate overrides inlined directly to reduce file sizes
+    const juce::String getName() const override { return JucePlugin_Name; }
+    bool acceptsMidi() const override { return true; }
+    bool producesMidi() const override { return true; }
+    bool isMidiEffect() const override { return false; } 
+    double getTailLengthSeconds() const override { return 0.0; }
+    int getNumPrograms() override { return 1; }
+    int getCurrentProgram() override { return 0; }
+    void setCurrentProgram (int index) override { juce::ignoreUnused (index); }
+    const juce::String getProgramName (int index) override { juce::ignoreUnused (index); return {}; }
+    void changeProgramName (int index, const juce::String& newName) override { juce::ignoreUnused (index, newName); }
 
     void getStateInformation (juce::MemoryBlock& destData) override;
     void setStateInformation (const void* data, int sizeInBytes) override;
 
-    // Symmetrical Scene Management
     void saveSceneA() { captureScene (0); }
     void saveSceneB() { captureScene (1); }
     void clearSceneA() { hasSceneA = false; }
@@ -86,55 +72,30 @@ public:
     void loadPreset (int slotIndex);
     bool isPresetSaved (int slotIndex) const { return presetSlotsSaved[slotIndex]; }
 
-    // Active Anchor Parameter Management Method Declarations
     void setActiveAnchor (bool useSceneB);
     void captureActiveParametersToActiveScene();
 
-    // Unified Project-Based Scene Arrays
-    SceneState sceneAPresets[8];
-    SceneState sceneBPresets[8];
-    bool sceneASlotsSaved[8] = { false };
-    bool sceneBSlotsSaved[8] = { false };
-
-    SceneState sceneA;
-    SceneState sceneB;
-    bool hasSceneA = false;
-    bool hasSceneB = false;
+    SceneState sceneAPresets[8], sceneBPresets[8];
+    bool sceneASlotsSaved[8] = { false }, sceneBSlotsSaved[8] = { false };
+    SceneState sceneA, sceneB;
+    bool hasSceneA = false, hasSceneB = false;
 
     std::atomic<int> activePresetIndex { 0 }; 
     std::atomic<bool> isSceneBActiveAnchor { false }; 
 
-    // Generative triggers
-    void diceMelody();
-    void diceArticulation();
-    void diceTime();
-    void diceNavy();
-    void diceActiveSceneA(); 
-    void diceActiveSceneB(); 
-    void resetAccumulator();
-    void resetRhythm();
+    void diceMelody(); void diceArticulation(); void diceTime(); void diceNavy();
+    void diceActiveSceneA(); void diceActiveSceneB(); void resetAccumulator(); void resetRhythm();
     void triggerDiatonicChordPad (int padIndex);
 
-    int currentStep = 0;
-    int currentBarInCycle = 1;
-
+    int currentStep = 0, currentBarInCycle = 1;
     std::atomic<bool> isCurrentlyPlayingUI { false };
     std::atomic<int> activeChordExtensionType { 0 }; 
 
-    // Public active values modulated in real-time by the internal LFOs
-    float activeMorph = 0.0f;
-    float activeRest = 0.1f;
-    float activeLegato = 0.5f;
-    int activeRateIdx = 2; 
-    float activeEntropy = 0.0f;
-    float activeHarmony = 0.0f;
-    float activeChaos = 0.0f;
-    int activeOctavesVal = 0;
+    float activeMorph = 0.0f, activeRest = 0.1f, activeLegato = 0.5f, activeEntropy = 0.0f, activeHarmony = 0.0f, activeChaos = 0.0f;
+    int activeRateIdx = 2, activeOctavesVal = 0;
 
-    std::vector<int> activeHeldNotes;
-    std::vector<int> latchedNotes;
+    std::vector<int> activeHeldNotes, latchedNotes;
     bool isFirstNoteOfNewChord = true;
-
     juce::AudioProcessorValueTreeState apvts;
 
 private:
@@ -142,44 +103,19 @@ private:
     void updateLfoModulations (int numSamples, double bpm);
     std::vector<int> generateEuclideanPattern (int steps, int pulses);
     void scheduleNoteOff (juce::MidiBuffer& midi, int pitch, int delaySamples);
-
     void captureScene (int side);
 
-    double mSampleRate = 44100.0;
-    int mTimeInSamples = 0;
-    double mSongPositionPPQ = 0.0;
-    
-    int mLastStep = -1;
-    int mLastNotePlayed = -1;
-    int mNoteOffTime = 0; 
-    
+    double mSampleRate = 44100.0, mSongPositionPPQ = 0.0;
+    int mTimeInSamples = 0, mLastStep = -1, mLastNotePlayed = -1, mNoteOffTime = 0; 
     std::vector<std::pair<int, int>> scheduledNoteOffs;
 
-    // 8 Independent LFO phases
-    double lfoPhases[8] = { 0.0 };
-
-    double lfoPhaseEntropy = 0.0;
-    double lfoPhaseChaos = 0.0;
-    double lfoPhaseMorph = 0.0;
-    double lfoPhaseLegato = 0.0;
-
-    float modRest = 0.1f;
-    float modLegato = 0.5f;
-    float modEntropy = 0.0f;
-    float modHarmony = 0.0f;
-    float modChaos = 0.0f;
-    float accumulatedPitchOffset = 0.0f;
-
+    double lfoPhases[8] = { 0.0 }, lfoPhaseEntropy = 0.0, lfoPhaseChaos = 0.0, lfoPhaseMorph = 0.0, lfoPhaseLegato = 0.0;
+    float modRest = 0.1f, modLegato = 0.5f, modEntropy = 0.0f, modHarmony = 0.0f, modChaos = 0.0f, accumulatedPitchOffset = 0.0f;
     std::vector<int> lastChordPitches;
 
-    // Presets 1-8 Master Kits
     SceneState presets[8];
     bool presetSlotsSaved[8] = { false };
-
-    // Slew smoothing arrays for transitions
-    float currentSlewTarget[24] = { 0.0f };
-    float currentSlewValue[24] = { 0.0f };
-
+    float currentSlewTarget[24] = { 0.0f }, currentSlewValue[24] = { 0.0f };
     bool lastSceneBActiveState = false;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PluginProcessor)

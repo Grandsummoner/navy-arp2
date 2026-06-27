@@ -1,706 +1,355 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 
-PluginProcessor::PluginProcessor()
-    : AudioProcessor (BusesProperties().withInput("Input", juce::AudioChannelSet::stereo(), true).withOutput("Output", juce::AudioChannelSet::stereo(), true)),
-      apvts (*this, nullptr, "PARAMETERS", createParameterLayout())
+// ==============================================================================
+// Custom LookAndFeel Button Painting Implementations
+// ==============================================================================
+void ChromaCapsLookAndFeel::drawButtonBackground (juce::Graphics& g, juce::Button& button, const juce::Colour& backgroundColour,
+                                                  bool shouldDrawButtonAsHighlighted, bool shouldDrawButtonAsDown)
 {
-    sceneA = SceneState(); 
-    sceneB = SceneState(); 
-    lastChordPitches = { 60, 64, 67 }; 
-    for (int i = 0; i < 8; ++i) 
-    { 
-        sceneAPresets[i] = SceneState(); 
-        sceneBPresets[i] = SceneState(); 
+    juce::ignoreUnused (backgroundColour); auto bounds = button.getLocalBounds().toFloat();
+    int themeIdx = static_cast<int> (processor.apvts.getRawParameterValue ("panelTheme")->load()); auto t = AppTheme::get (themeIdx);
+
+    bool isToggled = button.getToggleState(), isDown = shouldDrawButtonAsDown, isOver = shouldDrawButtonAsHighlighted;
+    juce::String id = button.getComponentID();
+
+    // 1. Symmetrical Scene Target Highlight (Only active anchor is lit, otherwise dark)
+    if (button.getButtonText() == "A") {
+        bool isBActive = processor.isSceneBActiveAnchor.load();
+        g.setColour (!isBActive ? t.leftAccent.withAlpha (isDown ? 0.8f : (isOver ? 0.5f : 0.35f)) : juce::Colour (0xFF151515)); g.fillRoundedRectangle (bounds, 4.0f);
+        g.setColour (!isBActive ? t.leftAccent : t.border); g.drawRoundedRectangle (bounds, 4.0f, 1.2f); return;
+    }
+    else if (button.getButtonText() == "B") {
+        bool isBActive = processor.isSceneBActiveAnchor.load();
+        g.setColour (isBActive ? t.leftAccent.withAlpha (isDown ? 0.8f : (isOver ? 0.5f : 0.35f)) : juce::Colour (0xFF151515)); g.fillRoundedRectangle (bounds, 4.0f);
+        g.setColour (isBActive ? t.leftAccent : t.border); g.drawRoundedRectangle (bounds, 4.0f, 1.2f); return;
+    }
+
+    // 2. Preset buttons with active storage light states & tap flash confirmations
+    int presetIdx = button.getButtonText().getIntValue() - 1;
+    if (presetIdx >= 0 && presetIdx < 8 && id.isEmpty()) {
+        if (editor != nullptr) {
+            int flashTimer = editor->presetFlashTimer[presetIdx], flashType = editor->presetFlashType[presetIdx];
+            if (flashTimer > 0) {
+                float alpha = static_cast<float> (flashTimer) / 24.0f; juce::Colour flashCol = (flashType == 1) ? juce::Colour (0xFFFFB300) : juce::Colour (0xFF00D2FF);
+                g.setColour (flashCol.withAlpha (alpha * 0.4f)); g.fillRoundedRectangle (bounds, 4.0f);
+                g.setColour (flashCol.withAlpha (alpha)); g.drawRoundedRectangle (bounds, 4.0f, 1.8f); return;
+            }
+        }
+        bool hasPreset = processor.isPresetSaved (presetIdx);
+        g.setColour (hasPreset ? t.leftAccent.withAlpha (0.12f) : juce::Colour (0xFF141416)); g.fillRoundedRectangle (bounds, 4.0f);
+        g.setColour (hasPreset ? t.leftAccent.withAlpha (0.6f) : t.unlitLed); g.drawRoundedRectangle (bounds, 4.0f, 1.2f); return;
+    }
+
+    // 3. Performance & Utility Buttons (Save, Recall, Copy, Init, Latch, SEQ, Poly, Freeze)
+    juce::Colour baseCol = (themeIdx == 1) ? juce::Colour (0xFFE2E0D8).darker (0.05f) : juce::Colour (0xFF181C22);
+    if (isToggled) {
+        juce::Colour activeAccent = (id == "dice_melody" || id == "dice_articulation" || id == "dice_time" || id == "dice_navy") ? t.rightAccent : t.leftAccent;
+        g.setColour (activeAccent.withAlpha (0.15f)); g.fillRoundedRectangle (bounds, 4.0f);
+        g.setColour (activeAccent); g.drawRoundedRectangle (bounds, 4.0f, 1.8f);
+    } else {
+        g.setColour (baseCol.darker (isDown ? 0.2f : (isOver ? 0.05f : 0.0f))); g.fillRoundedRectangle (bounds, 4.0f);
+        g.setColour (t.border); g.drawRoundedRectangle (bounds, 4.0f, 1.0f);
     }
 }
 
-PluginProcessor::~PluginProcessor() {}
-
-const juce::String PluginProcessor::getName() const { return JucePlugin_Name; }
-bool PluginProcessor::acceptsMidi() const { return true; }
-bool PluginProcessor::producesMidi() const { return true; }
-bool PluginProcessor::isMidiEffect() const { return false; } 
-double PluginProcessor::getTailLengthSeconds() const { return 0.0; }
-int PluginProcessor::getNumPrograms() { return 1; }
-int PluginProcessor::getCurrentProgram() { return 0; }
-void PluginProcessor::setCurrentProgram (int index) { juce::ignoreUnused (index); }
-const juce::String PluginProcessor::getProgramName (int index) { juce::ignoreUnused (index); return {}; }
-void PluginProcessor::changeProgramName (int index, const juce::String& newName) { juce::ignoreUnused (index, newName); }
-
-juce::AudioProcessorEditor* PluginProcessor::createEditor()
+void ChromaCapsLookAndFeel::drawButtonText (juce::Graphics& g, juce::TextButton& button, bool shouldDrawButtonAsHighlighted, bool shouldDrawButtonAsDown)
 {
-    return new PluginEditor (*this);
-}
+    juce::ignoreUnused (shouldDrawButtonAsHighlighted, shouldDrawButtonAsDown);
+    juce::String id = button.getComponentID();
+    int themeIdx = static_cast<int> (processor.apvts.getRawParameterValue ("panelTheme")->load()); auto t = AppTheme::get (themeIdx);
+    bool isToggled = button.getToggleState();
 
-void PluginProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
-{
-    mSampleRate = sampleRate; 
-    mLastStep = -1; 
-    mLastNotePlayed = -1; 
-    mNoteOffTime = 0; 
-    mTimeInSamples = 0;
-    activeHeldNotes.clear(); 
-    latchedNotes.clear(); 
-    scheduledNoteOffs.clear();
-    std::fill (std::begin (lfoPhases), std::end (lfoPhases), 0.0);
-    isFirstNoteOfNewChord = true; 
-    lastSceneBActiveState = isSceneBActiveAnchor.load();
-    juce::ignoreUnused (samplesPerBlock);
+    juce::Colour activeAccent = (id == "dice_melody" || id == "dice_articulation" || id == "dice_time" || id == "dice_navy" || button.getButtonText() == "B") ? t.rightAccent : t.leftAccent;
 
-    // Initialize slew smoothing values to prevent jumps
-    std::fill (std::begin (currentSlewValue), std::end (currentSlewValue), 0.5f);
-    std::fill (std::begin (currentSlewTarget), std::end (currentSlewTarget), 0.5f);
-}
-
-void PluginProcessor::releaseResources() {}
-
-bool PluginProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const 
-{ 
-    return layouts.getMainOutputChannelSet() == juce::AudioChannelSet::mono() || 
-           layouts.getMainOutputChannelSet() == juce::AudioChannelSet::stereo(); 
-}
-
-std::vector<int> PluginProcessor::generateEuclideanPattern (int steps, int pulses)
-{
-    std::vector<int> pattern(steps, 0); 
-    if (pulses <= 0) return pattern;
-    if (pulses >= steps) { std::fill(pattern.begin(), pattern.end(), 1); return pattern; }
-    int bucket = 0;
-    for (int i = 0; i < steps; ++i) 
-    { 
-        bucket += pulses; 
-        if (bucket >= steps) 
-        { 
-            bucket -= steps; 
-            pattern[i] = 1; 
-        } 
-    }
-    return pattern;
-}
-
-void PluginProcessor::scheduleNoteOff (juce::MidiBuffer& midi, int pitch, int delaySamples)
-{
-    if (delaySamples <= 0)
-    {
-        midi.addEvent (juce::MidiMessage::noteOff (1, pitch), 0);
-    }
-    else
-    {
-        scheduledNoteOffs.push_back ({ pitch, delaySamples });
-    }
-}
-
-// Active Anchor State & Snapshot snap routines
-void PluginProcessor::setActiveAnchor (bool useSceneB)
-{
-    if (isSceneBActiveAnchor.load() == useSceneB) return;
-    
-    // Save state of the outgoing scene before leaving
-    captureScene (isSceneBActiveAnchor.load() ? 1 : 0);
-    
-    isSceneBActiveAnchor.store (useSceneB);
-    lastSceneBActiveState = useSceneB;
-    
-    // Load snapshot properties of the incoming scene directly to active sliders
-    SceneState& targetScene = useSceneB ? sceneB : sceneA;
-    
-    apvts.getParameter (IDs::rhythmMorph.getParamID())->setValueNotifyingHost (targetScene.rhythmMorph);
-    apvts.getParameter (IDs::rest.getParamID())->setValueNotifyingHost (targetScene.rest);
-    apvts.getParameter (IDs::legato.getParamID())->setValueNotifyingHost (targetScene.legato);
-    apvts.getParameter (IDs::entropy.getParamID())->setValueNotifyingHost ((targetScene.entropy + 1.0f) * 0.5f);
-    apvts.getParameter (IDs::harmony.getParamID())->setValueNotifyingHost (targetScene.harmony);
-    apvts.getParameter (IDs::chaos.getParamID())->setValueNotifyingHost (targetScene.chaos);
-    apvts.getParameter (IDs::rate.getParamID())->setValueNotifyingHost (targetScene.rate / 3.0f);
-    apvts.getParameter (IDs::octaves.getParamID())->setValueNotifyingHost ((targetScene.octaves + 3.0f) / 6.0f);
-    
-    for (int i = 0; i < 8; ++i)
-        apvts.getParameter (juce::String ("fader" + juce::String (i + 1)))->setValueNotifyingHost (targetScene.faders[i]);
-}
-
-void PluginProcessor::captureActiveParametersToActiveScene()
-{
-    SceneState& activeScene = isSceneBActiveAnchor.load() ? sceneB : sceneA;
-    for (int i = 0; i < 8; ++i)
-        activeScene.faders[i] = *apvts.getRawParameterValue (juce::String ("fader" + juce::String (i + 1)));
+    if (id == "dice_melody" || id == "dice_articulation" || id == "dice_time" || id == "dice_navy") {
+        auto bounds = button.getLocalBounds().toFloat();
+        float diceSize = 14.0f, diceX = 6.0f, diceY = (bounds.getHeight() - diceSize) * 0.5f;
+        auto diceBounds = juce::Rectangle<float> (diceX, diceY, diceSize, diceSize);
         
-    activeScene.rhythmMorph = *apvts.getRawParameterValue (IDs::rhythmMorph.getParamID());
-    activeScene.rest        = *apvts.getRawParameterValue (IDs::rest.getParamID());
-    activeScene.legato      = *apvts.getRawParameterValue (IDs::legato.getParamID());
-    activeScene.entropy     = *apvts.getRawParameterValue (IDs::entropy.getParamID());
-    activeScene.harmony     = *apvts.getRawParameterValue (IDs::harmony.getParamID());
-    activeScene.chaos       = *apvts.getRawParameterValue (IDs::chaos.getParamID());
-    activeScene.rate        = *apvts.getRawParameterValue (IDs::rate.getParamID());
-    activeScene.octaves     = static_cast<float> (*apvts.getRawParameterValue (IDs::octaves.getParamID()));
+        juce::Colour pipCol = activeAccent; if (shouldDrawButtonAsDown) pipCol = pipCol.brighter (0.2f);
+        drawVectorDice (g, diceBounds, pipCol);
+        
+        auto textBounds = button.getLocalBounds().toFloat().withTrimmedLeft (24.0f);
+        g.setColour (isToggled ? activeAccent.brighter (0.1f) : (themeIdx == 1 ? juce::Colour(0xFF1E1E1E) : t.textDim.brighter(0.2f)));
+        g.setFont (getTextButtonFont (button, button.getHeight())); g.drawFittedText (button.getButtonText(), textBounds.toNearestInt(), juce::Justification::centredLeft, 1);
+    } else {
+        int presetIdx = button.getButtonText().getIntValue() - 1; bool isPreset = (presetIdx >= 0 && presetIdx < 8 && id.isEmpty());
+        juce::Colour textCol = isToggled ? activeAccent.brighter (0.1f) : (themeIdx == 1 ? juce::Colour (0xFF1E1E1E) : juce::Colour (0xFFCCCCCC));
+        if (isPreset) textCol = processor.isPresetSaved (presetIdx) ? t.leftAccent.brighter(0.2f) : (themeIdx == 1 ? juce::Colour (0xFF7A7870) : juce::Colour (0xFF55555C));
+        g.setColour (textCol); g.setFont (getTextButtonFont (button, button.getHeight())); g.drawFittedText (button.getButtonText(), button.getLocalBounds(), juce::Justification::centred, 1);
+    }
 }
 
-void PluginProcessor::updateLfoModulations (int numSamples, double bpm)
+// ==============================================================================
+// PluginEditor Implementations
+// ==============================================================================
+PluginEditor::PluginEditor (PluginProcessor& p)
+    : AudioProcessorEditor (&p), processor (p), oledDisplay (p), chromaLookAndFeel (p, this)
 {
-    // Auto-record active parameters in real-time to active Scene State
-    captureActiveParametersToActiveScene();
+    addAndMakeVisible (oledDisplay); processor.apvts.addParameterListener ("panelTheme", this);
 
-    // Check if Scene Active Anchor has switched at runtime
-    bool isSceneBActive = isSceneBActiveAnchor.load();
-    if (isSceneBActive != lastSceneBActiveState)
-    {
-        lastSceneBActiveState = isSceneBActive;
-        SceneState& targetScene = isSceneBActive ? sceneB : sceneA;
-        
-        apvts.getParameter (IDs::rhythmMorph.getParamID())->setValueNotifyingHost (targetScene.rhythmMorph);
-        apvts.getParameter (IDs::rest.getParamID())->setValueNotifyingHost (targetScene.rest);
-        apvts.getParameter (IDs::legato.getParamID())->setValueNotifyingHost (targetScene.legato);
-        apvts.getParameter (IDs::entropy.getParamID())->setValueNotifyingHost ((targetScene.entropy + 1.0f) * 0.5f);
-        apvts.getParameter (IDs::harmony.getParamID())->setValueNotifyingHost (targetScene.harmony);
-        apvts.getParameter (IDs::chaos.getParamID())->setValueNotifyingHost (targetScene.chaos);
-        apvts.getParameter (IDs::rate.getParamID())->setValueNotifyingHost (targetScene.rate / 3.0f);
-        apvts.getParameter (IDs::octaves.getParamID())->setValueNotifyingHost ((targetScene.octaves + 3.0f) / 6.0f);
-        
-        for (int i = 0; i < 8; ++i)
-            apvts.getParameter (juce::String ("fader" + juce::String (i + 1)))->setValueNotifyingHost (targetScene.faders[i]);
+    juce::Slider* faders[] = { &fader1, &fader2, &fader3, &fader4, &fader5, &fader6, &fader7, &fader8 };
+    juce::Label* faderLabels[] = { &faderLabel1, &faderLabel2, &faderLabel3, &faderLabel4, &faderLabel5, &faderLabel6, &faderLabel7, &faderLabel8 };
+    juce::String scaleNotes[] = { "C", "D", "Eb", "F", "G", "Ab", "Bb", "C" };
+    for (int i = 0; i < 8; ++i) {
+        faders[i]->setSliderStyle (juce::Slider::LinearVertical); faders[i]->setTextBoxStyle (juce::Slider::NoTextBox, false, 0, 0);
+        faders[i]->setColour (juce::Slider::thumbColourId, juce::Colour (0xFF00D2FF)); faders[i]->setColour (juce::Slider::trackColourId, juce::Colour (0xFF181C24));
+        faders[i]->setLookAndFeel (&chromaLookAndFeel); addAndMakeVisible (faders[i]);
+        faderLabels[i]->setText (scaleNotes[i], juce::dontSendNotification); faderLabels[i]->setFont (juce::Font (juce::FontOptions (14.0f).withStyle ("Bold"))); 
+        faderLabels[i]->setJustificationType (juce::Justification::centred); faderLabels[i]->setColour (juce::Label::textColourId, juce::Colour (0xFF888888)); addAndMakeVisible (faderLabels[i]);
     }
 
-    double samplesPerBeat = mSampleRate * (60.0 / (bpm > 0 ? bpm : 120.0)); 
-    double sampleDelta = numSamples;
-    int cycleIndex = juce::jlimit (0, 3, static_cast<int> (*apvts.getRawParameterValue (IDs::cycleLength.getParamID())));
-    int cycleBars = (cycleIndex == 0) ? 1 : (cycleIndex == 1) ? 2 : (cycleIndex == 2) ? 4 : 8;
-    currentBarInCycle = (static_cast<int>(std::floor(mSongPositionPPQ / 4.0)) % cycleBars) + 1;
+    juce::Slider* leftKnobs[] = { &rhythmMorphKnob, &restKnob, &legatoKnob, &rateKnob };
+    juce::Label* leftTitles[] = { &rhythmMorphTitle, &restTitle, &legatoTitle, &rateTitle };
+    juce::String leftNames[] = { "Morph", "Rest", "Legato", "Rate" }, leftPrefixes[] = { "rhythmMorph", "rest", "legato", "rate" };
+    for (int i = 0; i < 4; ++i) {
+        leftKnobs[i]->setSliderStyle (juce::Slider::RotaryHorizontalVerticalDrag); leftKnobs[i]->setTextBoxStyle (juce::Slider::TextBoxBelow, false, 65, 16);
+        leftKnobs[i]->setColour (juce::Slider::rotarySliderFillColourId, juce::Colour (0xFF00D2FF)); leftKnobs[i]->setLookAndFeel (&chromaLookAndFeel); 
+        leftKnobs[i]->setComponentID (leftPrefixes[i]); leftKnobs[i]->addMouseListener (this, false); addAndMakeVisible (leftKnobs[i]);
+        leftTitles[i]->setText (leftNames[i], juce::dontSendNotification); leftTitles[i]->setFont (juce::Font (juce::FontOptions (10.0f).withStyle ("Bold"))); 
+        leftTitles[i]->setJustificationType (juce::Justification::centred); leftTitles[i]->setColour (juce::Label::textColourId, juce::Colour (0xFF55555C)); addAndMakeVisible (leftTitles[i]);
+    }
 
-    // Crossfader morphing interpolation
-    float morphVal = *apvts.getRawParameterValue (IDs::morph.getParamID());
-    auto morphValue = [&](float valA, float valB) -> float { return (valA * (1.0f - morphVal)) + (valB * morphVal); };
+    juce::Slider* rightKnobs[] = { &entropyKnob, &harmonyKnob, &chaosKnob, &octavesKnob };
+    juce::Label* rightTitles[] = { &entropyTitle, &harmonyTitle, &chaosTitle, &octavesTitle };
+    juce::String rightNames[] = { "Entropy", "Harmony", "Chaos", "Octaves" }, rightPrefixes[] = { "entropy", "harmony", "chaos", "octaves" };
+    for (int i = 0; i < 4; ++i) {
+        rightKnobs[i]->setSliderStyle (juce::Slider::RotaryHorizontalVerticalDrag); rightKnobs[i]->setTextBoxStyle (juce::Slider::TextBoxBelow, false, 65, 16);
+        rightKnobs[i]->setColour (juce::Slider::rotarySliderFillColourId, juce::Colour (0xFFFFB300)); rightKnobs[i]->setLookAndFeel (&chromaLookAndFeel); 
+        rightKnobs[i]->setComponentID (rightPrefixes[i]); rightKnobs[i]->addMouseListener (this, false); addAndMakeVisible (rightKnobs[i]);
+        rightTitles[i]->setText (rightNames[i], juce::dontSendNotification); rightTitles[i]->setFont (juce::Font (juce::FontOptions (10.0f).withStyle ("Bold"))); 
+        rightTitles[i]->setJustificationType (juce::Justification::centred); rightTitles[i]->setColour (juce::Label::textColourId, juce::Colour (0xFF55555C)); addAndMakeVisible (rightTitles[i]);
+    }
 
-    float baseMorph   = morphValue (sceneA.rhythmMorph, sceneB.rhythmMorph);
-    float baseRest    = morphValue (sceneA.rest,        sceneB.rest);
-    float baseLegato  = morphValue (sceneA.legato,      sceneB.legato);
-    float baseRate    = morphValue (sceneA.rate,        sceneB.rate);
-    float baseEntropy = morphValue (sceneA.entropy,     sceneB.entropy);
-    float baseHarmony = morphValue (sceneA.harmony,     sceneB.harmony);
-    float baseChaos   = morphValue (sceneA.chaos,       sceneB.chaos);
-    float baseOctaves = morphValue (sceneA.octaves,     sceneB.octaves);
+    morphCrossfader.setSliderStyle (juce::Slider::LinearHorizontal); morphCrossfader.setTextBoxStyle (juce::Slider::NoTextBox, false, 0, 0);
+    morphCrossfader.setColour (juce::Slider::thumbColourId, juce::Colour (0xFFFFFFFF)); morphCrossfader.setColour (juce::Slider::trackColourId, juce::Colour (0xFF222222));
+    morphCrossfader.setLookAndFeel (&chromaLookAndFeel); addAndMakeVisible (morphCrossfader);
 
-    auto applyLfo = [&](int index, float baseVal, juce::ParameterID rateId, juce::ParameterID depthId, float minVal, float maxVal) -> float {
-        int rateChoice = static_cast<int> (*apvts.getRawParameterValue (rateId.getParamID()));
-        float depth = *apvts.getRawParameterValue (depthId.getParamID());
-        if (rateChoice == 0) return baseVal;
-        double divPPQ = (rateChoice == 1) ? 1.0 : (rateChoice == 2) ? 0.5 : (rateChoice == 3) ? 0.25 : 0.125;
-        double periodSamples = samplesPerBeat * divPPQ;
-        lfoPhases[index] += (sampleDelta / periodSamples); 
-        if (lfoPhases[index] >= 1.0) lfoPhases[index] -= 1.0;
-        float sineVal = static_cast<float> (std::sin (lfoPhases[index] * juce::MathConstants<double>::twoPi));
-        return juce::jlimit (minVal, maxVal, baseVal + (sineVal * depth * ((maxVal - minVal) * 0.5f)));
+    juce::TextButton* deckBtns[] = { &latchButton, &arpSeqButton, &polyButton, &freezeButton }; juce::String deckTxt[] = { "Latch", "SEQ", "Poly", "Freeze" };
+    for (int i = 0; i < 4; ++i) { addAndMakeVisible (deckBtns[i]); deckBtns[i]->setButtonText (deckTxt[i]); deckBtns[i]->setClickingTogglesState (true); deckBtns[i]->setLookAndFeel (&chromaLookAndFeel); }
+
+    juce::TextButton* sceneBtns[] = { &sceneAButton, &sceneBButton }; juce::String sceneTxt[] = { "A", "B" };
+    for (int i = 0; i < 2; ++i) { addAndMakeVisible (sceneBtns[i]); sceneBtns[i]->setButtonText (sceneTxt[i]); sceneBtns[i]->addMouseListener (this, false); sceneBtns[i]->setLookAndFeel (&chromaLookAndFeel); }
+
+    juce::TextButton* utilBtns[] = { &saveButton, &recallButton, &copyButton, &initButton }; juce::String utilTxt[] = { "Save", "Recall", "Copy", "Init" };
+    for (int i = 0; i < 4; ++i) { addAndMakeVisible (utilBtns[i]); utilBtns[i]->setButtonText (utilTxt[i]); utilBtns[i]->setClickingTogglesState (true); utilBtns[i]->addMouseListener (this, false); utilBtns[i]->setLookAndFeel (&chromaLookAndFeel); }
+    saveButton.onClick   = [this] { if (saveButton.getToggleState()) recallButton.setToggleState (false, juce::dontSendNotification); };
+    recallButton.onClick = [this] { if (recallButton.getToggleState()) saveButton.setToggleState (false, juce::dontSendNotification); };
+
+    // Symmetrical Latching Modifiers directly in standard button callbacks
+    addAndMakeVisible (diceMeloButton); diceMeloButton.setComponentID ("dice_melody"); diceMeloButton.setButtonText ("Melo"); diceMeloButton.setLookAndFeel (&chromaLookAndFeel); 
+    diceMeloButton.onClick = [this] { if (initButton.getToggleState()) { processor.resetRhythm(); initButton.setToggleState (false, juce::dontSendNotification); initButton.repaint(); } else { processor.diceMelody(); } };
+    
+    addAndMakeVisible (diceArtiButton); diceArtiButton.setComponentID ("dice_articulation"); diceArtiButton.setButtonText ("Arti"); diceArtiButton.setLookAndFeel (&chromaLookAndFeel); 
+    diceArtiButton.onClick = [this] { if (initButton.getToggleState()) { processor.apvts.getParameter(IDs::rest.getParamID())->setValueNotifyingHost(0.0f); processor.apvts.getParameter(IDs::legato.getParamID())->setValueNotifyingHost(0.5f); initButton.setToggleState (false, juce::dontSendNotification); initButton.repaint(); } else { processor.diceArticulation(); } };
+    
+    addAndMakeVisible (diceTimeButton); diceTimeButton.setComponentID ("dice_time"); diceTimeButton.setButtonText ("Time"); diceTimeButton.setLookAndFeel (&chromaLookAndFeel); 
+    diceTimeButton.onClick = [this] { if (initButton.getToggleState()) { processor.apvts.getParameter(IDs::rate.getParamID())->setValueNotifyingHost(2.0f / 3.0f); processor.apvts.getParameter(IDs::octaves.getParamID())->setValueNotifyingHost(3.0f / 6.0f); processor.apvts.getParameter(IDs::cycleLength.getParamID())->setValueNotifyingHost(2.0f / 3.0f); initButton.setToggleState (false, juce::dontSendNotification); initButton.repaint(); } else { processor.diceTime(); } };
+    
+    addAndMakeVisible (diceNavyButton); diceNavyButton.setComponentID ("dice_navy"); diceNavyButton.setButtonText ("Navy"); diceNavyButton.setLookAndFeel (&chromaLookAndFeel); 
+    diceNavyButton.onClick = [this] { if (initButton.getToggleState()) { processor.apvts.getParameter(IDs::rhythmMorph.getParamID())->setValueNotifyingHost(0.0f); processor.apvts.getParameter(IDs::entropy.getParamID())->setValueNotifyingHost(0.0f); processor.apvts.getParameter(IDs::harmony.getParamID())->setValueNotifyingHost(0.0f); processor.apvts.getParameter(IDs::chaos.getParamID())->setValueNotifyingHost(0.0f); initButton.setToggleState (false, juce::dontSendNotification); initButton.repaint(); } else { processor.diceNavy(); } };
+
+    sceneAButton.onClick = [this] {
+        if (initButton.getToggleState()) { processor.clearSceneA(); sceneAFlashTimer = 24; initButton.setToggleState (false, juce::dontSendNotification); initButton.repaint(); }
+        else if (copyButton.getToggleState()) { processor.saveSceneA(); sceneAFlashTimer = 24; copyButton.setToggleState (false, juce::dontSendNotification); copyButton.repaint(); }
+    };
+    sceneBButton.onClick = [this] {
+        if (initButton.getToggleState()) { processor.clearSceneB(); sceneBFlashTimer = 24; initButton.setToggleState (false, juce::dontSendNotification); initButton.repaint(); }
+        else if (copyButton.getToggleState()) { processor.saveSceneB(); sceneBFlashTimer = 24; copyButton.setToggleState (false, juce::dontSendNotification); copyButton.repaint(); }
     };
 
-    activeMorph   = applyLfo (0, baseMorph,   IDs::rhythmMorphLfoRate, IDs::rhythmMorphLfoDepth, 0.0f, 1.0f);
-    activeRest    = applyLfo (1, baseRest,    IDs::restLfoRate,        IDs::restLfoDepth,        0.0f, 1.0f);
-    activeLegato  = applyLfo (2, baseLegato,  IDs::legatoLfoRate,      IDs::legatoLfoDepth,      0.1f, 1.0f);
-    
-    modLegato = activeLegato;
-    if (activeLegato >= 0.8f)
-    {
-        float dampFactor = juce::jlimit (0.0f, 1.0f, (1.0f - activeLegato) / 0.2f);
-        modRest = activeRest * dampFactor;
-    }
-    else
-    {
-        modRest = activeRest;
-    }
+    for (int i = 0; i < 8; ++i) { addAndMakeVisible (presetButtons[i]); presetButtons[i].setButtonText (juce::String (i + 1)); presetButtons[i].addMouseListener (this, false); presetButtons[i].setLookAndFeel (&chromaLookAndFeel); }
 
-    float rawRate = applyLfo (3, baseRate, IDs::rateLfoRate, IDs::rateLfoDepth, 0.0f, 3.0f);
-    activeRateIdx = juce::jlimit (0, 3, static_cast<int> (std::round (rawRate)));
-    activeEntropy = applyLfo (4, baseEntropy, IDs::entropyLfoRate, IDs::entropyLfoDepth, -1.0f, 1.0f); 
-    modEntropy = activeEntropy;
-    activeHarmony = applyLfo (5, baseHarmony, IDs::harmonyLfoRate, IDs::harmonyLfoDepth, 0.0f, 1.0f); 
-    modHarmony = activeHarmony;
-    activeChaos   = applyLfo (6, baseChaos,   IDs::chaosLfoRate,   IDs::chaosLfoDepth,   0.0f, 1.0f); 
-    modChaos = activeChaos;
+    addAndMakeVisible (rootKeyBox); addAndMakeVisible (scaleTypeBox); addAndMakeVisible (cycleLengthBox);
+    rootKeyBox.addItemList (juce::StringArray { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "Bb", "B" }, 1);
+    scaleTypeBox.addItemList (juce::StringArray { "Major", "Minor", "Pentatonic Minor", "Pentatonic Major", "Dorian", "Phrygian", "Lydian", "Mixolydian", "Harmonic Minor", "Melodic Minor" }, 1);
+    cycleLengthBox.addItemList (juce::StringArray { "1 Bar", "2 Bars", "4 Bars", "8 Bars" }, 1);
 
-    float rawOctaves = applyLfo (7, baseOctaves, IDs::octavesLfoRate, IDs::octavesLfoDepth, -3.0f, 3.0f);
-    activeOctavesVal = juce::jlimit (-3, 3, static_cast<int> (std::round (rawOctaves)));
+    fader1Attachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (processor.apvts, IDs::fader1.getParamID(), fader1);
+    fader2Attachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (processor.apvts, IDs::fader2.getParamID(), fader2);
+    fader3Attachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (processor.apvts, IDs::fader3.getParamID(), fader3);
+    fader4Attachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (processor.apvts, IDs::fader4.getParamID(), fader4);
+    fader5Attachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (processor.apvts, IDs::fader5.getParamID(), fader5);
+    fader6Attachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (processor.apvts, IDs::fader6.getParamID(), fader6);
+    fader7Attachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (processor.apvts, IDs::fader7.getParamID(), fader7);
+    fader8Attachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (processor.apvts, IDs::fader8.getParamID(), fader8);
+
+    rhythmMorphAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (processor.apvts, IDs::rhythmMorph.getParamID(), rhythmMorphKnob);
+    restAttachment        = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (processor.apvts, IDs::rest.getParamID(), restKnob);
+    legatoAttachment      = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (processor.apvts, IDs::legato.getParamID(), legatoKnob);
+    rateAttachment        = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (processor.apvts, IDs::rate.getParamID(), rateKnob);
+
+    entropyAttachment     = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (processor.apvts, IDs::entropy.getParamID(), entropyKnob);
+    harmonyAttachment     = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (processor.apvts, IDs::harmony.getParamID(), harmonyKnob);
+    chaosAttachment       = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (processor.apvts, IDs::chaos.getParamID(), chaosKnob);
+    octavesAttachment     = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (processor.apvts, IDs::octaves.getParamID(), octavesKnob);
+
+    morphAttachment       = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (processor.apvts, IDs::morph.getParamID(), morphCrossfader);
+    latchAttachment       = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (processor.apvts, IDs::latch.getParamID(), latchButton);
+    arpSeqAttachment      = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (processor.apvts, IDs::arpSeq.getParamID(), arpSeqButton);
+    polyAttachment        = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (processor.apvts, IDs::poly.getParamID(), polyButton);
+    freezeAttachment      = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (processor.apvts, IDs::freeze.getParamID(), freezeButton);
+
+    rootKeyAttachment     = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment> (processor.apvts, IDs::rootKey.getParamID(), rootKeyBox);
+    scaleTypeAttachment   = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment> (processor.apvts, IDs::scaleType.getParamID(), scaleTypeBox);
+    cycleLengthAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment> (processor.apvts, IDs::cycleLength.getParamID(), cycleLengthBox);
+
+    int themeIdx = static_cast<int> (processor.apvts.getRawParameterValue ("panelTheme")->load()); auto t = AppTheme::get (themeIdx);
+    juce::Slider* knobs[] = { &rhythmMorphKnob, &restKnob, &legatoKnob, &rateKnob, &entropyKnob, &harmonyKnob, &chaosKnob, &octavesKnob };
+    for (auto* k : knobs) k->setColour (juce::Slider::textBoxTextColourId, t.textDim);
+
+    setResizable (true, true); setResizeLimits (700, 460, 1400, 920); setSize (850, 560); startTimerHz (30);
 }
 
-void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)
-{
-    buffer.clear(); 
-    bool isPlaying = false; 
-    double bpm = 120.0; 
-    mSongPositionPPQ = 0.0;
-
-#if JUCE_MAJOR_VERSION >= 7
-    if (auto* playhead = getPlayHead()) {
-        if (auto pos = playhead->getPosition()) {
-            isPlaying = pos->getIsPlaying();
-            auto bpmOpt = pos->getBpm(); if (bpmOpt.hasValue()) bpm = *bpmOpt;
-            auto ppqOpt = pos->getPpqPosition(); if (ppqOpt.hasValue()) mSongPositionPPQ = *ppqOpt;
-        }
-    }
-#else
-    if (auto* playhead = getPlayHead()) {
-        juce::AudioPlayHead::CurrentPositionInfo info;
-        if (playhead->getCurrentPositionInfo (info)) { 
-            isPlaying = info.isPlaying; 
-            bpm = info.bpm; 
-            mSongPositionPPQ = info.ppqPosition; 
-        }
-    }
-#endif
-
-    int numSamples = buffer.getNumSamples(); 
-    updateLfoModulations (numSamples, bpm);
-    
-    // Parameter Slew calculations
-    float slewFactor = static_cast<float>(1.0 - std::exp (-1.0 / (0.15 * mSampleRate)));
-    for (int i = 0; i < 24; ++i) {
-        currentSlewValue[i] += (currentSlewTarget[i] - currentSlewValue[i]) * slewFactor;
-    }
-
-    bool isLatchActive = *apvts.getRawParameterValue (IDs::latch.getParamID()) > 0.5f;
-    bool isArpActive = *apvts.getRawParameterValue (IDs::arpSeq.getParamID()) > 0.5f; 
-    bool isPolyActive = *apvts.getRawParameterValue (IDs::poly.getParamID()) > 0.5f; 
-    bool isFreezeActive = *apvts.getRawParameterValue (IDs::freeze.getParamID()) > 0.5f; 
-
-    // Dynamic unlatching reset on Latch Toggle OFF
-    if (!isLatchActive)
-    {
-        latchedNotes.clear();
-        isFirstNoteOfNewChord = true;
-    }
-
-    float activeFaderProb[8]; 
-    for (int i = 0; i < 8; ++i) 
-    {
-        activeFaderProb[i] = *apvts.getRawParameterValue (juce::String ("fader" + juce::String (i + 1)));
-    }
-
-    juce::MidiBuffer processedMidi;
-    for (auto it = scheduledNoteOffs.begin(); it != scheduledNoteOffs.end();) {
-        it->second -= numSamples;
-        if (it->second <= 0) 
-        { 
-            // Precise sample-offset calculation to prevent note-choking collisions
-            int sampleOffset = juce::jlimit (0, numSamples - 1, it->second + numSamples);
-            processedMidi.addEvent (juce::MidiMessage::noteOff (1, it->first), sampleOffset); 
-            it = scheduledNoteOffs.erase(it); 
-        }
-        else 
-        {
-            ++it;
-        }
-    }
-
-    // Latch Active keyboard sync catcher
-    if (isLatchActive && latchedNotes.empty() && !activeHeldNotes.empty())
-    {
-        latchedNotes = activeHeldNotes;
-        isFirstNoteOfNewChord = false;
-    }
-
-    for (const auto metadata : midiMessages) {
-        auto msg = metadata.getMessage();
-        if (msg.isNoteOn() && !isFreezeActive) { 
-            int note = msg.getNoteNumber();
-            if (std::find (activeHeldNotes.begin(), activeHeldNotes.end(), note) == activeHeldNotes.end()) 
-            { 
-                activeHeldNotes.push_back (note); 
-                std::sort (activeHeldNotes.begin(), activeHeldNotes.end()); 
-            }
-            if (isLatchActive) {
-                if (isFirstNoteOfNewChord) { 
-                    for (int n : latchedNotes) scheduleNoteOff (processedMidi, n, 0); 
-                    latchedNotes.clear(); 
-                    isFirstNoteOfNewChord = false; 
-                }
-                if (std::find (latchedNotes.begin(), latchedNotes.end(), note) == latchedNotes.end()) 
-                { 
-                    latchedNotes.push_back (note); 
-                    std::sort (latchedNotes.begin(), latchedNotes.end()); 
-                }
-            }
-        } else if (msg.isNoteOff() && !isFreezeActive) {
-            int note = msg.getNoteNumber(); 
-            activeHeldNotes.erase (std::remove (activeHeldNotes.begin(), activeHeldNotes.end(), note), activeHeldNotes.end());
-            if (activeHeldNotes.empty()) isFirstNoteOfNewChord = true;
-        }
-    }
-    midiMessages.clear();
-    
-    std::vector<int> notesToPlay = isLatchActive ? latchedNotes : activeHeldNotes;
-    isCurrentlyPlayingUI.store (!notesToPlay.empty() || isFreezeActive);
-
-    if (!notesToPlay.empty() || isFreezeActive) {
-        bool stepTriggered = false; 
-        double samplesPerBeat = mSampleRate * (60.0 / (bpm > 0 ? bpm : 120.0));
-        double stepLengthPPQ = (activeRateIdx == 0) ? 1.0 : (activeRateIdx == 1) ? 0.5 : (activeRateIdx == 2) ? 0.25 : 0.125;
-        double stepSamples = samplesPerBeat * stepLengthPPQ;
-
-        double swingOffset = 0.08 * activeMorph * stepLengthPPQ; 
-        double triggerThreshold = stepLengthPPQ;
-        if (currentStep % 2 == 1) {
-            triggerThreshold += swingOffset;
-        }
-
-        if (isPlaying) {
-            int stepIndex = static_cast<int> (std::floor (mSongPositionPPQ / stepLengthPPQ)) % 8;
-            if (stepIndex != mLastStep) { mLastStep = stepIndex; currentStep = stepIndex; stepTriggered = true; }
-        } else {
-            double activeStepSamples = stepSamples;
-            if (currentStep % 2 == 0) activeStepSamples *= (1.0 + (swingOffset * 4.0));
-            else activeStepSamples *= (1.0 - (swingOffset * 4.0));
-
-            mTimeInSamples += numSamples;
-            if (mTimeInSamples >= activeStepSamples) { mTimeInSamples = 0; stepTriggered = true; }
-        }
-
-        if (stepTriggered) {
-            int playDirection = 0; 
-            if (activeEntropy >= -0.1f && activeEntropy <= 0.1f) playDirection = 0;
-            else if (activeEntropy > 0.1f && activeEntropy <= 0.5f) playDirection = 1;
-            else if (activeEntropy > 0.5f) playDirection = 2;
-            else if (activeEntropy < -0.1f && activeEntropy >= -0.5f) playDirection = 3;
-            else if (activeEntropy < -0.5f) playDirection = 4;
-
-            static bool goingForward = true;
-            if (playDirection == 1) { 
-                if (goingForward) { currentStep++; if (currentStep >= 7) { currentStep = 7; goingForward = false; } }
-                else { currentStep--; if (currentStep <= 0) { currentStep = 0; goingForward = true; } }
-            } else if (playDirection == 2) { 
-                float rVal = juce::Random::getSystemRandom().nextFloat();
-                if (rVal < 0.7f) currentStep = (currentStep + 1) % 8;
-                else if (rVal < 0.9f) currentStep = (currentStep - 1 + 8) % 8;
-            } else if (playDirection == 3) { 
-                currentStep = (currentStep - 1 + 8) % 8;
-            } else if (playDirection == 4) { 
-                currentStep = (juce::Random::getSystemRandom().nextFloat() < 0.2f) ? (currentStep + 2) % 8 : (currentStep + 1) % 8;
-            } else { 
-                if (isPlaying) {
-                    currentStep = static_cast<int> (std::floor (mSongPositionPPQ / stepLengthPPQ)) % 8;
-                } else {
-                    currentStep = (currentStep + 1) % 8;
-                }
-            }
-            mLastStep = currentStep;
-
-            float faderProb = activeFaderProb[currentStep];
-            if (juce::Random::getSystemRandom().nextFloat() <= faderProb && !(juce::Random::getSystemRandom().nextFloat() <= modRest)) {
-                if (mLastNotePlayed != -1) { processedMidi.addEvent (juce::MidiMessage::noteOff (1, mLastNotePlayed), 0); mLastNotePlayed = -1; }
-                int rootKeyIdx = juce::jlimit (0, 11, static_cast<int> (*apvts.getRawParameterValue (IDs::rootKey.getParamID())));
-                int scaleIdx = juce::jlimit (0, 9, static_cast<int> (*apvts.getRawParameterValue (IDs::scaleType.getParamID())));
-                std::vector<int> scaleOffsets = { 0, 2, 4, 5, 7, 9, 11, 12 }; 
-                if (scaleIdx == 1) scaleOffsets = { 0, 2, 3, 5, 7, 8, 10, 12 }; 
-                else if (scaleIdx == 2) scaleOffsets = { 0, 3, 5, 7, 10, 12, 15, 17 }; 
-                else if (scaleIdx == 3) scaleOffsets = { 0, 2, 4, 7, 9, 12, 14, 16 };  
-                else if (scaleIdx == 4) scaleOffsets = { 0, 2, 3, 5, 7, 9, 10, 12 };  
-                else if (scaleIdx == 5) scaleOffsets = { 0, 1, 3, 5, 7, 8, 10, 12 };  
-                else if (scaleIdx == 6) scaleOffsets = { 0, 2, 4, 6, 7, 9, 11, 12 };  
-                else if (scaleIdx == 7) scaleOffsets = { 0, 2, 4, 5, 7, 9, 10, 12 };  
-                else if (scaleIdx == 8) scaleOffsets = { 0, 2, 3, 5, 7, 8, 11, 12 };  
-                else if (scaleIdx == 9) scaleOffsets = { 0, 2, 3, 5, 7, 9, 11, 12 };  
-
-                int rawPitch = 60;
-                int octaveBase = 60;
-                if (isArpActive && !notesToPlay.empty())
-                {
-                    rawPitch = notesToPlay[currentStep % notesToPlay.size()];
-                    octaveBase = ((rawPitch - rootKeyIdx) / 12) * 12 + rootKeyIdx;
-                }
-                else
-                {
-                    int scaleDeg = scaleOffsets[currentStep % scaleOffsets.size()];
-                    rawPitch = 48 + rootKeyIdx + scaleDeg;
-                    octaveBase = ((rawPitch - rootKeyIdx) / 12) * 12 + rootKeyIdx;
-                }
-
-                std::vector<int> pitchList;
-                pitchList.push_back (rawPitch);
-                
-                if (isPolyActive) 
-                {
-                    int maxAllowedNotes = 1;
-                    if (modHarmony > 0.25f && modHarmony < 0.5f)       maxAllowedNotes = 2; 
-                    else if (modHarmony >= 0.5f && modHarmony < 0.75f) maxAllowedNotes = 3; 
-                    else if (modHarmony >= 0.75f)                      maxAllowedNotes = 4; 
-                    
-                    if (maxAllowedNotes > 1)
-                    {
-                        for (int n = 1; n < maxAllowedNotes; ++n)
-                        {
-                            int degreeIndex = (currentStep + n * 2) % scaleOffsets.size();
-                            int chordPitch = octaveBase + scaleOffsets[degreeIndex];
-                            pitchList.push_back (chordPitch);
-                        }
-                    }
-                }
-
-                for (auto& pitch : pitchList)
-                {
-                    int noteOffset = (pitch - rootKeyIdx) % 12;
-                    int octBase = ((pitch - rootKeyIdx) / 12) * 12 + rootKeyIdx;
-                    
-                    int nearestVal = scaleOffsets[0];
-                    int minDiff = 12;
-                    for (int offset : scaleOffsets)
-                    {
-                        int diff = std::abs (offset - noteOffset);
-                        if (diff < minDiff) { minDiff = diff; nearestVal = offset; }
-                    }
-                    pitch = octBase + nearestVal;
-                }
-
-                int rangeShift = activeOctavesVal; 
-                int octaveShiftCount = 0;
-                if (rangeShift > 0) octaveShiftCount = (currentStep / 2) % (rangeShift + 1); 
-                else if (rangeShift < 0) octaveShiftCount = -((currentStep / 2) % (std::abs(rangeShift) + 1)); 
-
-                for (auto pitch : pitchList)
-                {
-                    int targetPitch = pitch + (octaveShiftCount * 12);
-                    if (modChaos > 0.2f && juce::Random::getSystemRandom().nextFloat() <= modChaos) 
-                        targetPitch += (juce::Random::getSystemRandom().nextBool() ? 12 : -12);
-                    
-                    targetPitch = juce::jlimit(0, 127, targetPitch); 
-                    int durationSamples = static_cast<int>(stepSamples * modLegato);
-
-                    processedMidi.addEvent (juce::MidiMessage::noteOn (1, targetPitch, static_cast<juce::uint8>(100)), 0);
-                    mLastNotePlayed = targetPitch; 
-                    mNoteOffTime = durationSamples; 
-                    scheduleNoteOff (processedMidi, targetPitch, durationSamples);
-                }
-            }
-        }
-    } else { 
-        if (mLastStep != -1) { 
-            if (mLastNotePlayed != -1) { 
-                processedMidi.addEvent (juce::MidiMessage::noteOff (1, mLastNotePlayed), 0); 
-                mLastNotePlayed = -1; 
-            } 
-            mLastStep = -1; 
-        } 
-        currentStep = 0; 
-    }
-    midiMessages.swapWith (processedMidi);
-}
-
-void PluginProcessor::triggerDiatonicChordPad (int padIndex)
-{
-    int rootIdx = juce::jlimit (0, 11, static_cast<int> (*apvts.getRawParameterValue (IDs::rootKey.getParamID())));
-    int scaleIdx = juce::jlimit (0, 9, static_cast<int> (*apvts.getRawParameterValue (IDs::scaleType.getParamID())));
-    std::vector<int> scaleOffsets = { 0, 2, 4, 5, 7, 9, 11 };
-    if (scaleIdx == 1) scaleOffsets = { 0, 2, 3, 5, 7, 8, 10 };
-    else if (scaleIdx == 2) scaleOffsets = { 0, 3, 5, 7, 10, 12, 14 };
-    else if (scaleIdx == 3) scaleOffsets = { 0, 2, 4, 7, 9, 12, 14 };
-    else if (scaleIdx == 4) scaleOffsets = { 0, 2, 3, 5, 7, 9, 10 };
-    else if (scaleIdx == 5) scaleOffsets = { 0, 1, 3, 5, 7, 8, 10 };
-    else if (scaleIdx == 6) scaleOffsets = { 0, 2, 4, 6, 7, 9, 11 };
-    else if (scaleIdx == 7) scaleOffsets = { 0, 2, 4, 5, 7, 9, 10 };
-    else if (scaleIdx == 8) scaleOffsets = { 0, 2, 3, 5, 7, 8, 11 };
-    else if (scaleIdx == 9) scaleOffsets = { 0, 2, 3, 5, 7, 9, 11 };
-
-    auto getScalePitch = [&](int degree) -> int { return scaleOffsets[degree % 7] + ((degree / 7) * 12); };
-    int baseRoot = 48 + rootIdx;
-    int r = getScalePitch (padIndex), t = getScalePitch (padIndex + 2), f = getScalePitch (padIndex + 4);
-
-    std::vector<int> newChord;
-    if (activeHarmony >= 0.34f && activeHarmony < 0.67f) { t = getScalePitch (padIndex + 3); newChord = { baseRoot + r, baseRoot + t, baseRoot + f }; }
-    else if (activeHarmony >= 0.67f) { int s = getScalePitch (padIndex + 6); newChord = { baseRoot + r, baseRoot + t, baseRoot + f, baseRoot + s }; }
-    else { newChord = { baseRoot + r, baseRoot + t, baseRoot + f }; }
-
-    if (!lastChordPitches.empty() && newChord.size() == lastChordPitches.size()) {
-        int pitchDiff = newChord[2] - lastChordPitches[2];
-        if (pitchDiff > 5) newChord[2] -= 12; else if (pitchDiff < -5) newChord[0] += 12; 
-    }
-    std::sort(newChord.begin(), newChord.end()); 
-    lastChordPitches = newChord;
-    latchedNotes = newChord; 
-    apvts.getParameter(IDs::latch.getParamID())->setValueNotifyingHost(1.0f); 
-}
-
-void PluginProcessor::savePreset (int slotIndex) 
+PluginEditor::~PluginEditor() 
 { 
-    if (slotIndex >= 0 && slotIndex < 8) 
-    { 
-        sceneAPresets[slotIndex] = sceneA;
-        sceneBPresets[slotIndex] = sceneB;
-        sceneASlotsSaved[slotIndex] = hasSceneA;
-        sceneBSlotsSaved[slotIndex] = hasSceneB;
-
-        for (int i = 0; i < 8; ++i) 
-            presets[slotIndex].faders[i] = *apvts.getRawParameterValue (juce::String ("fader" + juce::String (i + 1))); 
-        presets[slotIndex].rhythmMorph = *apvts.getRawParameterValue (IDs::rhythmMorph.getParamID()); 
-        presets[slotIndex].rest = *apvts.getRawParameterValue (IDs::rest.getParamID()); 
-        presets[slotIndex].legato = *apvts.getRawParameterValue (IDs::legato.getParamID()); 
-        presets[slotIndex].entropy = *apvts.getRawParameterValue (IDs::entropy.getParamID()); 
-        presets[slotIndex].harmony = *apvts.getRawParameterValue (IDs::harmony.getParamID()); 
-        presets[slotIndex].chaos = *apvts.getRawParameterValue (IDs::chaos.getParamID()); 
-        presets[slotIndex].rate = *apvts.getRawParameterValue (IDs::rate.getParamID());
-        presets[slotIndex].octaves = static_cast<float> (*apvts.getRawParameterValue (IDs::octaves.getParamID()));
-        
-        juce::ParameterID rates[] = { IDs::rhythmMorphLfoRate, IDs::restLfoRate, IDs::legatoLfoRate, IDs::rateLfoRate, IDs::entropyLfoRate, IDs::harmonyLfoRate, IDs::chaosLfoRate, IDs::octavesLfoRate };
-        juce::ParameterID depths[] = { IDs::rhythmMorphLfoDepth, IDs::restLfoDepth, IDs::legatoLfoDepth, IDs::rateLfoDepth, IDs::entropyLfoDepth, IDs::harmonyLfoDepth, IDs::chaosLfoDepth, IDs::octavesLfoDepth };
-        for (int i = 0; i < 8; ++i) { 
-            presets[slotIndex].lfoRates[i] = static_cast<int> (*apvts.getRawParameterValue (rates[i].getParamID())); 
-            presets[slotIndex].lfoDepths[i] = *apvts.getRawParameterValue (depths[i].getParamID()); 
-        }
-        
-        presetSlotsSaved[slotIndex] = true; 
-        activePresetIndex.store (slotIndex); 
-    } 
+    stopTimer(); processor.apvts.removeParameterListener ("panelTheme", this);
+    juce::Slider* sliders[] = { &rhythmMorphKnob, &restKnob, &legatoKnob, &rateKnob, &entropyKnob, &harmonyKnob, &chaosKnob, &octavesKnob, &fader1, &fader2, &fader3, &fader4, &fader5, &fader6, &fader7, &fader8, &morphCrossfader };
+    for (auto* s : sliders) s->setLookAndFeel (nullptr);
+    juce::TextButton* btns[] = { &diceMeloButton, &diceArtiButton, &diceTimeButton, &diceNavyButton, &latchButton, &arpSeqButton, &polyButton, &freezeButton, &sceneAButton, &sceneBButton, &saveButton, &recallButton, &copyButton, &initButton };
+    for (auto* b : btns) { b->setLookAndFeel (nullptr); b->onClick = nullptr; }
+    for (int i = 0; i < 8; ++i) { presetButtons[i].setLookAndFeel (nullptr); presetButtons[i].onClick = nullptr; presetButtons[i].onStateChange = nullptr; presetButtons[i].removeMouseListener(this); }
+    sceneAButton.removeMouseListener (this); sceneBButton.removeMouseListener (this);
 }
 
-void PluginProcessor::loadPreset (int slotIndex) 
-{ 
-    if (slotIndex >= 0 && slotIndex < 8 && presetSlotsSaved[slotIndex]) 
-    { 
-        sceneA = sceneAPresets[slotIndex];
-        sceneB = sceneBPresets[slotIndex];
-        hasSceneA = sceneASlotsSaved[slotIndex];
-        hasSceneB = sceneBSlotsSaved[slotIndex];
-
-        apvts.getParameter (IDs::rhythmMorph.getParamID())->setValueNotifyingHost (presets[slotIndex].rhythmMorph); 
-        apvts.getParameter (IDs::rest.getParamID())->setValueNotifyingHost (presets[slotIndex].rest); 
-        apvts.getParameter (IDs::legato.getParamID())->setValueNotifyingHost (presets[slotIndex].legato); 
-        
-        apvts.getParameter (IDs::entropy.getParamID())->setValueNotifyingHost ((presets[slotIndex].entropy + 1.0f) * 0.5f); 
-        apvts.getParameter (IDs::harmony.getParamID())->setValueNotifyingHost (presets[slotIndex].harmony); 
-        apvts.getParameter (IDs::chaos.getParamID())->setValueNotifyingHost (presets[slotIndex].chaos); 
-        apvts.getParameter (IDs::rate.getParamID())->setValueNotifyingHost (presets[slotIndex].rate / 3.0f);
-        apvts.getParameter (IDs::octaves.getParamID())->setValueNotifyingHost ((presets[slotIndex].octaves + 3.0f) / 6.0f); 
-
-        juce::ParameterID rates[] = { IDs::rhythmMorphLfoRate, IDs::restLfoRate, IDs::legatoLfoRate, IDs::rateLfoRate, IDs::entropyLfoRate, IDs::harmonyLfoRate, IDs::chaosLfoRate, IDs::octavesLfoRate };
-        juce::ParameterID depths[] = { IDs::rhythmMorphLfoDepth, IDs::restLfoDepth, IDs::legatoLfoDepth, IDs::rateLfoDepth, IDs::entropyLfoDepth, IDs::harmonyLfoDepth, IDs::chaosLfoDepth, IDs::octavesLfoDepth };
-        for (int i = 0; i < 8; ++i) { 
-            apvts.getParameter (rates[i].getParamID())->setValueNotifyingHost (static_cast<float>(presets[slotIndex].lfoRates[i]) / 4.0f); 
-            apvts.getParameter (depths[i].getParamID())->setValueNotifyingHost (presets[slotIndex].lfoDepths[i]); 
-        }
-
-        for (int i = 0; i < 8; ++i) 
-            apvts.getParameter (juce::String ("fader" + juce::String (i + 1)))->setValueNotifyingHost (presets[slotIndex].faders[i]); 
-            
-        activePresetIndex.store (slotIndex); 
-    } 
-}
-
-void PluginProcessor::captureScene (int side) 
-{ 
-    SceneState& s = (side == 0) ? sceneA : sceneB;
-    for (int i = 0; i < 8; ++i) s.faders[i] = *apvts.getRawParameterValue (juce::String ("fader" + juce::String (i + 1))); 
-    s.rhythmMorph = *apvts.getRawParameterValue (IDs::rhythmMorph.getParamID()); 
-    s.rest = *apvts.getRawParameterValue (IDs::rest.getParamID()); 
-    s.legato = *apvts.getRawParameterValue (IDs::legato.getParamID()); 
-    s.entropy = *apvts.getRawParameterValue (IDs::entropy.getParamID()); 
-    s.harmony = *apvts.getRawParameterValue (IDs::harmony.getParamID()); 
-    s.chaos = *apvts.getRawParameterValue (IDs::chaos.getParamID()); 
-    s.rate = *apvts.getRawParameterValue (IDs::rate.getParamID());
-    s.octaves = static_cast<float> (*apvts.getRawParameterValue (IDs::octaves.getParamID()));
-    
-    juce::ParameterID rates[] = { IDs::rhythmMorphLfoRate, IDs::restLfoRate, IDs::legatoLfoRate, IDs::rateLfoRate, IDs::entropyLfoRate, IDs::harmonyLfoRate, IDs::chaosLfoRate, IDs::octavesLfoRate };
-    juce::ParameterID depths[] = { IDs::rhythmMorphLfoDepth, IDs::restLfoDepth, IDs::legatoLfoDepth, IDs::rateLfoDepth, IDs::entropyLfoDepth, IDs::harmonyLfoDepth, IDs::chaosLfoDepth, IDs::octavesLfoDepth };
-    for (int i = 0; i < 8; ++i) { 
-        s.lfoRates[i] = static_cast<int> (*apvts.getRawParameterValue (rates[i].getParamID())); 
-        s.lfoDepths[i] = *apvts.getRawParameterValue (depths[i].getParamID()); 
+void PluginEditor::parameterChanged (const juce::String& parameterID, float newValue)
+{
+    juce::ignoreUnused (newValue);
+    if (parameterID == "panelTheme") {
+        juce::MessageManager::callAsync ([this]() {
+            int themeIdx = static_cast<int> (processor.apvts.getRawParameterValue ("panelTheme")->load()); auto t = AppTheme::get (themeIdx);
+            juce::Slider* knobs[] = { &rhythmMorphKnob, &restKnob, &legatoKnob, &rateKnob, &entropyKnob, &harmonyKnob, &chaosKnob, &octavesKnob };
+            for (auto* k : knobs) k->setColour (juce::Slider::textBoxTextColourId, t.textDim);
+            repaint(); oledDisplay.repaint();
+            fader1.repaint(); fader2.repaint(); fader3.repaint(); fader4.repaint(); fader5.repaint(); fader6.repaint(); fader7.repaint(); fader8.repaint();
+            rhythmMorphKnob.repaint(); restKnob.repaint(); legatoKnob.repaint(); rateKnob.repaint();
+            entropyKnob.repaint(); harmonyKnob.repaint(); chaosKnob.repaint(); octavesKnob.repaint();
+            morphCrossfader.repaint(); sceneAButton.repaint(); sceneBButton.repaint(); saveButton.repaint(); recallButton.repaint();
+        });
     }
-    if (side == 0) hasSceneA = true; else hasSceneB = true; 
 }
 
-void PluginProcessor::resetAccumulator() { accumulatedPitchOffset = 0.0f; }
-void PluginProcessor::resetRhythm() 
-{ 
-    for (int i = 1; i <= 8; ++i)
-        apvts.getParameter ("fader" + juce::String(i))->setValueNotifyingHost (1.0f);
-}
-
-void PluginProcessor::diceMelody() {
-    auto* r = &juce::Random::getSystemRandom();
-    for (int i = 1; i <= 8; ++i) apvts.getParameter ("fader" + juce::String(i))->setValueNotifyingHost (r->nextFloat());
-}
-
-void PluginProcessor::diceArticulation() {
-    auto* r = &juce::Random::getSystemRandom();
-    apvts.getParameter (IDs::rest.getParamID())->setValueNotifyingHost (r->nextFloat() * 0.5f);
-    apvts.getParameter (IDs::legato.getParamID())->setValueNotifyingHost (0.1f + r->nextFloat() * 0.9f);
-}
-
-void PluginProcessor::diceTime() {
-    auto* r = &juce::Random::getSystemRandom();
-    apvts.getParameter (IDs::rate.getParamID())->setValueNotifyingHost (static_cast<float>(r->nextInt(4)) / 3.0f);
-    apvts.getParameter (IDs::octaves.getParamID())->setValueNotifyingHost (static_cast<float>(r->nextInt(7)) / 6.0f); 
-    apvts.getParameter (IDs::cycleLength.getParamID())->setValueNotifyingHost (static_cast<float>(r->nextInt(4)) / 3.0f);
-}
-
-void PluginProcessor::diceNavy() {
-    auto* r = &juce::Random::getSystemRandom();
-    apvts.getParameter (IDs::rhythmMorph.getParamID())->setValueNotifyingHost (r->nextFloat());
-    apvts.getParameter (IDs::entropy.getParamID())->setValueNotifyingHost (r->nextFloat());
-    apvts.getParameter (IDs::harmony.getParamID())->setValueNotifyingHost (r->nextFloat());
-    apvts.getParameter (IDs::chaos.getParamID())->setValueNotifyingHost (r->nextFloat());
-}
-
-void PluginProcessor::diceActiveSceneA()
+void PluginEditor::mouseDown (const juce::MouseEvent& event)
 {
-    auto* random = &juce::Random::getSystemRandom();
-    for (int i = 0; i < 8; ++i) sceneA.faders[i] = random->nextFloat();
-    sceneA.rhythmMorph = random->nextFloat(); 
-    sceneA.rest = random->nextFloat() * 0.5f; 
-    sceneA.legato = 0.1f + random->nextFloat() * 0.9f;
-    sceneA.entropy = -1.0f + random->nextFloat() * 2.0f; 
-    sceneA.harmony = random->nextFloat(); 
-    sceneA.chaos = random->nextFloat();
-    sceneA.rate = static_cast<float> (random->nextInt (4)); 
-    sceneA.octaves = static_cast<float> (random->nextInt (7) - 3); 
-    hasSceneA = true;
+    for (int i = 0; i < 8; ++i) {
+        if (event.eventComponent == &presetButtons[i]) {
+            if (saveButton.getToggleState()) { presetPressStartTime[i] = juce::Time::getMillisecondCounter(); presetAlreadySaved[i] = false; }
+            else if (recallButton.getToggleState()) {
+                processor.loadPreset (i); presetFlashTimer[i] = 24; presetFlashType[i] = 2;
+                recallButton.setToggleState (false, juce::dontSendNotification); recallButton.repaint();
+            }
+            else if (event.mods.isRightButtonDown()) { processor.savePreset (i); presetFlashTimer[i] = 24; presetFlashType[i] = 1; }
+        }
+    }
+
+    if (event.eventComponent == &saveButton) { savePressStartTime = juce::Time::getMillisecondCounter(); saveAlreadySaved = false; }
+    else if (event.eventComponent == &recallButton) { recallPressStartTime = juce::Time::getMillisecondCounter(); recallAlreadySaved = false; }
+    else if (event.eventComponent == &copyButton) { copyPressStartTime = juce::Time::getMillisecondCounter(); copyAlreadySaved = false; }
+    else if (event.eventComponent == &initButton) { initPressStartTime = juce::Time::getMillisecondCounter(); initAlreadySaved = false; }
+    else if (event.eventComponent == &sceneAButton) { sceneAPressStartTime = juce::Time::getMillisecondCounter(); sceneAAlreadySaved = false; }
+    else if (event.eventComponent == &sceneBButton) { sceneBPressStartTime = juce::Time::getMillisecondCounter(); sceneBAlreadySaved = false; }
 }
 
-void PluginProcessor::diceActiveSceneB()
+void PluginEditor::mouseUp (const juce::MouseEvent& event)
 {
-    auto* random = &juce::Random::getSystemRandom();
-    for (int i = 0; i < 8; ++i) sceneB.faders[i] = random->nextFloat();
-    sceneB.rhythmMorph = random->nextFloat(); 
-    sceneB.rest = random->nextFloat() * 0.5f; 
-    sceneB.legato = 0.1f + random->nextFloat() * 0.9f;
-    sceneB.entropy = -1.0f + random->nextFloat() * 2.0f; 
-    sceneB.harmony = random->nextFloat(); 
-    sceneB.chaos = random->nextFloat();
-    sceneB.rate = static_cast<float> (random->nextInt (4)); 
-    sceneB.octaves = static_cast<float> (random->nextInt (7) - 3); 
-    hasSceneB = true;
+    for (int i = 0; i < 8; ++i) { if (event.eventComponent == &presetButtons[i]) { presetPressStartTime[i] = 0; presetAlreadySaved[i] = false; } }
+    if (event.eventComponent == &sceneAButton) { sceneAPressStartTime = 0; sceneAAlreadySaved = false; }
+    if (event.eventComponent == &sceneBButton) { sceneBPressStartTime = 0; sceneBAlreadySaved = false; }
+    if (event.eventComponent == &saveButton) { savePressStartTime = 0; saveAlreadySaved = false; }
+    if (event.eventComponent == &recallButton) { recallPressStartTime = 0; recallAlreadySaved = false; }
+    if (event.eventComponent == &copyButton) { copyPressStartTime = 0; copyAlreadySaved = false; }
+    if (event.eventComponent == &initButton) { initPressStartTime = 0; initAlreadySaved = false; }
 }
 
-void PluginProcessor::getStateInformation (juce::MemoryBlock& destData)
+void PluginEditor::paint (juce::Graphics& g)
 {
-    auto state = apvts.copyState();
-    std::unique_ptr<juce::XmlElement> xml (state.createXml());
-    auto* presetsNodeA = xml->createNewChildElement ("SCENE_A_PRESETS");
-    auto* presetsNodeB = xml->createNewChildElement ("SCENE_B_PRESETS");
+    int themeIdx = static_cast<int> (processor.apvts.getRawParameterValue ("panelTheme")->load()); auto t = AppTheme::get (themeIdx);
+    g.fillAll (t.background); g.setColour (t.border); g.drawRect (getLocalBounds().toFloat(), 3.0f);
+    auto bounds = getLocalBounds().toFloat();
+    g.drawRoundedRectangle (10.0f, 10.0f, 170.0f, bounds.getHeight() - 210.0f, 4.0f, 1.5f);
+    g.drawRoundedRectangle (bounds.getWidth() - 180.0f, 10.0f, 170.0f, bounds.getHeight() - 210.0f, 4.0f, 1.5f);
+    g.drawRoundedRectangle (10.0f, bounds.getHeight() - 190.0f, bounds.getWidth() - 20.0f, 180.0f, 4.0f, 1.5f);
+    g.setColour (t.textDim); g.setFont (juce::Font (juce::FontOptions (14.0f).withStyle ("Bold")));
+    g.drawText ("Rhythm", 20, 15, 150, 20, juce::Justification::left); g.drawText ("Generator", getWidth() - 170, 15, 150, 20, juce::Justification::right);
+}
 
-    for (int i = 0; i < 8; ++i) 
-    {
-        auto* childA = presetsNodeA->createNewChildElement ("SLOT_" + juce::String (i));
-        childA->setAttribute ("saved", sceneASlotsSaved[i]);
-        if (sceneASlotsSaved[i]) {
-            childA->setAttribute ("morph", sceneAPresets[i].rhythmMorph);
-            childA->setAttribute ("rest", sceneAPresets[i].rest);
-            childA->setAttribute ("legato", sceneAPresets[i].legato);
-            childA->setAttribute ("rate", sceneAPresets[i].rate);
-            childA->setAttribute ("entropy", sceneAPresets[i].entropy);
-            childA->setAttribute ("harmony", sceneAPresets[i].harmony);
-            childA->setAttribute ("chaos", sceneAPresets[i].chaos);
-            childA->setAttribute ("octaves", sceneAPresets[i].octaves);
-            for (int f = 0; f < 8; ++f) childA->setAttribute ("fader_" + juce::String (f), sceneAPresets[i].faders[f]);
-            for (int l = 0; l < 8; ++l) {
-                childA->setAttribute ("lfo_r_" + juce::String (l), sceneAPresets[i].lfoRates[l]);
-                childA->setAttribute ("lfo_d_" + juce::String (l), sceneAPresets[i].lfoDepths[l]);
+void PluginEditor::resized()
+{
+    int bottomY = getHeight() - 180, centerWidth = getWidth() - 370, centerStartX = 185;
+    juce::Slider* leftKnobs[] = { &rhythmMorphKnob, &restKnob, &legatoKnob, &rateKnob };
+    juce::Label* leftTitles[] = { &rhythmMorphTitle, &restTitle, &legatoTitle, &rateTitle };
+    juce::Slider* rightKnobs[] = { &entropyKnob, &harmonyKnob, &chaosKnob, &octavesKnob };
+    juce::Label* rightTitles[] = { &entropyTitle, &harmonyTitle, &chaosTitle, &octavesTitle };
+    
+    int rightX = getWidth() - 180, knobsAvailableHeight = bottomY - 120, knobHeight = juce::jlimit (50, 100, knobsAvailableHeight / 4), knobStartY = 38;
+    for (int i = 0; i < 4; ++i) {
+        int knobY = knobStartY + i * knobHeight;
+        leftKnobs[i]->setBounds (15, knobY + 12, 150, knobHeight - 16); leftTitles[i]->setBounds (15, knobY, 150, 14);
+        rightKnobs[i]->setBounds (rightX + 5, knobY + 12, 150, knobHeight - 16); rightTitles[i]->setBounds (rightX + 5, knobY, 150, 14);
+    }
+
+    int gridY = bottomY - 100;
+    saveButton.setBounds (15, gridY, 72, 36); recallButton.setBounds (93, gridY, 72, 36); copyButton.setBounds (15, gridY + 42, 72, 36); initButton.setBounds (93, gridY + 42, 72, 36);
+    int diceStartX = getWidth() - 165;
+    diceMeloButton.setBounds (diceStartX, gridY, 72, 36); diceArtiButton.setBounds (diceStartX + 78, gridY, 72, 36); diceTimeButton.setBounds (diceStartX, gridY + 42, 72, 36); diceNavyButton.setBounds (diceStartX + 78, gridY + 42, 72, 36);
+
+    int dropWidth = static_cast<int> ((centerWidth * 0.45f) / 3), perfWidth = static_cast<int> ((centerWidth * 0.55f) / 4);
+    rootKeyBox.setBounds (centerStartX, 15, dropWidth - 5, 24); scaleTypeBox.setBounds (centerStartX + dropWidth, 15, dropWidth - 5, 24); cycleLengthBox.setBounds (centerStartX + dropWidth * 2, 15, dropWidth - 5, 24);
+    int perfStartX = centerStartX + dropWidth * 3 + 10;
+    latchButton.setBounds (perfStartX, 15, perfWidth - 5, 24); arpSeqButton.setBounds (perfStartX + perfWidth, 15, perfWidth - 5, 24); polyButton.setBounds (perfStartX + perfWidth * 2, 15, perfWidth - 5, 24); freezeButton.setBounds (perfStartX + perfWidth * 3, 15, perfWidth - 5, 24);
+
+    int oledY = 50, presetsY = static_cast<int> (gridY + 6), crossfaderY = static_cast<int> (gridY + 48), oledHeight = presetsY - oledY - 10;
+    oledDisplay.setBounds (centerStartX, oledY, centerWidth, oledHeight);
+
+    int presetBtnW = (centerWidth - 35) / 8;
+    for (int i = 0; i < 8; ++i) presetButtons[i].setBounds (centerStartX + i * (presetBtnW + 5), presetsY, presetBtnW, 24);
+
+    sceneAButton.setBounds (centerStartX, crossfaderY, 40, 24); morphCrossfader.setBounds (centerStartX + 45, crossfaderY, centerWidth - 90, 24); sceneBButton.setBounds (centerStartX + centerWidth - 40, crossfaderY, 40, 24);
+
+    int faderWidth = (getWidth() - 40) / 8;
+    juce::Slider* faders[] = { &fader1, &fader2, &fader3, &fader4, &fader5, &fader6, &fader7, &fader8 };
+    juce::Label* faderLabels[] = { &faderLabel1, &faderLabel2, &faderLabel3, &faderLabel4, &faderLabel5, &faderLabel6, &faderLabel7, &faderLabel8 };
+    for (int i = 0; i < 8; ++i) {
+        int faderX = 20 + i * faderWidth; faders[i]->setBounds (faderX + 10, bottomY + 10, faderWidth - 20, 130); faderLabels[i]->setBounds (faderX, bottomY + 145, faderWidth, 20);
+    }
+}
+
+void PluginEditor::timerCallback()
+{
+    uint32_t now = juce::Time::getMillisecondCounter();
+    bool isArp = *processor.apvts.getRawParameterValue (IDs::arpSeq.getParamID()) > 0.5f; arpSeqButton.setButtonText (isArp ? "Arp" : "Seq");
+
+    static bool lastAnchorB = false; bool currentAnchorB = processor.isSceneBActiveAnchor.load();
+    if (currentAnchorB != lastAnchorB) { lastAnchorB = currentAnchorB; sceneAButton.repaint(); sceneBButton.repaint(); }
+
+    if (sceneAFlashTimer > 0) { sceneAFlashTimer--; if (sceneAFlashTimer == 0) sceneAButton.repaint(); }
+    if (sceneBFlashTimer > 0) { sceneBFlashTimer--; if (sceneBFlashTimer == 0) sceneBButton.repaint(); }
+    if (saveFlashTimer > 0) { saveFlashTimer--; if (saveFlashTimer == 0) saveButton.repaint(); }
+    if (recallFlashTimer > 0) { recallFlashTimer--; if (recallFlashTimer == 0) recallButton.repaint(); }
+    if (copyFlashTimer > 0) { copyFlashTimer--; if (copyFlashTimer == 0) copyButton.repaint(); }
+    if (initFlashTimer > 0) { initFlashTimer--; if (initFlashTimer == 0) initButton.repaint(); }
+
+    for (int i = 0; i < 8; ++i) {
+        if (presetButtons[i].isMouseButtonDown() && presetPressStartTime[i] != 0 && !presetAlreadySaved[i]) {
+            if (now - presetPressStartTime[i] >= 1000) {
+                processor.savePreset (i); presetAlreadySaved[i] = true; presetFlashTimer[i] = 24; presetFlashType[i] = 1;
+                if (saveButton.getToggleState()) { saveButton.setToggleState (false, juce::dontSendNotification); saveButton.repaint(); }
             }
         }
+        if (presetFlashTimer[i] > 0) { presetFlashTimer[i]--; if (presetFlashTimer[i] == 0) presetButtons[i].repaint(); }
+    }
 
-        auto* childB = presetsNodeB->createNewChildElement ("SLOT_" + juce::String (i));
-        childB->setAttribute ("saved", sceneBSlotsSaved[i]);
-        if (sceneBSlotsSaved[i]) {
-            childB->setAttribute ("morph", sceneBPresets[i].rhythmMorph);
-            childB->setAttribute ("rest", sceneBPresets[i].rest);
-            childB->setAttribute ("legato", sceneBPresets[i].legato);
-            childB->setAttribute ("rate", sceneBPresets[i].rate);
-            childB->setAttribute ("entropy", sceneBPresets[i].entropy);
-            childB->setAttribute ("harmony", sceneBPresets[i].harmony);
-            childB->setAttribute ("chaos", sceneBPresets[i].chaos);
-            childB->setAttribute ("octaves", sceneBPresets[i].octaves);
-            for (int f = 0; f < 8; ++f) childB->setAttribute ("fader_" + juce::String (f), sceneBPresets[i].faders[f]);
-            for (int l = 0; l < 8; ++l) {
-              
+    if (sceneAButton.isMouseButtonDown() && sceneAPressStartTime != 0 && !sceneAAlreadySaved) { if (now - sceneAPressStartTime >= 1000) { processor.setActiveAnchor (false); sceneAAlreadySaved = true; sceneAFlashTimer = 24; } }
+    if (sceneBButton.isMouseButtonDown() && sceneBPressStartTime != 0 && !sceneBAlreadySaved) { if (now - sceneBPressStartTime >= 1000) { processor.setActiveAnchor (true); sceneBAlreadySaved = true; sceneBFlashTimer = 24; } }
+
+    if (saveButton.isMouseButtonDown() && savePressStartTime != 0 && !saveAlreadySaved) { if (now - savePressStartTime >= 1000) { processor.savePreset (processor.activePresetIndex.load()); saveAlreadySaved = true; saveFlashTimer = 24; saveButton.setToggleState (false, juce::dontSendNotification); saveButton.repaint(); } }
+    if (recallButton.isMouseButtonDown() && recallPressStartTime != 0 && !recallAlreadySaved) { if (now - recallPressStartTime >= 1000) { processor.loadPreset (processor.activePresetIndex.load()); recallAlreadySaved = true; recallFlashTimer = 24; recallButton.setToggleState (false, juce::dontSendNotification); recallButton.repaint(); } }
+    if (copyButton.isMouseButtonDown() && copyPressStartTime != 0 && !copyAlreadySaved) { if (now - copyPressStartTime >= 1000) { processor.sceneB = processor.sceneA; processor.hasSceneB = processor.hasSceneA; copyAlreadySaved = true; copyFlashTimer = 24; copyButton.setToggleState (false, juce::dontSendNotification); copyButton.repaint(); } }
+    if (initButton.isMouseButtonDown() && initPressStartTime != 0 && !initAlreadySaved) {
+        if (now - initPressStartTime >= 1000) {
+            for (auto* param : processor.getParameters()) { if (param != nullptr) param->setValueNotifyingHost (param->getDefaultValue()); }
+            initAlreadySaved = true; initFlashTimer = 24; initButton.setToggleState (false, juce::dontSendNotification); initButton.repaint();
+        }
+    }
+}
