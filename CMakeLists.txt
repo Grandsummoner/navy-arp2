@@ -30,7 +30,7 @@ juce_add_plugin(NavyArp
     IS_MIDI_EFFECT TRUE
 )
 
-# CRUCIAL: Instructs CMake to generate the JuceHeader.h file in the build tree
+# Instructs CMake to generate the JuceHeader.h file in the build tree
 juce_generate_juce_header(NavyArp)
 
 # Target Source Files Listing
@@ -61,6 +61,11 @@ target_link_libraries(NavyArp PRIVATE
     juce::juce_recommended_config_flags
     juce::juce_recommended_warning_flags
     juce::juce_recommended_lto_flags
+)
+
+# Propagate suppression macro to prevent VST2 parameter automation warnings/errors on VST3 wrapper compilation
+target_compile_definitions(NavyArp PUBLIC
+    JUCE_IGNORE_VST3_MISMATCHED_PARAMETER_ID_WARNING=1
 )
 
 target_include_directories(NavyArp PRIVATE source)
