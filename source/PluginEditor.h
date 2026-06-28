@@ -47,7 +47,8 @@ private:
     juce::TextButton diceMeloButton, diceArtiButton, diceTimeButton, diceNavyButton;
     juce::TextButton presetButtons[8]; 
 
-    juce::ComboBox rootKeyBox, scaleTypeBox, cycleLengthBox;
+    // Added midiChannelBox
+    juce::ComboBox rootKeyBox, scaleTypeBox, cycleLengthBox, midiChannelBox; 
 
     uint32_t sceneAPressStartTime = 0, sceneBPressStartTime = 0;
     bool sceneAAlreadySaved = false, sceneBAlreadySaved = false;
@@ -66,7 +67,9 @@ private:
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> entropyAttachment, harmonyAttachment, chaosAttachment, octavesAttachment;
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> morphAttachment;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> latchAttachment, arpSeqAttachment, polyAttachment, freezeAttachment;
-    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> rootKeyAttachment, scaleTypeAttachment, cycleLengthAttachment;
+    
+    // Added midiChannelAttachment
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> rootKeyAttachment, scaleTypeAttachment, cycleLengthAttachment, midiChannelAttachment;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PluginEditor)
 };

@@ -49,48 +49,48 @@ void ChromaCapsLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, i
 
     juce::String pId = slider.getComponentID();
     if (pId.isNotEmpty()) {
-        int lfoRateVal = 0;
+        int lfoPresetVal = 0;
         if (pId == "rhythmMorph") {
-            lfoRateVal = static_cast<int> (*processor.apvts.getRawParameterValue (IDs::rhythmMorphLfoRate.getParamID()));
-            visualValue = (lfoRateVal > 0) ? processor.activeMorph : sliderPos;
+            lfoPresetVal = static_cast<int> (*processor.apvts.getRawParameterValue (IDs::rhythmMorphLfoPreset.getParamID()));
+            visualValue = (lfoPresetVal > 0) ? processor.activeMorph : sliderPos;
         }
         else if (pId == "rest") {
-            lfoRateVal = static_cast<int> (*processor.apvts.getRawParameterValue (IDs::restLfoRate.getParamID()));
-            visualValue = (lfoRateVal > 0) ? processor.activeRest : sliderPos;
+            lfoPresetVal = static_cast<int> (*processor.apvts.getRawParameterValue (IDs::restLfoPreset.getParamID()));
+            visualValue = (lfoPresetVal > 0) ? processor.activeRest : sliderPos;
         }
         else if (pId == "legato") {
-            lfoRateVal = static_cast<int> (*processor.apvts.getRawParameterValue (IDs::legatoLfoRate.getParamID()));
+            lfoPresetVal = static_cast<int> (*processor.apvts.getRawParameterValue (IDs::legatoLfoPreset.getParamID()));
             float baseLegato = static_cast<float> (*processor.apvts.getRawParameterValue (IDs::legato.getParamID()));
-            float rawLegato = (lfoRateVal > 0) ? processor.activeLegato : baseLegato;
+            float rawLegato = (lfoPresetVal > 0) ? processor.activeLegato : baseLegato;
             visualValue = (rawLegato - 0.1f) / 0.9f;
         }
         else if (pId == "rate") {
-            lfoRateVal = static_cast<int> (*processor.apvts.getRawParameterValue (IDs::rateLfoRate.getParamID()));
+            lfoPresetVal = static_cast<int> (*processor.apvts.getRawParameterValue (IDs::rateLfoPreset.getParamID()));
             float baseRate = static_cast<float> (*processor.apvts.getRawParameterValue (IDs::rate.getParamID()));
-            float rawRate = (lfoRateVal > 0) ? static_cast<float>(processor.activeRateIdx) : baseRate;
+            float rawRate = (lfoPresetVal > 0) ? static_cast<float>(processor.activeRateIdx) : baseRate;
             visualValue = rawRate / 3.0f;
         }
         else if (pId == "entropy") {
-            lfoRateVal = static_cast<int> (*processor.apvts.getRawParameterValue (IDs::entropyLfoRate.getParamID()));
+            lfoPresetVal = static_cast<int> (*processor.apvts.getRawParameterValue (IDs::entropyLfoPreset.getParamID()));
             float baseEntropy = static_cast<float> (*processor.apvts.getRawParameterValue (IDs::entropy.getParamID()));
-            float rawEntropy = (lfoRateVal > 0) ? processor.activeEntropy : baseEntropy;
+            float rawEntropy = (lfoPresetVal > 0) ? processor.activeEntropy : baseEntropy;
             visualValue = (rawEntropy + 1.0f) * 0.5f;
         }
         else if (pId == "harmony") {
-            lfoRateVal = static_cast<int> (*processor.apvts.getRawParameterValue (IDs::harmonyLfoRate.getParamID()));
-            visualValue = (lfoRateVal > 0) ? processor.activeHarmony : sliderPos;
+            lfoPresetVal = static_cast<int> (*processor.apvts.getRawParameterValue (IDs::harmonyLfoPreset.getParamID()));
+            visualValue = (lfoPresetVal > 0) ? processor.activeHarmony : sliderPos;
         }
         else if (pId == "chaos") {
-            lfoRateVal = static_cast<int> (*processor.apvts.getRawParameterValue (IDs::chaosLfoRate.getParamID()));
-            visualValue = (lfoRateVal > 0) ? processor.activeChaos : sliderPos;
+            lfoPresetVal = static_cast<int> (*processor.apvts.getRawParameterValue (IDs::chaosLfoPreset.getParamID()));
+            visualValue = (lfoPresetVal > 0) ? processor.activeChaos : sliderPos;
         }
         else if (pId == "octaves") {
-            lfoRateVal = static_cast<int> (*processor.apvts.getRawParameterValue (IDs::octavesLfoRate.getParamID()));
+            lfoPresetVal = static_cast<int> (*processor.apvts.getRawParameterValue (IDs::octavesLfoPreset.getParamID()));
             float baseOctaves = static_cast<float> (*processor.apvts.getRawParameterValue (IDs::octaves.getParamID()));
-            float rawOctaves = (lfoRateVal > 0) ? static_cast<float>(processor.activeOctavesVal) : baseOctaves;
+            float rawOctaves = (lfoPresetVal > 0) ? static_cast<float>(processor.activeOctavesVal) : baseOctaves;
             visualValue = (rawOctaves + 3.0f) / 6.0f;
         }
-        lfoActive = (lfoRateVal > 0);
+        lfoActive = (lfoPresetVal > 0);
         if (lfoActive) ledActiveCol = (pId == "rhythmMorph" || pId == "rest" || pId == "legato" || pId == "rate") ? juce::Colour (0xFFFF00D2) : juce::Colour (0xFF9933FF);
     }
 
@@ -234,6 +234,7 @@ void ChromaCapsLookAndFeel::drawButtonText (juce::Graphics& g, juce::TextButton&
         float diceSize = 14.0f, diceX = 6.0f, diceY = (bounds.getHeight() - diceSize) * 0.5f;
         auto diceBounds = juce::Rectangle<float> (diceX, diceY, diceSize, diceSize);
         drawVectorDice (g, diceBounds, activeAccent);
+        
         auto textBounds = button.getLocalBounds().toFloat().withTrimmedLeft (24.0f);
         g.setColour (isToggled ? activeAccent.brighter (0.1f) : (themeIdx == 1 ? juce::Colour(0xFF1E1E1E) : t.textDim.brighter(0.2f)));
         g.setFont (getTextButtonFont (button, button.getHeight())); g.drawFittedText (button.getButtonText(), textBounds.toNearestInt(), juce::Justification::centredLeft, 1);

@@ -12,18 +12,20 @@ OledDisplay::~OledDisplay()
 
 void OledDisplay::timerCallback()
 {
-    juce::String prefixes[] = { "rhythmMorph", "rest", "legato", "rate", "entropy", "harmony", "chaos", "octaves" };
-    bool lfoParamChanged = false; 
-    int changedIdx = -1;
-    for (int i = 0; i < 8; ++i) {
-        int rate = static_cast<int> (*processor.apvts.getRawParameterValue (prefixes[i] + "LfoRate"));
-        float depth = *processor.apvts.getRawParameterValue (prefixes[i] + "LfoDepth");
-        if (rate != lastLfoRates[i] || depth != lastLfoDepths[i]) {
-            lastLfoRates[i] = rate; lastLfoDepths[i] = depth; lfoParamChanged = true; changedIdx = i;
-        }
+    // Handle momentary parameter card overlay timer decay [NEW]
+    if (overlayTimer > 0)
+    {
+        overlayTimer--;
+        repaint();
     }
-    if (lfoParamChanged) { lfoOverlayTimer = 45; lfoActiveParamIdx = changedIdx; }
-    else if (lfoOverlayTimer > 0) { lfoOverlayTimer--; }
+}
+
+void OledDisplay::showParameter (const juce::String& paramName, float value, const juce::String& lfoName)
+{
+    activeParamName = paramName;
+    activeParamValue = value;
+    activeLfoPresetName = lfoName;
+    overlayTimer = 45; // 1.5 seconds at 30Hz
     repaint();
 }
 
@@ -33,30 +35,50 @@ void OledDisplay::paint (juce::Graphics& g)
     g.fillAll (juce::Colour (0xFF08080A)); g.setColour (t.border); g.drawRect (getLocalBounds().toFloat(), 2.0f);
     auto area = getLocalBounds().reduced (15);
 
-    if (lfoOverlayTimer > 0 && lfoActiveParamIdx >= 0) {
-        juce::String prefixes[] = { "MORPH", "REST", "LEGATO", "RATE", "ENTROPY", "HARMONY", "CHAOS", "OCTAVES" };
-        g.setColour (t.leftAccent); g.setFont (juce::Font (juce::FontOptions (15.0f).withStyle ("Bold")));
-        g.drawText ("LFO PREVIEW: " + prefixes[lfoActiveParamIdx], 15, 12, getWidth() - 30, 20, juce::Justification::centred);
-        g.setFont (juce::Font (juce::FontOptions (12.0f))); g.setColour (juce::Colour (0xFFFFB300));
-        juce::String speedRate = processor.apvts.getParameter(prefixes[lfoActiveParamIdx].toLowerCase() + "LfoRate")->getCurrentValueAsText();
-        g.drawText ("RATE: " + speedRate + " | DEPTH: " + juce::String(static_cast<int>(lastLfoDepths[lfoActiveParamIdx] * 100.0f)) + "%", 15, 27, getWidth() - 30, 15, juce::Justification::centred);
+    // 1. Draw Momentary Parameter Card Overlay if active [NEW]
+    if (overlayTimer > 0)
+    {
+        g.setColour (juce::Colour (0xFF181C24)); // Dark-charcoal backing card
+        g.fillRoundedRectangle (area.toFloat().reduced(5.0f), 4.0f);
+        g.setColour (t.leftAccent);
+        g.drawRoundedRectangle (area.toFloat().reduced(5.0f), 4.0f, 1.2f);
+        
+        // Parameter Name Header
+        g.setColour (juce::Colours::white);
+        g.setFont (juce::Font (juce::FontOptions (15.0f).withStyle ("Bold")));
+        g.drawText ("[" + activeParamName.toUpperCase() + "]", area.getX(), area.getY() + 15, area.getWidth(), 25, juce::Justification::centred);
 
-        juce::Path wavePath; float waveYCenter = area.getCentreY() + 10.0f, waveHeight = (area.getHeight() - 40.0f) * lastLfoDepths[lfoActiveParamIdx] * 0.45f;
-        int rateChoice = lastLfoRates[lfoActiveParamIdx]; float frequencyFactor = (rateChoice == 1) ? 0.25f : (rateChoice == 2) ? 0.5f : (rateChoice == 3) ? 1.0f : 2.0f;
-        static float phaseOffset = 0.0f; phaseOffset += 0.15f * frequencyFactor;
-        if (phaseOffset >= juce::MathConstants<float>::twoPi) phaseOffset -= juce::MathConstants<float>::twoPi;
-        for (int x = area.getX(); x < area.getRight(); ++x) {
-            float pct = static_cast<float>(x - area.getX()) / static_cast<float>(area.getWidth());
-            float sineVal = std::sin (pct * juce::MathConstants<float>::twoPi * 2.0f * frequencyFactor + phaseOffset);
-            float yVal = waveYCenter + sineVal * waveHeight;
-            if (x == area.getX()) wavePath.startNewSubPath (static_cast<float>(x), yVal); else wavePath.lineTo (static_cast<float>(x), yVal);
+        // Parameter Live Value
+        g.setFont (juce::Font (juce::FontOptions (11.0f).withStyle ("Bold")));
+        g.setColour (juce::Colour (0xFFFFB300)); // Saturated Amber
+        juce::String valStr = juce::String (activeParamValue, 2);
+        if (activeParamName == "Rate")
+        {
+            int rateVal = static_cast<int> (activeParamValue);
+            valStr = (rateVal == 0) ? "1/4" : (rateVal == 1) ? "1/8" : (rateVal == 2) ? "1/16" : "1/32";
         }
-        g.setColour (lfoActiveParamIdx < 4 ? t.leftAccent : t.rightAccent); g.strokePath (wavePath, juce::PathStrokeType (1.8f));
-        return; 
+        else if (activeParamName == "Octaves")
+        {
+            int octVal = static_cast<int> (activeParamValue);
+            valStr = (octVal >= 0) ? "+" + juce::String (octVal) : juce::String (octVal);
+        }
+        g.drawText ("Value: " + valStr, area.getX(), area.getY() + 45, area.getWidth(), 20, juce::Justification::centred);
+
+        // Active LFO Vibe Preset Name
+        g.setFont (juce::Font (juce::FontOptions (10.0f).withStyle ("Bold")));
+        g.setColour (juce::Colour (0xFF80D8FF)); // Ice Blue
+        g.drawText ("LFO Preset: " + activeLfoPresetName, area.getX(), area.getY() + 72, area.getWidth(), 20, juce::Justification::centred);
+
+        // Diagonal glass glare overlay
+        juce::Path glint; glint.startNewSubPath (0.0f, 0.0f); glint.lineTo (static_cast<float>(getWidth() * 0.45f), 0.0f); glint.lineTo (0.0f, static_cast<float>(getHeight() * 0.95f)); glint.closeSubPath();
+        juce::ColourGradient gr (juce::Colours::white.withAlpha (0.02f), 0.0f, 0.0f, juce::Colours::white.withAlpha (0.0f), static_cast<float>(getWidth() * 0.3f), static_cast<float>(getHeight() * 0.6f), false);
+        g.setGradientFill (gr); g.fillPath (glint);
+        return;
     }
 
+    // 2. Standard View (8-Step VU Meters & Display)
     auto headerArea = getLocalBounds().removeFromTop (25); g.setColour (juce::Colour (0xFF181C24)); g.fillRect (headerArea);
-    g.setColour (juce::Colour (0xFFFFFFFF)); g.setFont (juce::Font (juce::FontOptions (15.0f).withStyle ("Bold")));
+    g.setColour (juce::Colour (0xFFFFFFFF)); g.setFont (juce::Font (juce::FontOptions (12.5f).withStyle ("Bold")));
     g.drawText ("NAVY-ARP MONITOR", headerArea, juce::Justification::centred, true);
 
     juce::String scaleName = processor.apvts.getParameter(IDs::scaleType.getParamID())->getCurrentValueAsText();
@@ -64,7 +86,7 @@ void OledDisplay::paint (juce::Graphics& g)
     juce::String speedRate = processor.apvts.getParameter(IDs::rate.getParamID())->getCurrentValueAsText();
     int octValue = static_cast<int>(*processor.apvts.getRawParameterValue (IDs::octaves.getParamID()));
     juce::String activeOcts = (octValue >= 0) ? "+" + juce::String (octValue) : juce::String (octValue);
-    g.setFont (juce::Font (juce::FontOptions (12.0f))); g.setColour (juce::Colour (0xFFFFB300));
+    g.setFont (juce::Font (juce::FontOptions (9.5f))); g.setColour (juce::Colour (0xFFFFB300));
     g.drawText ("KEY: " + keyName + " | SCALE: " + scaleName + " | VOICE: TRIAD | RATE: " + speedRate + " | OCT: " + activeOcts, 10, 27, getWidth() - 20, 15, juce::Justification::centred);
 
     area.removeFromTop (27);
@@ -80,7 +102,7 @@ void OledDisplay::paint (juce::Graphics& g)
             g.setColour ((isPlaying && processor.currentStep == i) ? t.leftAccent : t.leftAccent.withAlpha (0.4f));
             g.fillRect (bar.getX(), segY, bar.getWidth(), 6);
         }
-        juce::String stepNumStr = juce::String (i + 1); g.setFont (juce::Font (juce::FontOptions (10.0f)));
+        juce::String stepNumStr = juce::String (i + 1); g.setFont (juce::Font (juce::FontOptions (9.0f)));
         g.setColour ((isPlaying && processor.currentStep == i) ? juce::Colours::white : juce::Colour (0xFF3A3F4E));
         g.drawText (stepNumStr, area.getX() + (i * barWidth), area.getBottom() - 12, barWidth, 12, juce::Justification::centred);
     }
