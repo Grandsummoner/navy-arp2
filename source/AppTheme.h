@@ -4,23 +4,53 @@
 
 namespace AppTheme
 {
-    // Obsidian Dark Dashboard Backgrounds
-    const juce::Colour obsidianBg           = juce::Colour::fromString ("#FF0F1116"); // #0F1116
-    const juce::Colour dashboardBg          = juce::Colour::fromString ("#FF1E2127"); // #1E2127
-    const juce::Colour darkShadow           = juce::Colour::fromString ("#FF050507");
-
-    // Unified Ice Blue Highlights (Freeze Mode & Active States)
-    const juce::Colour iceBlueActive        = juce::Colour::fromString ("#FF80D8FF"); // #80D8FF
-    const juce::Colour iceBlueDim           = juce::Colour::fromString ("#FF00B0FF");
-    
-    // Core Functional Colors
-    const juce::Colour textDim              = juce::Colour::fromString ("#FF9E9E9E");
-    const juce::Colour textBright           = juce::Colours::white;
-    const juce::Colour outlineGrey          = juce::Colour::fromString ("#FF303030");
-
-    // Standard Theme Palettes
-    inline juce::Colour getThemeColor (bool isFreezeActive)
+    struct Theme
     {
-        return isFreezeActive ? iceBlueActive : juce::Colour::fromString ("#FF2196F3");
+        juce::Colour background;
+        juce::Colour border;
+        juce::Colour textDim;
+        juce::Colour slotOutline;
+    };
+
+    inline Theme get (int index)
+    {
+        switch (index)
+        {
+            case 0: // Navy Cyber
+                return {
+                    juce::Colour::fromString ("#FF0A0B10"), // background
+                    juce::Colour::fromString ("#FF00D2FF"), // border
+                    juce::Colour::fromString ("#FF888888"), // textDim
+                    juce::Colour::fromString ("#FF181C24")  // slotOutline
+                };
+            case 1: // Skyline Eurorack
+                return {
+                    juce::Colour::fromString ("#FF1E2127"),
+                    juce::Colour::fromString ("#FFFFB300"),
+                    juce::Colour::fromString ("#FF9E9E9E"),
+                    juce::Colour::fromString ("#FF303030")
+                };
+            case 2: // Monochrome Minimal
+                return {
+                    juce::Colour::fromString ("#FF111111"),
+                    juce::Colour::fromString ("#FFFFFFFF"),
+                    juce::Colour::fromString ("#FF888888"),
+                    juce::Colour::fromString ("#FF222222")
+                };
+            case 3: // Matrix Terminal
+                return {
+                    juce::Colour::fromString ("#FF050A05"),
+                    juce::Colour::fromString ("#FF33FF33"),
+                    juce::Colour::fromString ("#FF558855"),
+                    juce::Colour::fromString ("#FF112211")
+                };
+            default:
+                return {
+                    juce::Colour::fromString ("#FF1E2127"),
+                    juce::Colour::fromString ("#FFFFB300"),
+                    juce::Colour::fromString ("#FF9E9E9E"),
+                    juce::Colour::fromString ("#FF303030")
+                };
+        }
     }
 }

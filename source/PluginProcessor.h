@@ -3,21 +3,69 @@
 #include <JuceHeader.h>
 #include <atomic>
 #include <vector>
-#include <map>
 
 //==============================================================================
-struct SceneSnapshot
+namespace IDs
 {
-    float stepFaders[8] { 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f };
-    float knobValues[8] { 0.5f, 0.5f, 0.5f, 0.5f, 0.5f, 0.5f, 0.5f, 0.5f };
-    int lfoPresets[8] { 0, 0, 0, 0, 0, 0, 0, 0 };
-};
+    inline const juce::ParameterID fader1             { "fader1", 1 };
+    inline const juce::ParameterID fader2             { "fader2", 1 };
+    inline const juce::ParameterID fader3             { "fader3", 1 };
+    inline const juce::ParameterID fader4             { "fader4", 1 };
+    inline const juce::ParameterID fader5             { "fader5", 1 };
+    inline const juce::ParameterID fader6             { "fader6", 1 };
+    inline const juce::ParameterID fader7             { "fader7", 1 };
+    inline const juce::ParameterID fader8             { "fader8", 1 };
 
-struct LfoPresetConfig
+    inline const juce::ParameterID rhythmMorph         { "rhythmMorph", 1 };
+    inline const juce::ParameterID rest                { "rest", 1 };
+    inline const juce::ParameterID legato              { "legato", 1 };
+    inline const juce::ParameterID entropy             { "entropy", 1 };
+    inline const juce::ParameterID harmony             { "harmony", 1 };
+    inline const juce::ParameterID chaos               { "chaos", 1 };
+    inline const juce::ParameterID morph               { "morph", 1 };
+    inline const juce::ParameterID latch               { "latch", 1 };
+    inline const juce::ParameterID arpSeq              { "arpSeq", 1 };
+    inline const juce::ParameterID poly                { "poly", 1 };
+    inline const juce::ParameterID freeze              { "freeze", 1 };
+    inline const juce::ParameterID rootKey             { "rootKey", 1 };
+    inline const juce::ParameterID scaleType           { "scaleType", 1 };
+    inline const juce::ParameterID cycleLength         { "cycleLength", 1 };
+    inline const juce::ParameterID rate                { "rate", 1 };
+    inline const juce::ParameterID octaves             { "octaves", 1 };
+    inline const juce::ParameterID panelTheme          { "panelTheme", 1 };
+
+    inline const juce::ParameterID rhythmMorphLfoRate  { "rhythmMorphLfoRate", 1 };
+    inline const juce::ParameterID rhythmMorphLfoDepth { "rhythmMorphLfoDepth", 1 };
+    inline const juce::ParameterID restLfoRate         { "restLfoRate", 1 };
+    inline const juce::ParameterID restLfoDepth        { "restLfoDepth", 1 };
+    inline const juce::ParameterID legatoLfoRate       { "legatoLfoRate", 1 };
+    inline const juce::ParameterID legatoLfoDepth      { "legatoLfoDepth", 1 };
+    inline const juce::ParameterID rateLfoRate         { "rateLfoRate", 1 };
+    inline const juce::ParameterID rateLfoDepth        { "rateLfoDepth", 1 };
+    inline const juce::ParameterID entropyLfoRate      { "entropyLfoRate", 1 };
+    inline const juce::ParameterID entropyLfoDepth     { "entropyLfoDepth", 1 };
+    inline const juce::ParameterID harmonyLfoRate      { "harmonyLfoRate", 1 };
+    inline const juce::ParameterID harmonyLfoDepth     { "harmonyLfoDepth", 1 };
+    inline const juce::ParameterID chaosLfoRate        { "chaosLfoRate", 1 };
+    inline const juce::ParameterID chaosLfoDepth       { "chaosLfoDepth", 1 };
+    inline const juce::ParameterID octavesLfoRate      { "octavesLfoRate", 1 };
+    inline const juce::ParameterID octavesLfoDepth     { "octavesLfoDepth", 1 };
+}
+
+//==============================================================================
+struct SceneState
 {
-    juce::String name;
-    float rate;  // Speed relative to tempo (e.g. cycles per beat)
-    float depth; // Scale factor (0.0 to 1.0)
+    float faders[8] { 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f };
+    float rhythmMorph { 0.0f };
+    float rest { 0.1f };
+    float legato { 0.5f };
+    float rate { 2.0f / 3.0f };
+    float entropy { 0.0f };
+    float harmony { 0.0f };
+    float chaos { 0.0f };
+    float octaves { 0.0f };
+    int lfoRates[8] { 0, 0, 0, 0, 0, 0, 0, 0 };
+    float lfoDepths[8] { 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f };
 };
 
 //==============================================================================
@@ -30,9 +78,14 @@ public:
 
     //==============================================================================
     void prepareToPlay (double sampleRate, int samplesPerBlock) override;
-    void releaseResources() override;
-
-    bool isBusesLayoutSupported (const BusesLayout& layouts) const override;
+    void releaseResources() override {}
+    bool isBusesLayoutSupported (const BusesLayout& layouts) const override
+    {
+        if (layouts.getMainOutputChannelSet() != juce::AudioChannelSet::mono()
+         && layouts.getMainOutputChannelSet() != juce::AudioChannelSet::stereo())
+            return false;
+        return true;
+    }
 
     void processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
 
@@ -41,35 +94,63 @@ public:
     bool hasEditor() const override { return true; }
 
     //==============================================================================
-    const juce::String getName() const override;
-
-    bool acceptsMidi() const override;
-    bool producesMidi() const override;
-    bool isMidiEffect() const override;
-    double getTailLengthSeconds() const override;
+    const juce::String getName() const override { return "Navy Arp"; }
+    bool acceptsMidi() const override { return true; }
+    bool producesMidi() const override { return true; }
+    bool isMidiEffect() const override { return false; }
+    double getTailLengthSeconds() const override { return 0.0; }
 
     //==============================================================================
-    int getNumPrograms() override;
-    int getCurrentProgram() override;
-    void setCurrentProgram (int index) override;
-    const juce::String getProgramName (int index) override;
-    void changeProgramName (int index, const juce::String& newName) override;
+    int getNumPrograms() override { return 1; }
+    int getCurrentProgram() override { return 0; }
+    void setCurrentProgram (int index) override { juce::ignoreUnused (index); }
+    const juce::String getProgramName (int index) override { juce::ignoreUnused (index); return {}; }
+    void changeProgramName (int index, const juce::String& newName) override { juce::ignoreUnused (index, newName); }
 
     //==============================================================================
     void getStateInformation (juce::MemoryBlock& destData) override;
     void setStateInformation (const void* data, int sizeInBytes) override;
 
     //==============================================================================
-    // Shared State & Target Snapping
+    // Generative Engine & Preset Utilities
     //==============================================================================
-    void captureScene (bool targetB);
-    void triggerSceneAnchorSwitch();
+    void scheduleNoteOff (juce::MidiBuffer& midi, int pitch, int delaySamples);
+    void setActiveAnchor (bool useSceneB);
+    void captureActiveParametersToActiveScene();
+    void updateLfoModulations (int numSamples, double bpm);
+    void triggerDiatonicChordPad (int padIndex);
     
-    bool isSceneBActive() const { return isSceneBActiveAnchor.load(); }
-    void setSceneBActive (bool shouldBeB) { isSceneBActiveAnchor.store (shouldBeB); }
+    void savePreset (int slotIndex);
+    void loadPreset (int slotIndex);
+    void captureScene (int side);
 
-    SceneSnapshot& getSceneA() { return sceneA; }
-    SceneSnapshot& getSceneB() { return sceneB; }
+    void resetAccumulator();
+    void resetRhythm();
+    void diceMelody();
+    void diceArticulation();
+    void diceTime();
+    void diceNavy();
+
+    void diceActiveSceneA();
+    void diceActiveSceneB();
+
+    // Shared State & Scene Snapshot Registers
+    SceneState sceneA;
+    SceneState sceneB;
+    SceneState sceneAPresets[8];
+    SceneState sceneBPresets[8];
+    SceneState presets[8];
+
+    bool sceneASlotsSaved[8] { false };
+    bool sceneBSlotsSaved[8] { false };
+    bool presetSlotsSaved[8] { false };
+
+    bool hasSceneA { false };
+    bool hasSceneB { false };
+
+    std::atomic<int> activePresetIndex { 0 };
+    std::atomic<bool> isSceneBActiveAnchor { false };
+    std::atomic<bool> isCurrentlyPlayingUI { false };
 
     juce::AudioProcessorValueTreeState apvts;
 
@@ -77,24 +158,59 @@ private:
     //==============================================================================
     juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
 
-    // Internal DSP States
-    SceneSnapshot sceneA;
-    SceneSnapshot sceneB;
-    SceneSnapshot frozenCache;
+    double mSampleRate = 44100.0;
+    int mLastStep = -1;
+    int mLastNotePlayed = -1;
+    int mNoteOffTime = 0;
+    int mTimeInSamples = 0;
+    int currentStep = 0;
 
-    std::atomic<bool> isSceneBActiveAnchor { false };
-    std::atomic<bool> isFrozen { false };
-    
-    // MIDI Sequence Clock & State Tracking
-    double currentSampleRate = 44100.0;
-    int clockStep = 0;
-    double playheadPosition = 0.0;
-    
-    // Kept note state for sample-accurate note-offs
-    std::vector<std::pair<int, int>> activeNotes; // pair of <midiNoteNumber, remainingSamples>
+    std::vector<int> activeHeldNotes;
+    std::vector<int> latchedNotes;
+    std::vector<std::pair<int, int>> scheduledNoteOffs;
+    std::vector<int> lastChordPitches;
 
-    // Static mapping of curated LFO configs
-    std::vector<LfoPresetConfig> lfoPresets;
+    double lfoPhases[8] { 0.0 };
+    bool isFirstNoteOfNewChord = true;
+    bool lastSceneBActiveState = false;
+
+    float currentSlewValue[24] { 0.5f };
+    float currentSlewTarget[24] { 0.5f };
+
+    double mSongPositionPPQ = 0.0;
+    int currentBarInCycle = 1;
+
+    // Modulator States
+    float activeMorph = 0.0f;
+    float activeRest = 0.0f;
+    float activeLegato = 0.0f;
+    int activeRateIdx = 0;
+    float activeEntropy = 0.0f;
+    float activeHarmony = 0.0f;
+    float activeChaos = 0.0f;
+    int activeOctavesVal = 0;
+
+    float modLegato = 0.5f;
+    float modRest = 0.1f;
+    float modEntropy = 0.0f;
+    float modHarmony = 0.0f;
+    float modChaos = 0.0f;
+
+    // Freeze Snapshot States
+    std::vector<int> frozenActiveHeldNotes;
+    std::vector<int> frozenLatchedNotes;
+    float frozenMorph = 0.0f;
+    float frozenRest = 0.0f;
+    float frozenLegato = 0.0f;
+    float frozenEntropy = 0.0f;
+    float frozenHarmony = 0.0f;
+    float frozenChaos = 0.0f;
+    int frozenRateIdx = 0;
+    int frozenOctavesVal = 0;
+    float frozenFaders[8] { 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f };
+    bool lastFreezeState = false;
+
+    float accumulatedPitchOffset = 0.0f;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PluginProcessor)
 };

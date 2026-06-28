@@ -7,9 +7,8 @@
 
 //==============================================================================
 class PluginEditor : public juce::AudioProcessorEditor,
-                     private juce::Timer,
-                     private juce::Slider::Listener,
-                     private juce::Button::Listener
+                     public juce::AudioProcessorValueTreeState::Listener,
+                     private juce::Timer
 {
 public:
     PluginEditor (PluginProcessor&);
@@ -19,70 +18,89 @@ public:
     void paint (juce::Graphics&) override;
     void resized() override;
 
+    void parameterChanged (const juce::String& parameterID, float newValue) override;
+    void mouseDown (const juce::MouseEvent& event) override;
+    void mouseUp (const juce::MouseEvent& event) override;
+
 private:
-    // Timer callback to handle long presses and parameter overlay timeout
     void timerCallback() override;
 
-    // Control listeners to trigger OLED overlay display updates
-    void sliderValueChanged (juce::Slider* slider) override;
-    void buttonClicked (juce::Button* button) override;
-
-    // UI Helper Layout Routines
-    void updateSliderTextBoxThemeColors();
-    void paint3DPanelPartitioning (juce::Graphics& g);
-
-    //==============================================================================
-    PluginProcessor& audioProcessor;
-
-    // LookAndFeel Instance
-    ChromaCapsLookAndFeel customLookAndFeel;
-
-    // Displays
+    PluginProcessor& processor;
     OledDisplay oledDisplay;
+    ChromaCapsLookAndFeel chromaLookAndFeel;
 
-    // Morph Row Controls
-    juce::TextButton sceneAButton { "A" };
-    juce::TextButton sceneBButton { "B" };
-    juce::Slider morphSlider;
+    // Matrix sliders and label elements
+    juce::Slider fader1, fader2, fader3, fader4, fader5, fader6, fader7, fader8;
+    juce::Label faderLabel1, faderLabel2, faderLabel3, faderLabel4, faderLabel5, faderLabel6, faderLabel7, faderLabel8;
+
+    // Left sidebar rotary components
+    juce::Slider rhythmMorphKnob, restKnob, legatoKnob, rateKnob;
+    juce::Label rhythmMorphTitle, restTitle, legatoTitle, rateTitle;
+
+    // Right sidebar rotary components
+    juce::Slider entropyKnob, harmonyKnob, chaosKnob, octavesKnob;
+    juce::Label entropyTitle, harmonyTitle, chaosTitle, octavesTitle;
+
+    juce::Slider morphCrossfader;
+
+    // Performance Mode Modifiers
+    juce::TextButton latchButton, arpSeqButton, polyButton, freezeButton;
+    juce::TextButton sceneAButton, sceneBButton;
+    juce::TextButton saveButton, recallButton, copyButton, initButton;
+
+    // Vector Dice buttons
+    juce::TextButton diceMeloButton, diceArtiButton, diceTimeButton, diceNavyButton;
+
+    // Preset Matrix Switches
+    juce::TextButton presetButtons[8];
+
+    // Top Control bar Dropdowns
+    juce::ComboBox rootKeyBox, scaleTypeBox, cycleLengthBox;
+
+    // Slide Attachments
+    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> fader1Attachment, fader2Attachment, fader3Attachment, fader4Attachment, fader5Attachment, fader6Attachment, fader7Attachment, fader8Attachment;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> rhythmMorphAttachment, restAttachment, legatoAttachment, rateAttachment;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> entropyAttachment, harmonyAttachment, chaosAttachment, octavesAttachment;
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> morphAttachment;
 
-    // Top Center Bar Dropdowns
-    juce::ComboBox midiChannelBox;
-    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> midiChannelAttachment;
-    
-    juce::ComboBox rootKeyBox; // Layout alignment dropdown (C, C#, D...)
+    // Toggle Attachments
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> latchAttachment, arpSeqAttachment, polyAttachment, freezeAttachment;
 
-    // Sequential Modifiers / Latching Utility Buttons
-    juce::TextButton saveButton { "SAVE" };
-    juce::TextButton recallButton { "RECALL" };
-    juce::TextButton copyButton { "COPY" };
-    juce::TextButton initButton { "INIT" };
+    // Dropdown Attachments
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> rootKeyAttachment, scaleTypeAttachment, cycleLengthAttachment;
 
-    // Vector Dice / Matrix Randomizers
-    juce::TextButton diceMeloButton { "MELO" };
-    juce::TextButton diceArtiButton { "ARTI" };
-    juce::TextButton diceTimeButton { "TIME" };
-    juce::TextButton diceNavyButton { "NAVY" };
+    // Timer Flash Variables
+    int sceneAFlashTimer = 0;
+    int sceneBFlashTimer = 0;
+    int saveFlashTimer = 0;
+    int recallFlashTimer = 0;
+    int copyFlashTimer = 0;
+    int initFlashTimer = 0;
 
-    // Freeze Trigger Button
-    juce::ToggleButton freezeButton { "FREEZE" };
-    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> freezeAttachment;
+    int presetFlashTimer[8] { 0 };
+    int presetFlashType[8] { 0 };
 
-    // Step Sequencer Parameter Knobs & Faders (8 slots)
-    juce::Slider stepFaders[8];
-    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> stepFaderAttachments[8];
+    // Timing States
+    std::uint32_t presetPressStartTime[8] { 0 };
+    bool presetAlreadySaved[8] { false };
 
-    juce::Slider knobSliders[8];
-    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> knobAttachments[8];
+    std::uint32_t savePressStartTime = 0;
+    bool saveAlreadySaved = false;
 
-    juce::ComboBox lfoPresetBoxes[8];
-    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> lfoAttachments[8];
+    std::uint32_t recallPressStartTime = 0;
+    bool recallAlreadySaved = false;
 
-    // Press Timing States
-    std::uint32_t sceneAPressTime = 0;
-    std::uint32_t sceneBPressTime = 0;
-    bool isAPressed = false;
-    bool isBPressed = false;
+    std::uint32_t copyPressStartTime = 0;
+    bool copyAlreadySaved = false;
+
+    std::uint32_t initPressStartTime = 0;
+    bool initAlreadySaved = false;
+
+    std::uint32_t sceneAPressStartTime = 0;
+    bool sceneAAlreadySaved = false;
+
+    std::uint32_t sceneBPressStartTime = 0;
+    bool sceneBAlreadySaved = false;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PluginEditor)
 };

@@ -2,11 +2,13 @@
 
 #include <JuceHeader.h>
 
+class PluginProcessor; // Forward declaration
+
 class OledDisplay : public juce::Component,
                     private juce::Timer
 {
 public:
-    OledDisplay();
+    OledDisplay (PluginProcessor& p);
     ~OledDisplay() override;
 
     void paint (juce::Graphics&) override;
@@ -21,7 +23,8 @@ public:
 private:
     void timerCallback() override;
 
-    // Active screen visual state indicators
+    PluginProcessor& processor;
+
     bool isOverlayActive = false;
     bool isFreezeActive = false;
 
@@ -29,7 +32,6 @@ private:
     float activeParamValue = 0.0f;
     juce::String activeLfoVibe;
 
-    // VU Levels (used when overlay is inactive)
     float leftVuLevel = 0.0f;
     float rightVuLevel = 0.0f;
 

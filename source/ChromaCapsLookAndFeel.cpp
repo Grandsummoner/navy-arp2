@@ -1,6 +1,8 @@
 #include "ChromaCapsLookAndFeel.h"
+#include "PluginProcessor.h"
 
-ChromaCapsLookAndFeel::ChromaCapsLookAndFeel()
+ChromaCapsLookAndFeel::ChromaCapsLookAndFeel (PluginProcessor& p, juce::AudioProcessorEditor* editor)
+    : processor (p), parentEditor (editor)
 {
 }
 
