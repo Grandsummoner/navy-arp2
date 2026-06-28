@@ -1,103 +1,67 @@
-name: Build and Test
+name: CI Build
 
 on:
-  workflow_dispatch:
   push:
+    branches:
+      - main
+      - master
   pull_request:
-
-concurrency:
-  group: ${{ github.ref }}
-  cancel-in-progress: true
+    branches:
+      - main
+      - master
 
 env:
   BUILD_TYPE: Release
-  BUILD_DIR: Builds
-  IPP_DIR: C:\Program Files (x86)\Intel\oneAPI\ipp\latest\lib\cmake\ipp
-
-defaults:
-  run:
-    shell: bash
 
 jobs:
-  build_and_test:
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.event.pull_request.base.repo.full_name
-    name: ${{ matrix.name }}
+  build:
+    name: Build (${{ matrix.name }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          - name: Windows
-            os: windows-latest
-            pluginval-binary: ./pluginval.exe
+          - os: macos-latest
+            name: macOS
+          - os: windows-latest
+            name: Windows
 
     steps:
-      - uses: ilammy/msvc-dev-cmd@v1
-
-      - name: Install IPP (Windows)
-        run: |
-          nuget install intelipp.static.win-x64 -Version 2022.3.0.387
-
-      - name: Install Ninja (Windows)
-        run: choco install ninja
-
-      - name: Checkout code
+      - name: Checkout Code
         uses: actions/checkout@v4
         with:
           submodules: recursive
 
-      - name: Configure
-        run: cmake -B ${{ env.BUILD_DIR }} -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE}} -G Ninja .
+      - name: Configure CMake
+        run: cmake -B Builds -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} -G Ninja .
 
-      - name: Build
-        run: cmake --build ${{ env.BUILD_DIR }} --config ${{ env.BUILD_TYPE }} --parallel
+      - name: Build Plugin & Standalone
+        run: cmake --build Builds --config ${{ env.BUILD_TYPE }} --parallel
 
-      - name: Test & Benchmarks
-        working-directory: ${{ env.BUILD_DIR }}
-        run: ctest --verbose --output-on-failure
-
-      - name: Read in .env from CMake
+      - name: Locate Built Artifacts (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
         run: |
-          cat .env
-          cat .env >> $GITHUB_ENV
+          mkdir -p Artifacts/VST3 Artifacts/Standalone
+          cp -R "Builds/NavyArp_artefacts/${{ env.BUILD_TYPE }}/VST3/Navy Arp.vst3" Artifacts/VST3/
+          cp -R "Builds/NavyArp_artefacts/${{ env.BUILD_TYPE }}/Standalone/Navy Arp.app" Artifacts/Standalone/
 
-      - name: Set additional env vars for next steps
+      - name: Locate Built Artifacts (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
         run: |
-          ARTIFACTS_PATH=${{ env.BUILD_DIR }}/${{ env.PROJECT_NAME }}_artefacts/${{ env.BUILD_TYPE }}
-          echo "ARTIFACTS_PATH=$ARTIFACTS_PATH" >> $GITHUB_ENV
-          echo "VST3_PATH=$ARTIFACTS_PATH/VST3/${{ env.PRODUCT_NAME }}.vst3" >> $GITHUB_ENV
-          echo "CLAP_PATH=$ARTIFACTS_PATH/CLAP/${{ env.PRODUCT_NAME }}.clap" >> $GITHUB_ENV
-          echo "STANDALONE_PATH=$ARTIFACTS_PATH/Standalone/${{ env.PRODUCT_NAME }}.exe" >> $GITHUB_ENV
-          echo "ARTIFACT_NAME=${{ env.PRODUCT_NAME }}-${{ env.VERSION }}-${{ runner.os }}" >> $GITHUB_ENV
+          mkdir -p Artifacts/VST3 Artifacts/Standalone
+          cp -R "Builds/NavyArp_artefacts/${{ env.BUILD_TYPE }}/VST3/Navy Arp.vst3" Artifacts/VST3/
+          cp "Builds/NavyArp_artefacts/${{ env.BUILD_TYPE }}/Standalone/Navy Arp.exe" Artifacts/Standalone/
 
-      - name: Pluginval
-        run: |
-          curl -LO "https://github.com/Tracktion/pluginval/releases/download/v1.0.3/pluginval_Windows.zip"
-          7z x pluginval_Windows.zip
-          ${{ matrix.pluginval-binary }} --strictness-level 5 --verbose --validate "${{ env.VST3_PATH }}"
-
-      - name: Generate Installer
-        run: |
-          iscc "packaging\installer.iss"
-          mv "packaging/Output/${{ env.ARTIFACT_NAME }}.exe" "${{ env.ARTIFACTS_PATH }}/"
-
-      - name: Upload Exe (Windows)
+      - name: Upload Built VST3
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.ARTIFACT_NAME }}
-          path: "${{ env.ARTIFACTS_PATH }}/${{ env.ARTIFACT_NAME }}.exe"
+          name: NavyArp-${{ matrix.name }}-VST3
+          path: Artifacts/VST3/
 
-  release:
-    if: contains(github.ref, 'tags/v')
-    runs-on: ubuntu-latest
-    needs: build_and_test
-    steps:
-      - name: Get Artifacts
-        uses: actions/download-artifact@v4
-
-      - name: Create Release
-        uses: softprops/action-gh-release@v2
+      - name: Upload Built Standalone
+        uses: actions/upload-artifact@v4
         with:
-          prerelease: true
-          files: |
-            */*.exe
+          name: NavyArp-${{ matrix.name }}-Standalone
+          path: Artifacts/Standalone/
