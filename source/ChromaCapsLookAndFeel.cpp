@@ -72,9 +72,7 @@ void ChromaCapsLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, i
         }
         else if (pId == "entropy") {
             lfoRateVal = static_cast<int> (*processor.apvts.getRawParameterValue (IDs::entropyLfoRate.getParamID()));
-            float baseEntropy = static_cast<float> (*processor.apvts.getRawParameterValue (IDs::entropy.getParamID()));
-            float rawEntropy = (lfoRateVal > 0) ? processor.activeEntropy : baseEntropy;
-            visualValue = (rawEntropy + 1.0f) * 0.5f;
+            visualValue = (lfoRateVal > 0) ? processor.activeEntropy : sliderPos;
         }
         else if (pId == "harmony") {
             lfoRateVal = static_cast<int> (*processor.apvts.getRawParameterValue (IDs::harmonyLfoRate.getParamID()));
@@ -116,13 +114,19 @@ void ChromaCapsLookAndFeel::drawLinearSlider (juce::Graphics& g, int x, int y, i
 
     if (style == juce::Slider::LinearVertical) {
         auto trackWidth = 4.0f, trackX = x + width * 0.5f - trackWidth * 0.5f;
-        g.setColour (t.trackBg); g.fillRoundedRectangle (trackX, (float)y, trackWidth, (float)height, trackWidth * 0.5f);
+        
+        // Recessed 3D track slot drawing
+        g.setColour (t.trackBg.darker (0.15f)); g.fillRoundedRectangle (trackX, (float)y, trackWidth, (float)height, trackWidth * 0.5f);
+        
+        // Subtle 3D inner bevel shadow and highlight lines
+        g.setColour (juce::Colours::black.withAlpha (0.22f)); g.drawLine (trackX, (float)y, trackX, (float)(y + height), 1.0f);
+        g.setColour (juce::Colours::white.withAlpha (0.1f)); g.drawLine (trackX + trackWidth, (float)y, trackX + trackWidth, (float)(y + height), 1.0f);
+        
         g.setColour (t.slotOutline); g.drawRoundedRectangle (trackX - 1.0f, (float)y, trackWidth + 2.0f, (float)height, trackWidth * 0.5f, 1.0f);
 
         float capWidth = juce::jmin (26.0f, width * 0.8f), capHeight = 14.0f;
         float capX = x + width * 0.5f - capWidth * 0.5f, capY = sliderPos - capHeight * 0.5f;
-        g.setColour (juce::Colour (themeIdx == 1 ? 0x15000000 : 0x45000000));
-        g.fillRoundedRectangle (capX + 1.0f, capY + 3.0f, capWidth, capHeight, 2.0f);
+        g.setColour (juce::Colour (themeIdx == 1 ? 0x15000000 : 0x45000000)); g.fillRoundedRectangle (capX + 1.0f, capY + 3.0f, capWidth, capHeight, 2.0f);
 
         juce::Colour capBaseCol = t.faderCap;
         juce::ColourGradient capGrad (capBaseCol.brighter (0.1f), capX, capY, capBaseCol.darker (0.2f), capX, capY + capHeight, false);
@@ -132,7 +136,14 @@ void ChromaCapsLookAndFeel::drawLinearSlider (juce::Graphics& g, int x, int y, i
     }
     else if (style == juce::Slider::LinearHorizontal) {
         auto trackHeight = 4.0f, trackY = y + height * 0.5f - trackHeight * 0.5f;
-        g.setColour (t.trackBg); g.fillRoundedRectangle ((float)x, trackY, (float)width, trackHeight, trackHeight * 0.5f);
+        
+        // Recessed 3D track slot drawing
+        g.setColour (t.trackBg.darker (0.15f)); g.fillRoundedRectangle ((float)x, trackY, (float)width, trackHeight, trackHeight * 0.5f);
+        
+        // Subtle 3D inner bevel shadow and highlight lines
+        g.setColour (juce::Colours::black.withAlpha (0.22f)); g.drawLine ((float)x, trackY, (float)(x + width), trackY, 1.0f);
+        g.setColour (juce::Colours::white.withAlpha (0.1f)); g.drawLine ((float)x, trackY + trackHeight, (float)(x + width), trackY + trackHeight, 1.0f);
+        
         g.setColour (t.slotOutline); g.drawRoundedRectangle ((float)x, trackY, (float)width, trackHeight, trackHeight * 0.5f, 1.0f);
 
         float capWidth = 28.0f, capHeight = 16.0f;
@@ -193,7 +204,12 @@ void ChromaCapsLookAndFeel::drawButtonBackground (juce::Graphics& g, juce::Butto
     // 3. Performance & Utility Buttons (Save, Recall, Copy, Init, Latch, SEQ, Poly, Freeze)
     juce::Colour baseCol = (themeIdx == 1) ? juce::Colour (0xFFE2E0D8).darker (0.05f) : juce::Colour (0xFF181C22);
     if (isToggled) {
-        juce::Colour activeAccent = (id == "dice_melody" || id == "dice_articulation" || id == "dice_time" || id == "dice_navy") ? t.rightAccent : t.leftAccent;
+        juce::Colour activeAccent = t.leftAccent;
+        if (id == "dice_melody" || id == "dice_articulation" || id == "dice_time" || id == "dice_navy")
+            activeAccent = t.rightAccent;
+        else if (button.getButtonText() == "Freeze")
+            activeAccent = juce::Colour (0xFF80D8FF); // Luminous Ice Blue color for Freeze latch button!
+
         g.setColour (activeAccent.withAlpha (0.15f)); g.fillRoundedRectangle (bounds, 4.0f);
         g.setColour (activeAccent); g.drawRoundedRectangle (bounds, 4.0f, 1.8f);
     } else {
@@ -225,6 +241,24 @@ void ChromaCapsLookAndFeel::drawButtonText (juce::Graphics& g, juce::TextButton&
         if (isPreset) textCol = processor.isPresetSaved (presetIdx) ? t.leftAccent.brighter(0.2f) : (themeIdx == 1 ? juce::Colour (0xFF7A7870) : juce::Colour (0xFF55555C));
         g.setColour (textCol); g.setFont (getTextButtonFont (button, button.getHeight())); g.drawFittedText (button.getButtonText(), button.getLocalBounds(), juce::Justification::centred, 1);
     }
+}
+
+void ChromaCapsLookAndFeel::drawTextBox (juce::Graphics& g, juce::Slider& slider, int x, int y, int width, int height)
+{
+    juce::ignoreUnused (slider);
+    auto bounds = juce::Rectangle<int> (x, y, width, height).toFloat().reduced (1.0f);
+    int themeIdx = static_cast<int> (processor.apvts.getRawParameterValue ("panelTheme")->load());
+    auto t = AppTheme::get (themeIdx);
+
+    bool isFreezeActive = *processor.apvts.getRawParameterValue (IDs::freeze.getParamID()) > 0.5f;
+    juce::Colour borderCol = isFreezeActive ? juce::Colour (0xFF80D8FF) : t.slotOutline;
+
+    // Standard state: Rounded capsule (pill) with a dark matte charcoal fill
+    g.setColour (juce::Colour (0xFF0F1116));
+    g.fillRoundedRectangle (bounds, 4.0f);
+
+    g.setColour (borderCol);
+    g.drawRoundedRectangle (bounds, 4.0f, 1.0f);
 }
 
 void ChromaCapsLookAndFeel::drawVectorDice (juce::Graphics& g, juce::Rectangle<float> bounds, juce::Colour pipColour)

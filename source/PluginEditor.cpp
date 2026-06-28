@@ -7,7 +7,8 @@
 PluginEditor::PluginEditor (PluginProcessor& p)
     : AudioProcessorEditor (&p), processor (p), oledDisplay (p), chromaLookAndFeel (p, this)
 {
-    addAndMakeVisible (oledDisplay); processor.apvts.addParameterListener ("panelTheme", this);
+    addAndMakeVisible (oledDisplay);
+    processor.apvts.addParameterListener ("panelTheme", this);
 
     juce::Slider* faders[] = { &fader1, &fader2, &fader3, &fader4, &fader5, &fader6, &fader7, &fader8 };
     juce::Label* faderLabels[] = { &faderLabel1, &faderLabel2, &faderLabel3, &faderLabel4, &faderLabel5, &faderLabel6, &faderLabel7, &faderLabel8 };
@@ -193,6 +194,13 @@ void PluginEditor::paint (juce::Graphics& g)
     g.drawRoundedRectangle (10.0f, bounds.getHeight() - 190.0f, bounds.getWidth() - 20.0f, 180.0f, 4.0f, 1.5f);
     g.setColour (t.textDim); g.setFont (juce::Font (juce::FontOptions (14.0f).withStyle ("Bold")));
     g.drawText ("Rhythm", 20, 15, 150, 20, juce::Justification::left); g.drawText ("Generator", getWidth() - 170, 15, 150, 20, juce::Justification::right);
+
+    // Subtle 3D inset line around the display screen (Improvement 6)
+    auto displayBounds = oledDisplay.getBounds().toFloat();
+    g.setColour (juce::Colour (themeIdx == 1 ? 0xFFFFFFFF : 0x18FFFFFF));
+    g.drawRoundedRectangle (displayBounds.expanded(1.0f), 2.0f, 1.0f);
+    g.setColour (juce::Colour (themeIdx == 1 ? 0x25000000 : 0x75000000));
+    g.drawRoundedRectangle (displayBounds, 2.0f, 1.0f);
 }
 
 void PluginEditor::resized()
@@ -223,10 +231,15 @@ void PluginEditor::resized()
     int oledY = 50, presetsY = static_cast<int> (gridY + 6), crossfaderY = static_cast<int> (gridY + 48), oledHeight = presetsY - oledY - 10;
     oledDisplay.setBounds (centerStartX, oledY, centerWidth, oledHeight);
 
+    // Proportional Visual Morphing Alignment for the centered Crossfader strip
     int presetBtnW = (centerWidth - 35) / 8;
     for (int i = 0; i < 8; ++i) presetButtons[i].setBounds (centerStartX + i * (presetBtnW + 5), presetsY, presetBtnW, 24);
 
-    sceneAButton.setBounds (centerStartX, crossfaderY, 40, 24); morphCrossfader.setBounds (centerStartX + 45, crossfaderY, centerWidth - 90, 24); sceneBButton.setBounds (centerStartX + centerWidth - 40, crossfaderY, 40, 24);
+    int rowWidth = 290;
+    int rowStartX = centerStartX + (centerWidth - rowWidth) / 2;
+    sceneAButton.setBounds (rowStartX, crossfaderY, 40, 24);
+    morphCrossfader.setBounds (rowStartX + 45, crossfaderY, 200, 24);
+    sceneBButton.setBounds (rowStartX + 250, crossfaderY, 40, 24);
 
     int faderWidth = (getWidth() - 40) / 8;
     juce::Slider* faders[] = { &fader1, &fader2, &fader3, &fader4, &fader5, &fader6, &fader7, &fader8 };
@@ -244,6 +257,20 @@ void PluginEditor::timerCallback()
     static bool lastAnchorB = false; bool currentAnchorB = processor.isSceneBActiveAnchor.load();
     if (currentAnchorB != lastAnchorB) { lastAnchorB = currentAnchorB; sceneAButton.repaint(); sceneBButton.repaint(); }
 
+    // Dynamic contrast & "Ice Blue" active indicators for freeze mode (Improvement 7)
+    static bool lastFreezeState = false;
+    bool currentFreeze = *processor.apvts.getRawParameterValue (IDs::freeze.getParamID()) > 0.5f;
+    if (currentFreeze != lastFreezeState) {
+        lastFreezeState = currentFreeze;
+        int activeThemeIdx = static_cast<int> (processor.apvts.getRawParameterValue ("panelTheme")->load());
+        auto t = AppTheme::get (activeThemeIdx);
+        juce::Colour textCol = currentFreeze ? juce::Colour (0xFF80D8FF) : t.textDim;
+        
+        juce::Slider* knobs[] = { &rhythmMorphKnob, &restKnob, &legatoKnob, &rateKnob, &entropyKnob, &harmonyKnob, &chaosKnob, &octavesKnob };
+        for (auto* k : knobs) { k->setColour (juce::Slider::textBoxTextColourId, textCol); k->repaint(); }
+        freezeButton.repaint();
+    }
+
     if (sceneAFlashTimer > 0) { sceneAFlashTimer--; if (sceneAFlashTimer == 0) sceneAButton.repaint(); }
     if (sceneBFlashTimer > 0) { sceneBFlashTimer--; if (sceneBFlashTimer == 0) sceneBButton.repaint(); }
     if (saveFlashTimer > 0) { saveFlashTimer--; if (saveFlashTimer == 0) saveButton.repaint(); }
@@ -251,7 +278,7 @@ void PluginEditor::timerCallback()
     if (copyFlashTimer > 0) { copyFlashTimer--; if (copyFlashTimer == 0) copyButton.repaint(); }
     if (initFlashTimer > 0) { initFlashTimer--; if (initFlashTimer == 0) initButton.repaint(); }
 
-    // Real-Time Visual Morphing (Dynamically glides knobs & upfaders in real-time)
+    // Real-Time Visual Morphing / Interpolation for UI Dials & Faders
     float morphVal = static_cast<float> (morphCrossfader.getValue());
     auto interpolate = [morphVal](float valA, float valB) -> float {
         return (valA * (1.0f - morphVal)) + (valB * morphVal);
