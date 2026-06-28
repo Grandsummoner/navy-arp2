@@ -15,7 +15,7 @@ env:
 
 jobs:
   build:
-    name: Build (Windows)
+    name: Build & Package (Windows)
     runs-on: windows-latest
 
     steps:
@@ -34,6 +34,7 @@ jobs:
       - name: Build Plugin & Standalone
         run: cmake --build Builds --config ${{ env.BUILD_TYPE }} --parallel
 
+      # Gather raw compiled binaries into a standardized folder structure
       - name: Locate Built Artifacts
         shell: bash
         run: |
@@ -41,14 +42,14 @@ jobs:
           cp -R "Builds/NavyArp_artefacts/${{ env.BUILD_TYPE }}/VST3/Navy Arp.vst3" Artifacts/VST3/
           cp "Builds/NavyArp_artefacts/${{ env.BUILD_TYPE }}/Standalone/Navy Arp.exe" Artifacts/Standalone/
 
-      - name: Upload Built VST3
-        uses: actions/upload-artifact@v4
-        with:
-          name: NavyArp-Windows-VST3
-          path: Artifacts/VST3/
+      # Run Inno Setup compiler (ISCC) to bundle the Artifacts/ folder into an installer
+      - name: Build Windows Setup Installer
+        shell: pwsh
+        run: iscc "packaging/installer.iss"
 
-      - name: Upload Built Standalone
+      # Upload the single, unified Setup Installer file
+      - name: Upload Windows Setup Installer
         uses: actions/upload-artifact@v4
         with:
-          name: NavyArp-Windows-Standalone
-          path: Artifacts/Standalone/
+          name: NavyArp-Windows-Installer
+          path: Artifacts/Navy_Arp_Installer.exe
