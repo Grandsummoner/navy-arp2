@@ -2,18 +2,16 @@ cmake_minimum_required(VERSION 3.22)
 
 project(NavyArp VERSION 1.0.0 LANGUAGES C CXX)
 
-# Force standard C++20 compilation across all platforms and targets
+# Force standard C++20 compilation
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-# Enable MSVC compiler optimization switches in release mode
 if(MSVC)
     add_compile_options(/W4 /WX /utf-8 /MP)
     add_compile_definitions(_CRT_SECURE_NO_WARNINGS)
 endif()
 
-# Locate or include JUCE Framework sub-repository
 if(NOT TARGET juce::juce_recommended_config_flags)
     add_subdirectory(JUCE)
 endif()
@@ -31,6 +29,9 @@ juce_add_plugin(NavyArp
     NEEDS_MIDI_OUTPUT TRUE
     IS_MIDI_EFFECT TRUE
 )
+
+# CRUCIAL: Instructs CMake to generate the JuceHeader.h file in the build tree
+juce_generate_juce_header(NavyArp)
 
 # Target Source Files Listing
 target_sources(NavyArp PRIVATE
@@ -62,10 +63,8 @@ target_link_libraries(NavyArp PRIVATE
     juce::juce_recommended_lto_flags
 )
 
-# Include directories alignment
 target_include_directories(NavyArp PRIVATE source)
 
-# Add custom clap-juce-extensions wrapper library if target output demands CLAP format
 if(TARGET clap_juce_extensions)
     target_link_libraries(NavyArp PRIVATE clap_juce_extensions)
 endif()
