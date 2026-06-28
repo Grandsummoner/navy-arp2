@@ -1,80 +1,71 @@
-cmake_minimum_required(VERSION 3.25)
+cmake_minimum_required(VERSION 3.22)
 
-list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
-include(PamplejuceVersion)
-include(CPM)
-include(PamplejuceMacOS)
-include(JUCEDefaults)
+project(NavyArp VERSION 1.0.0 LANGUAGES C CXX)
 
-# Rebranded Project Variables
-set(PROJECT_NAME "NavyArp")
-set(PRODUCT_NAME "Navy Arp")
-set(COMPANY_NAME "Navy Audio")
-set(BUNDLE_ID "com.navyaudio.navyarp")
-set(FORMATS Standalone VST3)
+# Force standard C++20 compilation across all platforms and targets
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
 
-set(CMAKE_POLICY_DEFAULT_CMP0141 NEW CACHE STRING "" FORCE)
-set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT Embedded CACHE STRING "" FORCE)
+# Enable MSVC compiler optimization switches in release mode
+if(MSVC)
+    add_compile_options(/W4 /WX /utf-8 /MP)
+    add_compile_definitions(_CRT_SECURE_NO_WARNINGS)
+endif()
 
-project(${PROJECT_NAME} VERSION ${CURRENT_VERSION})
-include(PamplejuceLog)
+# Locate or include JUCE Framework sub-repository
+if(NOT TARGET juce::juce_recommended_config_flags)
+    add_subdirectory(JUCE)
+endif()
 
-add_subdirectory(JUCE)
-add_subdirectory(modules/clap-juce-extensions EXCLUDE_FROM_ALL)
-
-juce_add_plugin("${PROJECT_NAME}"
-    COMPANY_NAME "${COMPANY_NAME}"
-    BUNDLE_ID "${BUNDLE_ID}"
-    COPY_PLUGIN_AFTER_BUILD TRUE
-    PLUGIN_MANUFACTURER_CODE Navy
-    PLUGIN_CODE Narp
-    FORMATS "${FORMATS}"
-    PRODUCT_NAME "${PRODUCT_NAME}"
-    IS_SYNTH TRUE
-    IS_MIDI_EFFECT FALSE
+# Define the main Audio Plugin Target
+juce_add_plugin(NavyArp
+    VERSION "1.0.0"
+    ICON_LOCAL_PATH "assets/images/icon.png"
+    FORMATS Standalone VST3 CLAP
+    PRODUCT_NAME "Navy Arp"
+    PLUGIN_NAME "Navy Arp"
+    COMPANY_NAME "Navy Audio"
+    IS_SYNTH FALSE
     NEEDS_MIDI_INPUT TRUE
     NEEDS_MIDI_OUTPUT TRUE
+    IS_MIDI_EFFECT TRUE
 )
 
-add_library(SharedCode INTERFACE)
-
-clap_juce_extensions_plugin(TARGET "${PROJECT_NAME}"
-    CLAP_ID "${BUNDLE_ID}"
-    CLAP_FEATURES instrument synthesiser)
-
-include(SharedCodeDefaults)
-
-file(GLOB_RECURSE SourceFiles CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/source/*.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/source/*.h")
-target_sources(SharedCode INTERFACE ${SourceFiles})
-
-include(Assets)
-include(XcodePrettify)
-
-target_compile_definitions(SharedCode
-    INTERFACE
-    JUCE_WEB_BROWSER=0
-    JUCE_USE_CURL=0
-    JUCE_VST3_CAN_REPLACE_VST2=0
-    CMAKE_BUILD_TYPE="${CMAKE_BUILD_TYPE}"
-    VERSION="${CURRENT_VERSION}"
-    PRODUCT_NAME_WITHOUT_VERSION="NavyArp"
+# Target Source Files Listing
+target_sources(NavyArp PRIVATE
+    source/AppTheme.h
+    source/OledDisplay.h
+    source/OledDisplay.cpp
+    source/ChromaCapsLookAndFeel.h
+    source/ChromaCapsLookAndFeel.cpp
+    source/PluginProcessor.h
+    source/PluginProcessor.cpp
+    source/PluginEditor.h
+    source/PluginEditor.cpp
 )
 
-target_link_libraries(SharedCode
-    INTERFACE
-    Assets
-    juce_audio_utils
-    juce_audio_processors
-    juce_dsp
-    juce_gui_basics
-    juce_gui_extra
+# Standard JUCE Core Modules Dependencies
+target_link_libraries(NavyArp PRIVATE
+    juce::juce_audio_utils
+    juce::juce_audio_processors
+    juce::juce_dsp
+    juce::juce_gui_extra
+    juce::juce_gui_basics
+    juce::juce_graphics
+    juce::juce_events
+    juce::juce_data_structures
+    juce::juce_core
+    juce::juce_audio_basics
     juce::juce_recommended_config_flags
+    juce::juce_recommended_warning_flags
     juce::juce_recommended_lto_flags
-    juce::juce_recommended_warning_flags)
+)
 
-target_link_libraries("${PROJECT_NAME}" PRIVATE SharedCode)
+# Include directories alignment
+target_include_directories(NavyArp PRIVATE source)
 
-include(PamplejuceIPP)
-
-# Restored GitHubENV so the GitHub Actions runner can find the generated .env file
-include(GitHubENV)
+# Add custom clap-juce-extensions wrapper library if target output demands CLAP format
+if(TARGET clap_juce_extensions)
+    target_link_libraries(NavyArp PRIVATE clap_juce_extensions)
+endif()
