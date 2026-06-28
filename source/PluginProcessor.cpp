@@ -93,7 +93,7 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
     // 1. Retrieve Central Controller & Latch Settings
     const float morphVal = apvts.getRawParameterValue ("morph")->load();
     const bool freezeActive = apvts.getRawParameterValue ("freeze")->load();
-    const int targetMidiChannel = apvts.getRawParameterValue ("midiChannel")->load();
+    const int targetMidiChannel = static_cast<int> (apvts.getRawParameterValue ("midiChannel")->load());
 
     // Cache handling upon switching Freeze state
     if (freezeActive && !isFrozen.load())
@@ -150,9 +150,9 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
     }
 
     // 4. Temporary Internal Clock Tracking / Simple Step Sequencer Trigger
-    if (auto* playHead = getPlayHead())
+    if (auto* currentPlayHead = getPlayHead())
     {
-        if (auto bpmOpt = playHead->getPosition()->getBpm())
+        if (auto bpmOpt = currentPlayHead->getPosition()->getBpm())
         {
             double bpm = *bpmOpt;
             double samplesPerBeat = (currentSampleRate * 60.0) / bpm;
