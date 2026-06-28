@@ -22,7 +22,7 @@ if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/modules/clap-juce-extensions")
     add_subdirectory(modules/clap-juce-extensions EXCLUDE_FROM_ALL)
 endif()
 
-# Define the main Audio Plugin Target
+# Define the main Audio Plugin Target (Configured as Synth for cross-DAW VST3 compatibility)
 juce_add_plugin(NavyArp
     VERSION "1.0.0"
     ICON_LOCAL_PATH "assets/images/icon.png"
@@ -30,10 +30,11 @@ juce_add_plugin(NavyArp
     PRODUCT_NAME "Navy Arp"
     PLUGIN_NAME "Navy Arp"
     COMPANY_NAME "Navy Audio"
-    IS_SYNTH FALSE
+    IS_SYNTH TRUE                 # Reclassified as Synth/Instrument to allow Ableton VST3 scanning
     NEEDS_MIDI_INPUT TRUE
     NEEDS_MIDI_OUTPUT TRUE
-    IS_MIDI_EFFECT TRUE
+    IS_MIDI_EFFECT FALSE          # Disabled pure MIDI Effect classification to prevent DAW scanner reject
+    VST3_CATEGORIES "Instrument" "Generator"
 )
 
 # Instructs CMake to generate the JuceHeader.h file in the build tree
@@ -43,7 +44,7 @@ juce_generate_juce_header(NavyArp)
 if(TARGET clap_juce_extensions)
     clap_juce_extensions_plugin(TARGET NavyArp
         CLAP_ID "com.Navy Audio.NavyArp"
-        CLAP_FEATURES "arpeggiator" "utility" "midi"
+        CLAP_FEATURES "instrument" "arpeggiator" "utility" "midi"
     )
 endif()
 
