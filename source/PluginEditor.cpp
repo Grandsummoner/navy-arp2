@@ -42,7 +42,7 @@ PluginEditor::PluginEditor (PluginProcessor& p)
         rightKnobs[i]->setColour (juce::Slider::rotarySliderFillColourId, juce::Colour (0xFFFFB300)); rightKnobs[i]->setLookAndFeel (&chromaLookAndFeel); 
         rightKnobs[i]->setComponentID (rightPrefixes[i]); rightKnobs[i]->addMouseListener (this, false); addAndMakeVisible (rightKnobs[i]);
         rightTitles[i]->setText (rightNames[i], juce::dontSendNotification); rightTitles[i]->setFont (juce::Font (juce::FontOptions (10.0f).withStyle ("Bold"))); 
-        rightTitles[i]->setJustificationType (juce::Justification::centred); rightTitles[i]->setColour (juce::Label::textColourId, juce::Colour (0xFF55555C)); addAndMakeVisible (rightTitles[i]);
+        rightTitles[i]->setJustificationType (juce::Justification::centred); rightTitles[i]->setColour (juce::Label::textColourId, juce::Colour (0xFF55555C)); addAndMakeVisible (rightKnobs[i]);
     }
 
     morphCrossfader.setSliderStyle (juce::Slider::LinearHorizontal); morphCrossfader.setTextBoxStyle (juce::Slider::NoTextBox, false, 0, 0);
@@ -326,4 +326,11 @@ void PluginEditor::timerCallback()
 
     if (saveButton.isMouseButtonDown() && savePressStartTime != 0 && !saveAlreadySaved) { if (now - savePressStartTime >= 1000) { processor.savePreset (processor.activePresetIndex.load()); saveAlreadySaved = true; saveFlashTimer = 24; saveButton.setToggleState (false, juce::dontSendNotification); saveButton.repaint(); } }
     if (recallButton.isMouseButtonDown() && recallPressStartTime != 0 && !recallAlreadySaved) { if (now - recallPressStartTime >= 1000) { processor.loadPreset (processor.activePresetIndex.load()); recallAlreadySaved = true; recallFlashTimer = 24; recallButton.setToggleState (false, juce::dontSendNotification); recallButton.repaint(); } }
-    if (copyButton.isMouseButtonDown() && copyPressStartTime != 0 && !copyAlreadySaved) { if (now - copyPressStartTime >= 1000) { processor.sceneB = processor.sceneA; processor.has
+    if (copyButton.isMouseButtonDown() && copyPressStartTime != 0 && !copyAlreadySaved) { if (now - copyPressStartTime >= 1000) { processor.sceneB = processor.sceneA; processor.hasSceneB = processor.hasSceneA; copyAlreadySaved = true; copyFlashTimer = 24; copyButton.setToggleState (false, juce::dontSendNotification); copyButton.repaint(); } }
+    if (initButton.isMouseButtonDown() && initPressStartTime != 0 && !initAlreadySaved) {
+        if (now - initPressStartTime >= 1000) {
+            for (auto* param : processor.getParameters()) { if (param != nullptr) param->setValueNotifyingHost (param->getDefaultValue()); }
+            initAlreadySaved = true; initFlashTimer = 24; initButton.setToggleState (false, juce::dontSendNotification); initButton.repaint();
+        }
+    }
+}
