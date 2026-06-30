@@ -20,8 +20,11 @@ void ChromaCapsLookAndFeel::drawButtonText (juce::Graphics& g, juce::TextButton&
 
     int themeIdx = static_cast<int> (processor.apvts.getRawParameterValue ("panelTheme")->load());
     
-    const bool isButtonA = (button.getButtonText() == "A");
-    const bool isButtonB = (button.getButtonText() == "B");
+    const juce::String text = button.getButtonText();
+    const bool isButtonA = (text == "A");
+    const bool isButtonB = (text == "B");
+    const bool isUtilButton = (text == "Save" || text == "Recall" || text == "Copy" || text == "Init");
+    const bool isDiceButton = (text == "Melo" || text == "Arti" || text == "Time" || text == "Navy");
     
     if (themeIdx == 1) // Skyline Eurorack (Light Beige Theme)
     {
@@ -34,6 +37,17 @@ void ChromaCapsLookAndFeel::drawButtonText (juce::Graphics& g, juce::TextButton&
                 g.setColour (juce::Colour (0xFFFF5533)); // High contrast orange-red text
             else
                 g.setColour (juce::Colour (0xFF55555C));
+        }
+        else if (isUtilButton)
+        {
+            if (button.getToggleState())
+                g.setColour (juce::Colour (0xFFFF5533)); // Red-orange text when active
+            else
+                g.setColour (juce::Colours::white); // High contrast white on dark charcoal
+        }
+        else if (isDiceButton)
+        {
+            g.setColour (juce::Colours::white); // Clean white text on dark charcoal
         }
         else if (button.getClickingTogglesState() && button.getToggleState())
         {
@@ -122,7 +136,7 @@ void ChromaCapsLookAndFeel::drawButtonBackground (juce::Graphics& g, juce::Butto
             {
                 isFlashing = true;
                 int flashState = (editor->recallFlashTimer / 4) % 2;
-                baseColour = (flashState == 1) ? juce::Colour (0xFFFF5533) : backgroundColour;
+                baseColour = (flashState == 1) ? juce::Colour (0xFF00D2FF) : backgroundColour;
             }
             else if (&button == &(editor->copyButton) && editor->copyFlashTimer > 0)
             {
@@ -154,8 +168,11 @@ void ChromaCapsLookAndFeel::drawButtonBackground (juce::Graphics& g, juce::Butto
     // 2. Render standard static or active background based on theme selections
     if (!isFlashing)
     {
-        const bool isButtonA = (button.getButtonText() == "A");
-        const bool isButtonB = (button.getButtonText() == "B");
+        const juce::String text = button.getButtonText();
+        const bool isButtonA = (text == "A");
+        const bool isButtonB = (text == "B");
+        const bool isUtilButton = (text == "Save" || text == "Recall" || text == "Copy" || text == "Init");
+        const bool isDiceButton = (text == "Melo" || text == "Arti" || text == "Time" || text == "Navy");
 
         if (themeIdx == 1) // Skyline Eurorack (Light Beige Theme)
         {
@@ -168,6 +185,14 @@ void ChromaCapsLookAndFeel::drawButtonBackground (juce::Graphics& g, juce::Butto
                     baseColour = juce::Colour (0xFFFFE5DD); // Gentle light red-orange highlight background
                 else
                     baseColour = juce::Colour (0xFFD8D4CC);
+            }
+            else if (isUtilButton || isDiceButton)
+            {
+                // Both utility and dice grids share the same dark charcoal background
+                if (isUtilButton && button.getToggleState())
+                    baseColour = juce::Colour (0xFFFFE5DD); // Gentle highlight background when active
+                else
+                    baseColour = juce::Colour (0xFF2D313A); // Shared dark charcoal base [43]
             }
             else if (button.getClickingTogglesState())
             {
@@ -207,11 +232,29 @@ void ChromaCapsLookAndFeel::drawButtonBackground (juce::Graphics& g, juce::Butto
     g.setColour (baseColour);
     g.fillRoundedRectangle (bounds, cornerSize);
 
-    // Draw thin outline
-    if (themeIdx == 1)
-        g.setColour (juce::Colour (0xFF55555C).withAlpha (0.15f));
+    // 3. Draw thin outline (Orange-Red on active toggles for Skyline theme)
+    if (themeIdx == 1 && !isFlashing)
+    {
+        const juce::String text = button.getButtonText();
+        const bool isButtonA = (text == "A");
+        const bool isButtonB = (text == "B");
+        const bool isSceneB = processor.isSceneBActiveAnchor.load();
+        const bool isActiveAnchor = (isButtonA && !isSceneB) || (isButtonB && isSceneB);
+        const bool isToggleOn = button.getClickingTogglesState() && button.getToggleState();
+
+        if (isActiveAnchor || isToggleOn)
+            g.setColour (juce::Colour (0xFFFF5533)); // Red-Orange border outline
+        else if (text == "Save" || text == "Recall" || text == "Copy" || text == "Init" ||
+                 text == "Melo" || text == "Arti" || text == "Time" || text == "Navy")
+            g.setColour (juce::Colour (0xFF181C24)); // Clean dark outline for both grids
+        else
+            g.setColour (juce::Colour (0xFF70757D).withAlpha (0.4f));
+    }
     else
+    {
         g.setColour (button.findColour (juce::ComboBox::outlineColourId, true).withAlpha (0.15f));
+    }
+
     g.drawRoundedRectangle (bounds.reduced (0.5f), cornerSize, 1.0f);
 }
 

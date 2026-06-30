@@ -28,7 +28,7 @@ PluginEditor::PluginEditor (PluginProcessor& p)
     juce::String leftNames[] = { "Morph", "Rest", "Legato", "Rate" }, leftPrefixes[] = { "rhythmMorph", "rest", "legato", "rate" };
     for (int i = 0; i < 4; ++i) {
         leftKnobs[i]->setSliderStyle (juce::Slider::RotaryHorizontalVerticalDrag); leftKnobs[i]->setTextBoxStyle (juce::Slider::TextBoxBelow, false, 65, 16);
-        leftKnobs[i]->setColour (juce::Slider::rotarySliderFillColourId, juce::Colour (0xFF00D2FF)); leftKnobs[i]->setLookAndFeel (&chromaLookAndFeel); 
+        leftKnobs[i]->setColour (juce::Slider::rotarySliderFillColourId, juce::Colour (0xFFFF5533)); leftKnobs[i]->setLookAndFeel (&chromaLookAndFeel); 
         leftKnobs[i]->setComponentID (leftPrefixes[i]); leftKnobs[i]->addMouseListener (this, false); addAndMakeVisible (leftKnobs[i]);
         leftTitles[i]->setText (leftNames[i], juce::dontSendNotification); leftTitles[i]->setFont (juce::Font (juce::FontOptions (10.0f).withStyle ("Bold"))); 
         leftTitles[i]->setJustificationType (juce::Justification::centred); leftTitles[i]->setColour (juce::Label::textColourId, juce::Colour (0xFF55555C)); addAndMakeVisible (leftTitles[i]);
@@ -39,7 +39,7 @@ PluginEditor::PluginEditor (PluginProcessor& p)
     juce::String rightNames[] = { "Entropy", "Harmony", "Chaos", "Octaves" }, rightPrefixes[] = { "entropy", "harmony", "chaos", "octaves" };
     for (int i = 0; i < 4; ++i) {
         rightKnobs[i]->setSliderStyle (juce::Slider::RotaryHorizontalVerticalDrag); rightKnobs[i]->setTextBoxStyle (juce::Slider::TextBoxBelow, false, 65, 16);
-        rightKnobs[i]->setColour (juce::Slider::rotarySliderFillColourId, juce::Colour (0xFFFFB300)); rightKnobs[i]->setLookAndFeel (&chromaLookAndFeel); 
+        rightKnobs[i]->setColour (juce::Slider::rotarySliderFillColourId, juce::Colour (0xFFFF5533)); rightKnobs[i]->setLookAndFeel (&chromaLookAndFeel); 
         rightKnobs[i]->setComponentID (rightPrefixes[i]); rightKnobs[i]->addMouseListener (this, false); addAndMakeVisible (rightKnobs[i]);
         rightTitles[i]->setText (rightNames[i], juce::dontSendNotification); rightTitles[i]->setFont (juce::Font (juce::FontOptions (10.0f).withStyle ("Bold"))); 
         rightTitles[i]->setJustificationType (juce::Justification::centred); rightTitles[i]->setColour (juce::Label::textColourId, juce::Colour (0xFF55555C)); addAndMakeVisible (rightKnobs[i]);
@@ -124,7 +124,6 @@ PluginEditor::PluginEditor (PluginProcessor& p)
 
     updateSliderTextBoxThemeColors();
 
-    // Sinks minimum height to 530px to force DAW wraps to reveal all rotary textboxes and knobs at launch!
     setResizable (true, true); setResizeLimits (700, 530, 1400, 920); setSize (850, 560); startTimerHz (30);
 }
 
@@ -165,7 +164,7 @@ void PluginEditor::mouseDown (const juce::MouseEvent& event)
     for (int i = 0; i < 8; ++i) {
         if (event.eventComponent == &presetButtons[i]) {
             if (initButton.getToggleState()) {
-                // INIT + PRESET SLOT [1-8]: Completely resets that preset slot back to default
+                // INIT + PRESET SLOT [1-8]: Resets that preset's data buffers
                 processor.presetSlotsSaved[i] = false;
                 processor.presets[i] = SceneState();
                 presetFlashTimer[i] = 24;
@@ -233,14 +232,16 @@ void PluginEditor::resized()
     juce::Slider* rightKnobs[] = { &entropyKnob, &harmonyKnob, &chaosKnob, &octavesKnob };
     juce::Label* rightTitles[] = { &entropyTitle, &harmonyTitle, &chaosTitle, &octavesTitle };
     
-    int rightX = getWidth() - 180, knobsAvailableHeight = bottomY - 120, knobHeight = juce::jlimit (50, 100, knobsAvailableHeight / 4), knobStartY = 38;
+    // Reduces knobHeight to 58px and starts at Y=35 to eliminate rate-textbox overlapping 2x2 grid
+    int rightX = getWidth() - 180, knobsAvailableHeight = bottomY - 120, knobHeight = juce::jlimit (50, 100, knobsAvailableHeight / 4), knobStartY = 35;
     for (int i = 0; i < 4; ++i) {
         int knobY = knobStartY + i * knobHeight;
         leftKnobs[i]->setBounds (15, knobY + 12, 150, knobHeight - 16); leftTitles[i]->setBounds (15, knobY, 150, 14);
         rightKnobs[i]->setBounds (rightX + 5, knobY + 12, 150, knobHeight - 16); rightTitles[i]->setBounds (rightX + 5, knobY, 150, 14);
     }
 
-    int gridY = bottomY - 100;
+    // Lowers 2x2 grid start Y to 295px (leaving 28px of clean padded space below rate textboxes)
+    int gridY = bottomY - 85;
     saveButton.setBounds (15, gridY, 72, 36); recallButton.setBounds (93, gridY, 72, 36); copyButton.setBounds (15, gridY + 42, 72, 36); initButton.setBounds (93, gridY + 42, 72, 36);
     int diceStartX = getWidth() - 165;
     diceMeloButton.setBounds (diceStartX, gridY, 72, 36); diceArtiButton.setBounds (diceStartX + 78, gridY, 72, 36); diceTimeButton.setBounds (diceStartX, gridY + 42, 72, 36); diceNavyButton.setBounds (diceStartX + 78, gridY + 42, 72, 36);

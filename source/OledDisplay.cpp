@@ -127,8 +127,6 @@ void OledDisplay::paint (juce::Graphics& g)
         g.setFont (juce::FontOptions (9.5f, juce::Font::bold));
         g.drawText (metaText, displayArea.removeFromTop (12.0f), juce::Justification::centred, true);
 
-        displayArea.removeFromTop (8.0f);
-
         // =====================================================================
         // RENDER: 8 SEGMENTED LED LADDERS (STEP LEVEL MONITOR)
         // =====================================================================
@@ -138,12 +136,14 @@ void OledDisplay::paint (juce::Graphics& g)
         const bool isPlaying = processor.isCurrentlyPlayingUI.load();
 
         const float morphVal = *processor.apvts.getRawParameterValue (IDs::morph.getParamID());
-        const int numSegments = 12;
-        const float segmentHeight = 2.0f;
-        const float segmentSpacing = 1.0f;
+        const int numSegments = 16;
+        const float segmentHeight = 6.0f;      // Chunky, bold hardware-style LEDs
+        const float segmentSpacing = 2.0f;
         const float maxLaddersHeight = (numSegments * segmentHeight) + ((numSegments - 1) * segmentSpacing);
 
-        auto laddersArea = displayArea.removeFromTop (maxLaddersHeight);
+        // Position fader monitor area to sit right above the bottom step numbers
+        float fadersY = bounds.getHeight() - maxLaddersHeight - 24.0f;
+        auto laddersArea = juce::Rectangle<float> (displayArea.getX(), fadersY, displayArea.getWidth(), maxLaddersHeight);
 
         for (int i = 0; i < 8; ++i)
         {
@@ -178,19 +178,19 @@ void OledDisplay::paint (juce::Graphics& g)
                 g.fillRect (segmentRect);
             }
 
-            // Draw small step number indicator inside screen boundaries
+            // Draw small step number indicator sitting exactly at the bottom screen boundary
             float textY = colBounds.getY() + maxLaddersHeight + 4.0f;
-            auto stepNumRect = juce::Rectangle<float> (colBounds.getX(), textY, colBounds.getWidth(), 10.0f);
+            auto stepNumRect = juce::Rectangle<float> (colBounds.getX(), textY, colBounds.getWidth(), 12.0f);
             
             if (isActiveStep)
             {
                 g.setColour (juce::Colour (0xFFFF4500));
-                g.setFont (juce::FontOptions (8.5f, juce::Font::bold));
+                g.setFont (juce::FontOptions (9.5f, juce::Font::bold));
             }
             else
             {
                 g.setColour (juce::Colours::grey.withAlpha (0.6f));
-                g.setFont (juce::FontOptions (8.0f, juce::Font::plain));
+                g.setFont (juce::FontOptions (9.0f, juce::Font::plain));
             }
 
             g.drawText (juce::String (i + 1), stepNumRect, juce::Justification::centred, true);
