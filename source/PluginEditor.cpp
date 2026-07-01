@@ -42,7 +42,7 @@ PluginEditor::PluginEditor (PluginProcessor& p)
         rightKnobs[i]->setColour (juce::Slider::rotarySliderFillColourId, juce::Colour (0xFFFFB300)); rightKnobs[i]->setLookAndFeel (&chromaLookAndFeel); 
         rightKnobs[i]->setComponentID (rightPrefixes[i]); rightKnobs[i]->addMouseListener (this, false); addAndMakeVisible (rightKnobs[i]);
         rightTitles[i]->setText (rightNames[i], juce::dontSendNotification); rightTitles[i]->setFont (juce::Font (juce::FontOptions (10.0f).withStyle ("Bold"))); 
-        rightTitles[i]->setJustificationType (juce::Justification::centred); rightTitles[i]->setColour (juce::Label::textColourId, juce::Colour (0xFF55555C)); addAndMakeVisible (rightKnobs[i]);
+        rightTitles[i]->setJustificationType (juce::Justification::centred); rightTitles[i]->setColour (juce::Label::textColourId, juce::Colour (0xFF55555C)); addAndMakeVisible (rightTitles[i]); // Fixed duplicate registration
     }
 
     morphCrossfader.setSliderStyle (juce::Slider::LinearHorizontal); morphCrossfader.setTextBoxStyle (juce::Slider::NoTextBox, false, 0, 0);
