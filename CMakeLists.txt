@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.15)
 
-project(NavyArp VERSION 1.0.0 LANGUAGES CXX)
+# Added 'C' alongside 'CXX' to resolve the CMAKE_C_COMPILE_OBJECT missing variable crash
+project(NavyArp VERSION 1.0.0 LANGUAGES C CXX)
 
 # 1. Include your local JUCE directory
 add_subdirectory(JUCE)
@@ -8,18 +9,19 @@ add_subdirectory(JUCE)
 # 2. Add and define the Navy Arp plugin targets
 juce_add_plugin(NavyArp
     COMPANY_NAME "Navy Audio"
-    PLUGIN_MANUFACTURER_CODE 0x4d616e75 # 'Manu'
-    PLUGIN_CODE 0x44676176 # 'Dgav'
+    BUNDLE_ID "com.navyaudio.navyarp"       # Added to resolve the spaces warning
+    PLUGIN_MANUFACTURER_CODE "Manu"         # Changed from hex to clean 4-char string literal
+    PLUGIN_CODE "Dgav"                      # Changed from hex to clean 4-char string literal
     FORMATS VST3 Standalone CLAP
     PRODUCT_NAME "Navy Arp"
     PLUGIN_NAME "Navy Arp"
     IS_SYNTH TRUE
     PRODUCES_MIDI_OUTPUT TRUE
     WANTS_MIDI_INPUT TRUE
-    COPY_PLUGIN_AFTER_BUILD FALSE # Disable the default nested-folder copy step!
+    COPY_PLUGIN_AFTER_BUILD FALSE           # Disable default multi-folder copy step
 )
 
-# 3. Custom post-build step to copy ONLY the single flat VST3 file to your custom folder!
+# 3. Custom post-build step to copy ONLY the single flat VST3 file to your custom folder
 add_custom_command(TARGET NavyArp_VST3 POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy
     "$<TARGET_FILE:NavyArp_VST3>"
