@@ -1,4 +1,3 @@
-#include "OledDisplay.cpp"
 #include "OledDisplay.h"
 #include "PluginProcessor.h"
 
