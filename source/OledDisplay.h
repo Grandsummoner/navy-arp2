@@ -18,7 +18,7 @@ public:
     void showParameterOverlay (const juce::String& paramName, float baseValue, const juce::String& lfoVibeText);
 
     // Track active freeze visual state
-    void setFreezeActive (bool shouldBeActive);
+    void setFreezeActive (shouldBeActive);
 
 private:
     void timerCallback() override;

@@ -42,7 +42,7 @@ PluginEditor::PluginEditor (PluginProcessor& p)
         rightKnobs[i]->setColour (juce::Slider::rotarySliderFillColourId, juce::Colour (0xFFFFB300)); rightKnobs[i]->setLookAndFeel (&chromaLookAndFeel); 
         rightKnobs[i]->setComponentID (rightPrefixes[i]); rightKnobs[i]->addMouseListener (this, false); addAndMakeVisible (rightKnobs[i]);
         rightTitles[i]->setText (rightNames[i], juce::dontSendNotification); rightTitles[i]->setFont (juce::Font (juce::FontOptions (10.0f).withStyle ("Bold"))); 
-        rightTitles[i]->setJustificationType (juce::Justification::centred); rightTitles[i]->setColour (juce::Label::textColourId, juce::Colour (0xFF55555C)); addAndMakeVisible (rightTitles[i]); // Fixed duplicate registration
+        rightTitles[i]->setJustificationType (juce::Justification::centred); rightTitles[i]->setColour (juce::Label::textColourId, juce::Colour (0xFF55555C)); addAndMakeVisible (rightTitles[i]);
     }
 
     morphCrossfader.setSliderStyle (juce::Slider::LinearHorizontal); morphCrossfader.setTextBoxStyle (juce::Slider::NoTextBox, false, 0, 0);
@@ -152,8 +152,8 @@ PluginEditor::PluginEditor (PluginProcessor& p)
 
     updateSliderTextBoxThemeColors();
 
-    // Increased default height and minimum limit to provide ample vertical clearance for rotary knobs
-	setResizable (true, true); setResizeLimits (700, 620, 1400, 920); setSize (850, 650); startTimerHz (30);
+    // Sinks minimum height to 620px and default height to 650px to provide full circular space
+    setResizable (true, true); setResizeLimits (700, 620, 1400, 920); setSize (850, 650); startTimerHz (30);
 }
 
 PluginEditor::~PluginEditor() 
@@ -171,25 +171,82 @@ void PluginEditor::parameterChanged (const juce::String& parameterID, float newV
 {
     juce::ignoreUnused (newValue);
     if (parameterID == "panelTheme") {
-        juce::MessageManager::callAsync ([this]() {
-            int themeIdx = static_cast<int> (processor.apvts.getRawParameterValue ("panelTheme")->load());
-            auto t = AppTheme::get (themeIdx);
-            juce::Slider* knobs[] = { &rhythmMorphKnob, &restKnob, &legatoKnob, &rateKnob, &entropyKnob, &harmonyKnob, &chaosKnob, &octavesKnob };
-            for (auto* k : knobs) k->setColour (juce::Slider::textBoxTextColourId, t.textDim);
+        juce::Component::SafePointer<PluginEditor> safeThis (this);
+        juce::MessageManager::callAsync ([safeThis]() {
+            if (safeThis != nullptr) {
+                int themeIdx = static_cast<int> (safeThis->processor.apvts.getRawParameterValue ("panelTheme")->load());
+                auto t = AppTheme::get (themeIdx);
+                juce::Slider* knobs[] = { &safeThis->rhythmMorphKnob, &safeThis->restKnob, &safeThis->legatoKnob, &safeThis->rateKnob, &safeThis->entropyKnob, &safeThis->harmonyKnob, &safeThis->chaosKnob, &safeThis->octavesKnob };
+                for (auto* k : knobs) k->setColour (juce::Slider::textBoxTextColourId, t.textDim);
 
-            updateSliderTextBoxThemeColors();
+                safeThis->updateSliderTextBoxThemeColors();
 
-            repaint(); oledDisplay.repaint();
-            fader1.repaint(); fader2.repaint(); fader3.repaint(); fader4.repaint(); fader5.repaint(); fader6.repaint(); fader7.repaint(); fader8.repaint();
-            rhythmMorphKnob.repaint(); restKnob.repaint(); legatoKnob.repaint(); rateKnob.repaint();
-            entropyKnob.repaint(); harmonyKnob.repaint(); chaosKnob.repaint(); octavesKnob.repaint();
-            morphCrossfader.repaint(); sceneAButton.repaint(); sceneBButton.repaint(); saveButton.repaint(); recallButton.repaint();
+                safeThis->repaint(); safeThis->oledDisplay.repaint();
+                safeThis->fader1.repaint(); safeThis->fader2.repaint(); safeThis->fader3.repaint(); safeThis->fader4.repaint(); safeThis->fader5.repaint(); safeThis->fader6.repaint(); safeThis->fader7.repaint(); safeThis->fader8.repaint();
+                safeThis->rhythmMorphKnob.repaint(); safeThis->restKnob.repaint(); safeThis->legatoKnob.repaint(); safeThis->rateKnob.repaint();
+                safeThis->entropyKnob.repaint(); safeThis->harmonyKnob.repaint(); safeThis->chaosKnob.repaint(); safeThis->octavesKnob.repaint();
+                safeThis->morphCrossfader.repaint(); safeThis->sceneAButton.repaint(); safeThis->sceneBButton.repaint(); safeThis->saveButton.repaint(); safeThis->recallButton.repaint();
+            }
         });
     }
 }
 
 void PluginEditor::mouseDown (const juce::MouseEvent& event)
 {
+    // Real-Time LFO Modulation Right-Click Context Menu for 8 knobs [43]
+    juce::Slider* knobs[] = { &rhythmMorphKnob, &restKnob, &legatoKnob, &rateKnob, &entropyKnob, &harmonyKnob, &chaosKnob, &octavesKnob };
+    juce::ParameterID rates[] = { IDs::rhythmMorphLfoRate, IDs::restLfoRate, IDs::legatoLfoRate, IDs::rateLfoRate, IDs::entropyLfoRate, IDs::harmonyLfoRate, IDs::chaosLfoRate, IDs::octavesLfoRate };
+    juce::ParameterID depths[] = { IDs::rhythmMorphLfoDepth, IDs::restLfoDepth, IDs::legatoLfoDepth, IDs::rateLfoDepth, IDs::entropyLfoDepth, IDs::harmonyLfoDepth, IDs::chaosLfoDepth, IDs::octavesLfoDepth };
+
+    for (int i = 0; i < 8; ++i)
+    {
+        if (event.eventComponent == knobs[i] && event.mods.isRightButtonDown())
+        {
+            auto* rateParam = processor.apvts.getParameter (rates[i].getParamID());
+            auto* depthParam = processor.apvts.getParameter (depths[i].getParamID());
+            
+            if (rateParam != nullptr && depthParam != nullptr)
+            {
+                juce::PopupMenu menu;
+                menu.addSectionHeader (juce::String(knobs[i]->getComponentID()).toUpperCase() + " LFO MODULATION");
+                
+                // LFO Speed Sub-menu
+                juce::PopupMenu speedMenu;
+                int currentRateIdx = static_cast<int> (std::round (rateParam->getValue() * 4.0f)); // Map 0.0-1.0 to 0-4 index
+                speedMenu.addItem (1, "Off", true, currentRateIdx == 0);
+                speedMenu.addItem (2, "1/4 Beat", true, currentRateIdx == 1);
+                speedMenu.addItem (3, "1/8 Beat", true, currentRateIdx == 2);
+                speedMenu.addItem (4, "1/16 Beat", true, currentRateIdx == 3);
+                speedMenu.addItem (5, "1/32 Beat", true, currentRateIdx == 4);
+                menu.addSubMenu ("Speed", speedMenu);
+                
+                // LFO Depth Sub-menu
+                juce::PopupMenu depthMenu;
+                float currentDepth = depthParam->getValue(); // 0.0 to 1.0
+                depthMenu.addItem (10, "0% (Off)", true, currentDepth == 0.0f);
+                depthMenu.addItem (11, "10%", true, std::abs(currentDepth - 0.1f) < 0.05f);
+                depthMenu.addItem (12, "25%", true, std::abs(currentDepth - 0.25f) < 0.05f);
+                depthMenu.addItem (13, "50%", true, std::abs(currentDepth - 0.5f) < 0.05f);
+                depthMenu.addItem (14, "75%", true, std::abs(currentDepth - 0.75f) < 0.05f);
+                depthMenu.addItem (15, "100%", true, std::abs(currentDepth - 1.0f) < 0.05f);
+                menu.addSubMenu ("Depth", depthMenu);
+                
+                menu.showMenuAsync (juce::PopupMenu::Options(), [rateParam, depthParam](int result) {
+                    if (result >= 1 && result <= 5)
+                    {
+                        rateParam->setValueNotifyingHost (static_cast<float>(result - 1) / 4.0f);
+                    }
+                    else if (result >= 10 && result <= 15)
+                    {
+                        float depthsList[] = { 0.0f, 0.1f, 0.25f, 0.5f, 0.75f, 1.0f };
+                        depthParam->setValueNotifyingHost (depthsList[result - 10]);
+                    }
+                });
+                return; // Consume right-click event
+            }
+        }
+    }
+
     for (int i = 0; i < 8; ++i) {
         if (event.eventComponent == &presetButtons[i]) {
             if (initButton.getToggleState()) {

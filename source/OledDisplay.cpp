@@ -1,3 +1,4 @@
+#include "OledDisplay.cpp"
 #include "OledDisplay.h"
 #include "PluginProcessor.h"
 
@@ -131,7 +132,7 @@ void OledDisplay::paint (juce::Graphics& g)
         // =====================================================================
         const float spacing = 6.0f;
         const float colWidth = (displayArea.getWidth() - (7.0f * spacing)) / 8.0f;
-        const int activeStep = processor.currentStep;
+        const int activeStep = processor.currentStep.load(); // Thread-safe atomic access
         const bool isPlaying = processor.isCurrentlyPlayingUI.load();
 
         const float morphVal = *processor.apvts.getRawParameterValue (IDs::morph.getParamID());

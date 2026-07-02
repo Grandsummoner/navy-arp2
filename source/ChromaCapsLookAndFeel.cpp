@@ -192,7 +192,7 @@ void ChromaCapsLookAndFeel::drawButtonBackground (juce::Graphics& g, juce::Butto
                 if (isUtilButton && button.getToggleState())
                     baseColour = juce::Colour (0xFFFFE5DD); // Gentle highlight background when active
                 else
-                    baseColour = juce::Colour (0xFF2D313A); // Shared dark charcoal base [43]
+                    baseColour = juce::Colour (0xFF2D313A); // Shared dark charcoal base
             }
             else if (button.getClickingTogglesState())
             {
