@@ -1,6 +1,7 @@
 #include "ChromaCapsLookAndFeel.h"
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
+#include "AppTheme.h"
 
 ChromaCapsLookAndFeel::ChromaCapsLookAndFeel (PluginProcessor& p, juce::AudioProcessorEditor* editor)
     : processor (p), parentEditor (editor)
@@ -11,20 +12,104 @@ ChromaCapsLookAndFeel::~ChromaCapsLookAndFeel()
 {
 }
 
+void ChromaCapsLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, int width, int height,
+                                              float sliderPos, float rotaryStartAngle, float rotaryEndAngle,
+                                              juce::Slider& slider)
+{
+    juce::String cid = slider.getComponentID();
+    int lfoIndex = -1;
+    if (cid == "rhythmMorph") lfoIndex = 0;
+    else if (cid == "rest") lfoIndex = 1;
+    else if (cid == "legato") lfoIndex = 2;
+    else if (cid == "rate") lfoIndex = 3;
+    else if (cid == "entropy") lfoIndex = 4;
+    else if (cid == "harmony") lfoIndex = 5;
+    else if (cid == "chaos") lfoIndex = 6;
+    else if (cid == "octaves") lfoIndex = 7;
+
+    // 1. Calculate LFO status and dynamic LED target value [43]
+    float targetVal = sliderPos;
+    if (lfoIndex != -1)
+    {
+        int rateChoice = static_cast<int> (processor.lfoRatePtrs[lfoIndex]->load());
+        float depth = processor.lfoDepthPtrs[lfoIndex]->load();
+        if (rateChoice > 0 && depth > 0.02f)
+        {
+            double currentPhase = processor.lfoPhases[lfoIndex];
+            targetVal = sliderPos + (static_cast<float> (std::sin (currentPhase * juce::MathConstants<double>::twoPi)) * depth * 0.5f);
+            targetVal = juce::jlimit (0.0f, 1.0f, targetVal);
+        }
+    }
+    int litCount = static_cast<int> (std::round (targetVal * 15.0f));
+
+    // 2. Fetch Theme details
+    int themeIdx = static_cast<int> (processor.apvts.getRawParameterValue ("panelTheme")->load());
+    auto t = AppTheme::get (themeIdx);
+
+    float centerX = static_cast<float> (x) + static_cast<float> (width) * 0.5f;
+    float centerY = static_cast<float> (y) + static_cast<float> (height) * 0.5f;
+    float knobRadius = juce::jmin (static_cast<float> (width), static_cast<float> (height)) * 0.28f;
+    float ledRadius = knobRadius + 8.0f;
+    float ledDiameter = 3.5f;
+
+    bool isLeftKnob = (cid == "rhythmMorph" || cid == "rest" || cid == "legato" || cid == "rate");
+    juce::Colour activeColor = isLeftKnob ? t.knobFillLeft : t.knobFillRight;
+
+    // 3. Draw 15 surrounding LEDs (DJ TechTools style) [43]
+    for (int i = 0; i < 15; ++i)
+    {
+        float angle = rotaryStartAngle + (static_cast<float> (i) / 14.0f) * (rotaryEndAngle - rotaryStartAngle);
+        float ledX = centerX + ledRadius * std::sin (angle) - ledDiameter * 0.5f;
+        float ledY = centerY - ledRadius * std::cos (angle) - ledDiameter * 0.5f;
+
+        if (i < litCount)
+        {
+            g.setColour (activeColor); // Glowing active indicator LED
+        }
+        else
+        {
+            g.setColour (juce::Colour (0xFF1F2229).withAlpha (0.25f)); // Dim inactive LED
+        }
+        g.fillEllipse (ledX, ledY, ledDiameter, ledDiameter);
+    }
+
+    // 4. Draw Matte Black Encoders with a clean white pointer indicator
+    g.setColour (juce::Colour (0xFF121417));
+    g.fillEllipse (centerX - knobRadius, centerY - knobRadius, knobRadius * 2.0f, knobRadius * 2.0f);
+
+    float angle = rotaryStartAngle + sliderPos * (rotaryEndAngle - rotaryStartAngle);
+    juce::Path path;
+    float pointerThickness = 2.0f;
+    float pointerLength = knobRadius * 0.8f;
+    path.addRectangle (-pointerThickness * 0.5f, -knobRadius, pointerThickness, pointerLength);
+    path.applyTransform (juce::AffineTransform::rotation (angle).translated (centerX, centerY));
+    g.setColour (juce::Colours::white);
+    g.fillPath (path);
+}
+
 void ChromaCapsLookAndFeel::drawButtonText (juce::Graphics& g, juce::TextButton& button, bool shouldDrawButtonAsHighlighted, bool shouldDrawButtonAsDown)
 {
     juce::ignoreUnused (shouldDrawButtonAsHighlighted, shouldDrawButtonAsDown);
     
     auto& lf = button.getLookAndFeel();
-    g.setFont (lf.getTextButtonFont (button, button.getHeight()));
-
-    int themeIdx = static_cast<int> (processor.apvts.getRawParameterValue ("panelTheme")->load());
     
     const juce::String text = button.getButtonText();
     const bool isButtonA = (text == "A");
     const bool isButtonB = (text == "B");
     const bool isUtilButton = (text == "Save" || text == "Recall" || text == "Copy" || text == "Init");
     const bool isDiceButton = (text == "Melo" || text == "Arti" || text == "Time" || text == "Navy");
+
+    // Scale down text inside 2x2 grid buttons to keep them elegant and clean [43]
+    if (isUtilButton || isDiceButton)
+    {
+        g.setFont (juce::FontOptions (11.0f, juce::Font::bold));
+    }
+    else
+    {
+        g.setFont (lf.getTextButtonFont (button, button.getHeight()));
+    }
+
+    int themeIdx = static_cast<int> (processor.apvts.getRawParameterValue ("panelTheme")->load());
     
     if (themeIdx == 1) // Skyline Eurorack (Light Beige Theme)
     {
@@ -232,7 +317,7 @@ void ChromaCapsLookAndFeel::drawButtonBackground (juce::Graphics& g, juce::Butto
     g.setColour (baseColour);
     g.fillRoundedRectangle (bounds, cornerSize);
 
-    // 3. Draw thin outline (Orange-Red on active toggles for Skyline theme)
+    // 3. Draw thin outline (Only active on the Skyline theme, completely borderless on dark themes) [43]
     if (themeIdx == 1 && !isFlashing)
     {
         const juce::String text = button.getButtonText();
@@ -249,13 +334,9 @@ void ChromaCapsLookAndFeel::drawButtonBackground (juce::Graphics& g, juce::Butto
             g.setColour (juce::Colour (0xFF181C24)); // Clean dark outline for both grids
         else
             g.setColour (juce::Colour (0xFF70757D).withAlpha (0.4f));
+        
+        g.drawRoundedRectangle (bounds.reduced (0.5f), cornerSize, 1.0f);
     }
-    else
-    {
-        g.setColour (button.findColour (juce::ComboBox::outlineColourId, true).withAlpha (0.15f));
-    }
-
-    g.drawRoundedRectangle (bounds.reduced (0.5f), cornerSize, 1.0f);
 }
 
 void ChromaCapsLookAndFeel::drawLinearSlider (juce::Graphics& g, int x, int y, int width, int height, float sliderPos, float minSliderPos, float maxSliderPos, juce::Slider::SliderStyle style, juce::Slider& slider)
@@ -269,6 +350,9 @@ void ChromaCapsLookAndFeel::drawLinearSlider (juce::Graphics& g, int x, int y, i
         return;
     }
 
+    int themeIdx = static_cast<int> (processor.apvts.getRawParameterValue ("panelTheme")->load());
+    auto t = AppTheme::get (themeIdx);
+
     const bool isVertical = (style == juce::Slider::LinearVertical);
     
     if (isVertical)
@@ -276,16 +360,9 @@ void ChromaCapsLookAndFeel::drawLinearSlider (juce::Graphics& g, int x, int y, i
         const float trackWidth = 6.0f;
         const float trackX = static_cast<float>(x) + (static_cast<float>(width) - trackWidth) * 0.5f;
         
-        // Base track background slot (Clean dark track with no level overlay, as meters are in the OLED)
-        g.setColour (juce::Colours::black.withAlpha (0.4f));
+        // Flat, borderless track background slot with zero inner 3D highlights [43]
+        g.setColour (juce::Colours::black.withAlpha (0.25f));
         g.fillRoundedRectangle (trackX, static_cast<float>(y), trackWidth, static_cast<float>(height), 3.0f);
-        
-        // Inner 3D bevel highlighting
-        g.setColour (juce::Colours::black.withAlpha (0.6f));
-        g.drawVerticalLine (static_cast<int>(trackX), static_cast<float>(y), static_cast<float>(y + height));
-        
-        g.setColour (juce::Colours::white.withAlpha (0.1f));
-        g.drawVerticalLine (static_cast<int>(trackX + trackWidth), static_cast<float>(y), static_cast<float>(y + height));
 
         // Draw fader cap handle thumb
         const float thumbHeight = 16.0f;
@@ -293,12 +370,12 @@ void ChromaCapsLookAndFeel::drawLinearSlider (juce::Graphics& g, int x, int y, i
         const float thumbX = static_cast<float>(x) + (static_cast<float>(width) - thumbWidth) * 0.5f;
         const float thumbY = sliderPos - (thumbHeight * 0.5f);
 
-        const juce::Colour capColour = slider.findColour (juce::Slider::thumbColourId);
-        g.setColour (capColour);
+        // Navy blue thumb cap color [43]
+        g.setColour (t.faderCap);
         g.fillRoundedRectangle (thumbX, thumbY, thumbWidth, thumbHeight, 2.0f);
 
-        // Neon Cyan indicator line inside fader cap
-        g.setColour (juce::Colour (0xFF00D2FF));
+        // Horizontal white indicator line across the middle of the Navy cap [43]
+        g.setColour (juce::Colours::white);
         g.fillRect (thumbX + 2.0f, thumbY + (thumbHeight * 0.5f) - 1.0f, thumbWidth - 4.0f, 2.0f);
     }
     else
@@ -306,14 +383,9 @@ void ChromaCapsLookAndFeel::drawLinearSlider (juce::Graphics& g, int x, int y, i
         const float trackHeight = 6.0f;
         const float trackY = static_cast<float>(y) + (static_cast<float>(height) - trackHeight) * 0.5f;
         
-        g.setColour (juce::Colours::black.withAlpha (0.4f));
+        // Flat borderless horizontal track
+        g.setColour (juce::Colours::black.withAlpha (0.25f));
         g.fillRoundedRectangle (static_cast<float>(x), trackY, static_cast<float>(width), trackHeight, 3.0f);
-        
-        g.setColour (juce::Colours::black.withAlpha (0.6f));
-        g.drawHorizontalLine (static_cast<int>(trackY), static_cast<float>(x), static_cast<float>(x + width));
-        
-        g.setColour (juce::Colours::white.withAlpha (0.1f));
-        g.drawHorizontalLine (static_cast<int>(trackY + trackHeight), static_cast<float>(x), static_cast<float>(x + width));
 
         // Horizontal thumb
         const float thumbWidth = 16.0f;
@@ -321,10 +393,10 @@ void ChromaCapsLookAndFeel::drawLinearSlider (juce::Graphics& g, int x, int y, i
         const float thumbX = sliderPos - (thumbWidth * 0.5f);
         const float thumbY = static_cast<float>(y) + (static_cast<float>(height) - thumbHeight) * 0.5f;
 
-        const juce::Colour capColour = slider.findColour (juce::Slider::thumbColourId);
-        g.setColour (capColour);
+        g.setColour (t.faderCap);
         g.fillRoundedRectangle (thumbX, thumbY, thumbWidth, thumbHeight, 2.0f);
 
+        // Clean white vertical line on horizontal thumb
         g.setColour (juce::Colours::white);
         g.fillRect (thumbX + (thumbWidth * 0.5f) - 1.0f, thumbY + 2.0f, 2.0f, thumbHeight - 4.0f);
     }

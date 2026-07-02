@@ -239,6 +239,9 @@ public:
     std::atomic<float>* lfoRatePtrs[8] { nullptr };
     std::atomic<float>* lfoDepthPtrs[8] { nullptr };
 
+    // Moved to public section to allow ChromaCapsLookAndFeel to read LFO phases in real-time [43]
+    double lfoPhases[8] { 0.0 };
+
 private:
     //==============================================================================
     juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
@@ -254,7 +257,6 @@ private:
     std::vector<std::pair<int, int>> scheduledNoteOffs;
     std::vector<int> lastChordPitches;
 
-    double lfoPhases[8] { 0.0 };
     bool isFirstNoteOfNewChord = true;
     bool lastSceneBActiveState = false;
 

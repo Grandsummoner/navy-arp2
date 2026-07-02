@@ -15,7 +15,8 @@ PluginEditor::PluginEditor (PluginProcessor& p)
     juce::String scaleNotes[] = { "C", "D", "Eb", "F", "G", "Ab", "Bb", "C" };
     for (int i = 0; i < 8; ++i) {
         faders[i]->setSliderStyle (juce::Slider::LinearVertical); faders[i]->setTextBoxStyle (juce::Slider::NoTextBox, false, 0, 0);
-        faders[i]->setColour (juce::Slider::thumbColourId, juce::Colour (0xFF00D2FF)); faders[i]->setColour (juce::Slider::trackColourId, juce::Colour (0xFF181C24));
+        faders[i]->setColour (juce::Slider::thumbColourId, juce::Colour (0xFF0A1D33)); // Premium Navy Blue thumb [43]
+        faders[i]->setColour (juce::Slider::trackColourId, juce::Colour (0xFF181C24));
         faders[i]->setLookAndFeel (&chromaLookAndFeel); 
         faders[i]->setComponentID ("fader" + juce::String (i + 1)); // Tag fader for LookAndFeel level meters
         addAndMakeVisible (faders[i]);
@@ -28,10 +29,11 @@ PluginEditor::PluginEditor (PluginProcessor& p)
     juce::String leftNames[] = { "Morph", "Rest", "Legato", "Rate" }, leftPrefixes[] = { "rhythmMorph", "rest", "legato", "rate" };
     for (int i = 0; i < 4; ++i) {
         leftKnobs[i]->setSliderStyle (juce::Slider::RotaryHorizontalVerticalDrag); leftKnobs[i]->setTextBoxStyle (juce::Slider::TextBoxBelow, false, 65, 16);
-        leftKnobs[i]->setColour (juce::Slider::rotarySliderFillColourId, juce::Colour (0xFF00D2FF)); leftKnobs[i]->setLookAndFeel (&chromaLookAndFeel); 
+        leftKnobs[i]->setLookAndFeel (&chromaLookAndFeel); 
         leftKnobs[i]->setComponentID (leftPrefixes[i]); leftKnobs[i]->addMouseListener (this, false); addAndMakeVisible (leftKnobs[i]);
-        leftTitles[i]->setText (leftNames[i], juce::dontSendNotification); leftTitles[i]->setFont (juce::Font (juce::FontOptions (10.0f).withStyle ("Bold"))); 
-        leftTitles[i]->setJustificationType (juce::Justification::centred); leftTitles[i]->setColour (juce::Label::textColourId, juce::Colour (0xFF55555C)); addAndMakeVisible (leftTitles[i]);
+        leftTitles[i]->setText (leftNames[i], juce::dontSendNotification); 
+        leftTitles[i]->setFont (juce::Font (juce::FontOptions (12.5f).withStyle ("Bold"))); // Enlarged font for readability [43]
+        leftTitles[i]->setJustificationType (juce::Justification::centred); addAndMakeVisible (leftTitles[i]);
     }
 
     juce::Slider* rightKnobs[] = { &entropyKnob, &harmonyKnob, &chaosKnob, &octavesKnob };
@@ -39,10 +41,11 @@ PluginEditor::PluginEditor (PluginProcessor& p)
     juce::String rightNames[] = { "Entropy", "Harmony", "Chaos", "Octaves" }, rightPrefixes[] = { "entropy", "harmony", "chaos", "octaves" };
     for (int i = 0; i < 4; ++i) {
         rightKnobs[i]->setSliderStyle (juce::Slider::RotaryHorizontalVerticalDrag); rightKnobs[i]->setTextBoxStyle (juce::Slider::TextBoxBelow, false, 65, 16);
-        rightKnobs[i]->setColour (juce::Slider::rotarySliderFillColourId, juce::Colour (0xFFFFB300)); rightKnobs[i]->setLookAndFeel (&chromaLookAndFeel); 
+        rightKnobs[i]->setLookAndFeel (&chromaLookAndFeel); 
         rightKnobs[i]->setComponentID (rightPrefixes[i]); rightKnobs[i]->addMouseListener (this, false); addAndMakeVisible (rightKnobs[i]);
-        rightTitles[i]->setText (rightNames[i], juce::dontSendNotification); rightTitles[i]->setFont (juce::Font (juce::FontOptions (10.0f).withStyle ("Bold"))); 
-        rightTitles[i]->setJustificationType (juce::Justification::centred); rightTitles[i]->setColour (juce::Label::textColourId, juce::Colour (0xFF55555C)); addAndMakeVisible (rightTitles[i]);
+        rightTitles[i]->setText (rightNames[i], juce::dontSendNotification); 
+        rightTitles[i]->setFont (juce::Font (juce::FontOptions (12.5f).withStyle ("Bold"))); // Enlarged font for readability [43]
+        rightTitles[i]->setJustificationType (juce::Justification::centred); addAndMakeVisible (rightTitles[i]);
     }
 
     morphCrossfader.setSliderStyle (juce::Slider::LinearHorizontal); morphCrossfader.setTextBoxStyle (juce::Slider::NoTextBox, false, 0, 0);
@@ -146,14 +149,10 @@ PluginEditor::PluginEditor (PluginProcessor& p)
     scaleTypeAttachment   = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment> (processor.apvts, IDs::scaleType.getParamID(), scaleTypeBox);
     cycleLengthAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment> (processor.apvts, IDs::cycleLength.getParamID(), cycleLengthBox);
 
-    int themeIdx = static_cast<int> (processor.apvts.getRawParameterValue ("panelTheme")->load()); auto t = AppTheme::get (themeIdx);
-    juce::Slider* knobs[] = { &rhythmMorphKnob, &restKnob, &legatoKnob, &rateKnob, &entropyKnob, &harmonyKnob, &chaosKnob, &octavesKnob };
-    for (auto* k : knobs) k->setColour (juce::Slider::textBoxTextColourId, t.textDim);
-
     updateSliderTextBoxThemeColors();
 
-    // Sinks minimum height to 620px and default height to 650px to provide full circular space
-    setResizable (true, true); setResizeLimits (700, 620, 1400, 920); setSize (850, 650); startTimerHz (30);
+    // Sinks minimum height to 605px to crop faders by 25% while maintaining layout [43]
+    setResizable (true, true); setResizeLimits (700, 605, 1400, 920); setSize (850, 605); startTimerHz (30);
 }
 
 PluginEditor::~PluginEditor() 
@@ -174,11 +173,6 @@ void PluginEditor::parameterChanged (const juce::String& parameterID, float newV
         juce::Component::SafePointer<PluginEditor> safeThis (this);
         juce::MessageManager::callAsync ([safeThis]() {
             if (safeThis != nullptr) {
-                int themeIdx = static_cast<int> (safeThis->processor.apvts.getRawParameterValue ("panelTheme")->load());
-                auto t = AppTheme::get (themeIdx);
-                juce::Slider* knobs[] = { &safeThis->rhythmMorphKnob, &safeThis->restKnob, &safeThis->legatoKnob, &safeThis->rateKnob, &safeThis->entropyKnob, &safeThis->harmonyKnob, &safeThis->chaosKnob, &safeThis->octavesKnob };
-                for (auto* k : knobs) k->setColour (juce::Slider::textBoxTextColourId, t.textDim);
-
                 safeThis->updateSliderTextBoxThemeColors();
 
                 safeThis->repaint(); safeThis->oledDisplay.repaint();
@@ -193,7 +187,7 @@ void PluginEditor::parameterChanged (const juce::String& parameterID, float newV
 
 void PluginEditor::mouseDown (const juce::MouseEvent& event)
 {
-    // Real-Time LFO Modulation Right-Click Context Menu for 8 knobs [43]
+    // Real-Time LFO Modulation Right-Click Context Menu for 8 knobs
     juce::Slider* knobs[] = { &rhythmMorphKnob, &restKnob, &legatoKnob, &rateKnob, &entropyKnob, &harmonyKnob, &chaosKnob, &octavesKnob };
     juce::ParameterID rates[] = { IDs::rhythmMorphLfoRate, IDs::restLfoRate, IDs::legatoLfoRate, IDs::rateLfoRate, IDs::entropyLfoRate, IDs::harmonyLfoRate, IDs::chaosLfoRate, IDs::octavesLfoRate };
     juce::ParameterID depths[] = { IDs::rhythmMorphLfoDepth, IDs::restLfoDepth, IDs::legatoLfoDepth, IDs::rateLfoDepth, IDs::entropyLfoDepth, IDs::harmonyLfoDepth, IDs::chaosLfoDepth, IDs::octavesLfoDepth };
@@ -319,10 +313,8 @@ void PluginEditor::paint (juce::Graphics& g)
 {
     int themeIdx = static_cast<int> (processor.apvts.getRawParameterValue ("panelTheme")->load()); auto t = AppTheme::get (themeIdx);
     g.fillAll (t.background); g.setColour (t.border); g.drawRect (getLocalBounds().toFloat(), 3.0f);
-    auto bounds = getLocalBounds().toFloat();
-    g.drawRoundedRectangle (10.0f, 10.0f, 170.0f, bounds.getHeight() - 210.0f, 4.0f, 1.5f);
-    g.drawRoundedRectangle (bounds.getWidth() - 180.0f, 10.0f, 170.0f, bounds.getHeight() - 210.0f, 4.0f, 1.5f);
-    g.drawRoundedRectangle (10.0f, bounds.getHeight() - 190.0f, bounds.getWidth() - 20.0f, 180.0f, 4.0f, 1.5f);
+    
+    // Title names (High-Contrast dynamic rendering for clean reading) [43]
     g.setColour (t.textDim); g.setFont (juce::Font (juce::FontOptions (14.0f).withStyle ("Bold")));
     g.drawText ("Rhythm", 20, 15, 150, 20, juce::Justification::left); g.drawText ("Generator", getWidth() - 170, 15, 150, 20, juce::Justification::right);
 
@@ -336,21 +328,21 @@ void PluginEditor::paint (juce::Graphics& g)
 
 void PluginEditor::resized()
 {
-    int bottomY = getHeight() - 180, centerWidth = getWidth() - 370, centerStartX = 185;
+    // Height allocated to faders adjusted to Y = getHeight() - 135px (yielding 25% fader height reduction) [43]
+    int bottomY = getHeight() - 135, centerWidth = getWidth() - 370, centerStartX = 185;
     juce::Slider* leftKnobs[] = { &rhythmMorphKnob, &restKnob, &legatoKnob, &rateKnob };
     juce::Label* leftTitles[] = { &rhythmMorphTitle, &restTitle, &legatoTitle, &rateTitle };
     juce::Slider* rightKnobs[] = { &entropyKnob, &harmonyKnob, &chaosKnob, &octavesKnob };
     juce::Label* rightTitles[] = { &entropyTitle, &harmonyTitle, &chaosTitle, &octavesTitle };
     
-    // Reduces knobHeight to 58px and starts at Y=35 to eliminate rate-textbox overlapping 2x2 grid
-    int rightX = getWidth() - 180, knobsAvailableHeight = bottomY - 120, knobHeight = juce::jlimit (50, 100, knobsAvailableHeight / 4), knobStartY = 35;
+    // Spacing optimization: Shrinks knob bounds height manually by 5px each to aggregate a perfect 20px gaps above the grids
+    int rightX = getWidth() - 180, knobsAvailableHeight = bottomY - 140, knobHeight = juce::jlimit (50, 100, knobsAvailableHeight / 4), knobStartY = 35;
     for (int i = 0; i < 4; ++i) {
         int knobY = knobStartY + i * knobHeight;
         leftKnobs[i]->setBounds (15, knobY + 12, 150, knobHeight - 16); leftTitles[i]->setBounds (15, knobY, 150, 14);
         rightKnobs[i]->setBounds (rightX + 5, knobY + 12, 150, knobHeight - 16); rightTitles[i]->setBounds (rightX + 5, knobY, 150, 14);
     }
 
-    // Lowers 2x2 grid start Y to 295px (leaving 28px of clean padded space below rate textboxes)
     int gridY = bottomY - 85;
     saveButton.setBounds (15, gridY, 72, 36); recallButton.setBounds (93, gridY, 72, 36); copyButton.setBounds (15, gridY + 42, 72, 36); initButton.setBounds (93, gridY + 42, 72, 36);
     int diceStartX = getWidth() - 165;
@@ -378,7 +370,9 @@ void PluginEditor::resized()
     juce::Slider* faders[] = { &fader1, &fader2, &fader3, &fader4, &fader5, &fader6, &fader7, &fader8 };
     juce::Label* faderLabels[] = { &faderLabel1, &faderLabel2, &faderLabel3, &faderLabel4, &faderLabel5, &faderLabel6, &faderLabel7, &faderLabel8 };
     for (int i = 0; i < 8; ++i) {
-        int faderX = 20 + i * faderWidth; faders[i]->setBounds (faderX + 10, bottomY + 10, faderWidth - 20, 130); faderLabels[i]->setBounds (faderX, bottomY + 145, faderWidth, 20);
+        int faderX = 20 + i * faderWidth; 
+        faders[i]->setBounds (faderX + 10, bottomY + 10, faderWidth - 20, 98); // Height scaled down by 25% [43]
+        faderLabels[i]->setBounds (faderX, bottomY + 112, faderWidth, 15); // Trimmed vertical padding [43]
     }
 }
 
@@ -479,13 +473,14 @@ void PluginEditor::updateSliderTextBoxThemeColors()
     int themeIdx = static_cast<int> (processor.apvts.getRawParameterValue ("panelTheme")->load());
     auto t = AppTheme::get (themeIdx);
 
-    juce::Slider* knobs[] = { &rhythmMorphKnob, &restKnob, &legatoKnob, &rateKnob, &entropyKnob, &harmonyKnob, &chaosKnob, &octavesKnob };
-    for (auto* k : knobs)
+    juce::Slider* leftKnobs[] = { &rhythmMorphKnob, &restKnob, &legatoKnob, &rateKnob };
+    for (auto* k : leftKnobs)
     {
+        k->setColour (juce::Slider::rotarySliderFillColourId, t.knobFillLeft); // Theme-native custom fill
         if (themeIdx == 1) // Skyline Eurorack (Light Beige Theme)
         {
-            k->setColour (juce::Slider::textBoxTextColourId, juce::Colour (0xFF111111)); // High contrast black text!
-            k->setColour (juce::Slider::textBoxBackgroundColourId, juce::Colour (0xFFEAE5DC)); // Match the beige background!
+            k->setColour (juce::Slider::textBoxTextColourId, juce::Colour (0xFF111111));
+            k->setColour (juce::Slider::textBoxBackgroundColourId, juce::Colour (0xFFEAE5DC));
             k->setColour (juce::Slider::textBoxOutlineColourId, juce::Colour (0xFF8B8D93).withAlpha (0.4f)); 
         }
         else
@@ -495,4 +490,30 @@ void PluginEditor::updateSliderTextBoxThemeColors()
             k->setColour (juce::Slider::textBoxOutlineColourId, t.slotOutline);
         }
     }
+
+    juce::Slider* rightKnobs[] = { &entropyKnob, &harmonyKnob, &chaosKnob, &octavesKnob };
+    for (auto* k : rightKnobs)
+    {
+        k->setColour (juce::Slider::rotarySliderFillColourId, t.knobFillRight); // Theme-native custom fill
+        if (themeIdx == 1)
+        {
+            k->setColour (juce::Slider::textBoxTextColourId, juce::Colour (0xFF111111));
+            k->setColour (juce::Slider::textBoxBackgroundColourId, juce::Colour (0xFFEAE5DC));
+            k->setColour (juce::Slider::textBoxOutlineColourId, juce::Colour (0xFF8B8D93).withAlpha (0.4f)); 
+        }
+        else
+        {
+            k->setColour (juce::Slider::textBoxTextColourId, t.textDim);
+            k->setColour (juce::Slider::textBoxBackgroundColourId, juce::Colour (0xFF0F1116));
+            k->setColour (juce::Slider::textBoxOutlineColourId, t.slotOutline);
+        }
+    }
+
+    // High-Contrast dynamic rendering for knob title labels across all themes [43]
+    juce::Label* leftTitles[] = { &rhythmMorphTitle, &restTitle, &legatoTitle, &rateTitle };
+    juce::Label* rightTitles[] = { &entropyTitle, &harmonyTitle, &chaosTitle, &octavesTitle };
+    for (auto* title : leftTitles)
+        title->setColour (juce::Label::textColourId, themeIdx == 1 ? juce::Colour (0xFF111111) : juce::Colours::white.withAlpha (0.8f));
+    for (auto* title : rightTitles)
+        title->setColour (juce::Label::textColourId, themeIdx == 1 ? juce::Colour (0xFF111111) : juce::Colours::white.withAlpha (0.8f));
 }
