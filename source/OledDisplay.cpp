@@ -1,5 +1,6 @@
 #include "OledDisplay.h"
 #include "PluginProcessor.h"
+#include "AppTheme.h"
 
 OledDisplay::OledDisplay (PluginProcessor& p)
     : processor (p)
@@ -138,8 +139,8 @@ void OledDisplay::paint (juce::Graphics& g)
 
         // Project 3D coordinates onto Left-hand viewport
         auto globeArea = displayArea.removeFromLeft (width * 0.38f); // Allocate 38% of OLED space to the Globe [43]
-        float globeCenterX = globeArea.getCenterX();
-        float globeCenterY = globeArea.getCenterY();
+        float globeCenterX = globeArea.getCentreX(); // Corrected to British English spelling
+        float globeCenterY = globeArea.getCentreY(); // Corrected to British English spelling
         float globeRadius = juce::jmin (globeArea.getWidth(), globeArea.getHeight()) * 0.40f;
         float cameraDistance = 2.0f;
 
@@ -241,7 +242,7 @@ void OledDisplay::paint (juce::Graphics& g)
                 float jitterX = (flareRand.nextFloat() - 0.5f) * 10.0f;
                 float jitterY = (flareRand.nextFloat() - 0.5f) * 10.0f;
 
-                if (step == 3) { jitterX = 0.0f; jitterY = 0.0f; } // Close perfectly at the target edge [43]
+                if (step == 3) { jitterX = 0.0f; jitterY = 0.0f; } // Close precisely at the target edge [43]
 
                 flarePath.lineTo (nominalX + jitterX, nominalY + jitterY);
             }
