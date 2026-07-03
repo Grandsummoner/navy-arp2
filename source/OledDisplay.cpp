@@ -23,11 +23,17 @@ public:
     double lastCameoTriggerTime = 0.0;
     double nextCameoInterval = 300000.0; // 5 minutes minimum (300,000 ms) [43]
 
-    // Persistent vertex indices for the teleporting triangles [43]
-    int tri1_v1 = 0,  tri1_v2 = 1,  tri1_v3 = 12;
-    int tri2_v1 = 15, tri2_v2 = 16, tri2_v3 = 28;
-    double lastTeleportTimeA = 0.0;
-    double lastTeleportTimeB = 0.0;
+    // Persistent structure for the 4-triangle multi-speed kaleidoscope [43]
+    struct FacetTriangle
+    {
+        int v1 = 0, v2 = 1, v3 = 12;
+        double lastTeleportTime = 0.0;
+        double currentPeriod = 1000.0;
+        juce::Colour colour;
+    };
+    
+    FacetTriangle triangles[4];
+    bool isInitialized = false;
 };
 
 OledDisplay::OledDisplay (PluginProcessor& p)
@@ -182,17 +188,16 @@ void OledDisplay::paint (juce::Graphics& g)
         // LOAD PERSISTENT INSTANCE-SAFE CAMEO DATA [43]
         // =====================================================================
         auto* cameoVar = getProperties().getVarPointer ("cameoState");
-        CameoState* state = nullptr; // Bypassed ReferenceCountedObjectPtr template for MSVC [43]
+        juce::ReferenceCountedObjectPtr<CameoState> state;
 
         if (cameoVar == nullptr || cameoVar->getObject() == nullptr)
         {
-            auto* newState = new CameoState();
-            newState->lastCameoTriggerTime = timeMs;
+            state = new CameoState();
+            state->lastCameoTriggerTime = timeMs;
             
             juce::Random randInit;
-            newState->nextCameoInterval = 300000.0 + randInit.nextDouble() * 300000.0; // Random interval (5 to 10 mins) [43]
-            getProperties().set ("cameoState", newState);
-            state = newState;
+            state->nextCameoInterval = 300000.0 + randInit.nextDouble() * 180000.0; // Random interval (5 to 8 mins) [43]
+            getProperties().set ("cameoState", state.get());
         }
         else
         {
@@ -243,50 +248,61 @@ void OledDisplay::paint (juce::Graphics& g)
         // =====================================================================
         if (isPlaying && state != nullptr)
         {
-            double teleportPeriodA = 400.0; // Triangle 1 (Magenta) teleports every 400ms [43]
-            double teleportPeriodB = 600.0; // Triangle 2 (Orange) teleports every 600ms [43]
-            
             juce::Random triRand (static_cast<int64_t> (timeMs));
-            
-            // Triangle 1 Teleport & Flicker [43]
-            if (timeMs - state->lastTeleportTimeA >= teleportPeriodA)
+
+            juce::Colour colors[] = {
+                juce::Colour::fromString ("#FFFF3366"), // Coral Red / Neon Magenta [43]
+                juce::Colour::fromString ("#FFFF8D11"), // Sun Orange [43]
+                juce::Colour::fromString ("#FF00FF66"), // Emerald Green [43]
+                juce::Colour::fromString ("#FF0055FF")  // Sapphire Blue [43]
+            };
+            double speeds[] = { 533.0, 1200.0, 1600.0, 8000.0 }; // Multi-speed definitions [43]
+
+            // Initialize triangles on first play run [43]
+            if (! state->isInitialized)
             {
-                state->lastTeleportTimeA = timeMs;
-                state->tri1_v1 = triRand.nextInt (62);
-                state->tri1_v2 = (state->tri1_v1 + 1) % 62;
-                state->tri1_v3 = (state->tri1_v1 + 12) % 62;
+                state->isInitialized = true;
+                for (int i = 0; i < 4; ++i)
+                {
+                    state->triangles[i].v1 = triRand.nextInt (62);
+                    state->triangles[i].v2 = (state->triangles[i].v1 + 1) % 62;
+                    state->triangles[i].v3 = (state->triangles[i].v1 + 12) % 62;
+                    state->triangles[i].lastTeleportTime = timeMs - (triRand.nextDouble() * 300.0);
+                    state->triangles[i].currentPeriod = speeds[i];
+                    state->triangles[i].colour = colors[i];
+                }
             }
-            
-            // Triangle 2 Teleport & Flicker [43]
-            if (timeMs - state->lastTeleportTimeB >= teleportPeriodB)
+
+            for (int i = 0; i < 4; ++i)
             {
-                state->lastTeleportTimeB = timeMs;
-                state->tri2_v1 = triRand.nextInt (62);
-                state->tri2_v2 = (state->tri2_v1 + 1) % 62;
-                state->tri2_v3 = (state->tri2_v1 + 12) % 62;
+                auto& tri = state->triangles[i];
+
+                // Teleport when the current randomized period has elapsed [43]
+                if (timeMs - tri.lastTeleportTime >= tri.currentPeriod)
+                {
+                    tri.lastTeleportTime = timeMs;
+                    tri.v1 = triRand.nextInt (62);
+                    tri.v2 = (tri.v1 + 1) % 62;
+                    tri.v3 = (tri.v1 + 12) % 62;
+
+                    // Randomly assign a new color and a new speed out of the palettes [43]
+                    tri.currentPeriod = speeds[triRand.nextInt (4)];
+                    tri.colour = colors[triRand.nextInt (4)];
+                }
+
+                // Smoothly oscillate flicker frequency depending on its active speed [43]
+                float frequencyFactor = static_cast<float> (500.0 / tri.currentPeriod);
+                float flicker = static_cast<float> (std::sin (timeMs * 0.05f * frequencyFactor)) * 0.4f + 0.6f;
+
+                juce::Path triPath;
+                triPath.startNewSubPath (projectedPoints[tri.v1]);
+                triPath.lineTo (projectedPoints[tri.v2]);
+                triPath.lineTo (projectedPoints[tri.v3]);
+                triPath.closeSubPath();
+
+                g.setColour (tri.colour.withAlpha (0.28f * flicker));
+                g.fillPath (triPath);
             }
-            
-            // Calculate high-frequency flicker (12Hz and 15Hz modulator waves) [43]
-            float flickerA = static_cast<float> (std::sin (timeMs * 0.075)) * 0.4f + 0.6f;
-            float flickerB = static_cast<float> (std::sin (timeMs * 0.095)) * 0.4f + 0.6f;
-            
-            // Draw Triangle 1 (Cyberpunk Coral Red / Neon Magenta) [43]
-            juce::Path path1;
-            path1.startNewSubPath (projectedPoints[state->tri1_v1]);
-            path1.lineTo (projectedPoints[state->tri1_v2]);
-            path1.lineTo (projectedPoints[state->tri1_v3]);
-            path1.closeSubPath();
-            g.setColour (juce::Colour::fromString ("#FFFF3366").withAlpha (0.28f * flickerA));
-            g.fillPath (path1);
-            
-            // Draw Triangle 2 (Sun Orange) [43]
-            juce::Path path2;
-            path2.startNewSubPath (projectedPoints[state->tri2_v1]);
-            path2.lineTo (projectedPoints[state->tri2_v2]);
-            path2.lineTo (projectedPoints[state->tri2_v3]);
-            path2.closeSubPath();
-            g.setColour (juce::Colour::fromString ("#FFFF8D11").withAlpha (0.28f * flickerB));
-            g.fillPath (path2);
         }
 
         // Draw active glowing star nodes, modulated in vertical waves by the 8 LFOs! [43]
