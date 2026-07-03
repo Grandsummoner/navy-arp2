@@ -21,7 +21,7 @@ public:
     
     std::vector<ActiveCameo> activeCameos;
     double lastCameoTriggerTime = 0.0;
-    double nextCameoInterval = 300000.0; // 5 minutes minimum (300,000 ms) [43]
+    double nextCameoInterval = 120000.0; // 2 minutes minimum (120,000 ms) [43]
 
     // Persistent structure for the 4-triangle multi-speed kaleidoscope [43]
     struct FacetTriangle
@@ -127,38 +127,11 @@ void OledDisplay::paint (juce::Graphics& g)
     else
     {
         // =====================================================================
-        // MATH & STATE SETUP: METADATA, MOTION, AND GLOBE CONFIGURATIONS [43]
+        // MATH SETUP: DEEP GEODESIC 3D CONSTELLATION GLOBE [43]
         // =====================================================================
         float morphVal = *processor.apvts.getRawParameterValue (IDs::morph.getParamID());
-        const int activeStep = processor.currentStep.load();          
-        const bool isPlaying = processor.isCurrentlyPlayingUI.load(); 
-
-        // Unified Metadata parsing at the top of the else-block to ensure scope safety [43]
-        int rootKeyIdx = juce::jlimit (0, 11, static_cast<int> (*processor.apvts.getRawParameterValue (IDs::rootKey.getParamID())));
-        juce::StringArray keys { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "Bb", "B" }, scales { "Major", "Natural Minor", "Pentatonic Minor", "Pentatonic Major", "Dorian", "Phrygian", "Lydian", "Mixolydian", "Harmonic Minor", "Melodic Minor" };
-        juce::String keyStr = keys[rootKeyIdx];
-
-        int scaleIdx = juce::jlimit (0, 9, static_cast<int> (*processor.apvts.getRawParameterValue (IDs::scaleType.getParamID())));
-        juce::String scaleStr = scales[scaleIdx];
-
-        bool isPolyActive = *processor.apvts.getRawParameterValue (IDs::poly.getParamID()) > 0.5f;
-        float currentHarmony = *processor.apvts.getRawParameterValue (IDs::harmony.getParamID());
-        juce::String voiceStr = "MONO";
-        if (isPolyActive)
-        {
-            if (currentHarmony >= 0.25f && currentHarmony < 0.5f) voiceStr = "DUO";
-            else if (currentHarmony >= 0.5f) voiceStr = "TRIAD";
-            else voiceStr = "MONO";
-        }
-
-        int rateIdx = juce::jlimit (0, 3, static_cast<int> (*processor.apvts.getRawParameterValue (IDs::rate.getParamID())));
-        juce::StringArray rates { "1/4", "1/8", "1/16", "1/32" };
-        juce::String rateStr = rates[rateIdx];
-
-        int rangeShift = static_cast<int> (*processor.apvts.getRawParameterValue (IDs::octaves.getParamID()));
-        juce::String octStr = (rangeShift >= 0 ? "+" : "") + juce::String (rangeShift);
-
-        juce::String metaText = "KEY: " + keyStr + " | SCALE: " + scaleStr + " | VOICE: " + voiceStr + " | RATE: " + rateStr + " | OCT: " + octStr;
+        const int activeStep = processor.currentStep.load();          // Made globally visible in the else-block [43]
+        const bool isPlaying = processor.isCurrentlyPlayingUI.load(); // Made globally visible in the else-block [43]
 
         struct Point3D { float x, y, z; };
         std::vector<Point3D> vertices;
@@ -178,18 +151,10 @@ void OledDisplay::paint (juce::Graphics& g)
         }
         vertices.push_back ({ 0.0f, -1.0f, 0.0f }); // Bottom pole (Index 61)
 
-        // Calculate dynamic, parameter-driven spinning (Yaw) and tumbling (Pitch) physics [43]
-        float ratePct = static_cast<float> (rateIdx) / 3.0f; // 0.0 to 1.0 range
-        float spinMultiplier = 0.2f + ratePct * 1.1f;        // Limits speed to exactly 0.2x to 1.3x [43]
-        float yawSpeed = 0.00012f * spinMultiplier;
-
-        float chaosVal = *processor.apvts.getRawParameterValue (IDs::chaos.getParamID()); // 0.0 to 1.0 range
-        float tumbleMultiplier = 0.2f + chaosVal * 1.1f;    // Limits speed to exactly 0.2x to 1.3x [43]
-        float pitchSpeed = 0.00005f * tumbleMultiplier;
-
+        // Reverted to constant, majestic spin and tumble parameters [43]
         double timeMs = juce::Time::getMillisecondCounterHiRes();
-        float yaw = static_cast<float> (timeMs * yawSpeed);
-        float pitch = static_cast<float> (timeMs * pitchSpeed);
+        float yaw = static_cast<float> (timeMs * 0.00012);
+        float pitch = static_cast<float> (timeMs * 0.00005);
 
         auto rotatePoint = [&](Point3D p, float yAngle, float pAngle) -> Point3D
         {
@@ -232,7 +197,7 @@ void OledDisplay::paint (juce::Graphics& g)
             newState->lastCameoTriggerTime = timeMs;
             
             juce::Random randInit;
-            newState->nextCameoInterval = 300000.0 + randInit.nextDouble() * 180000.0; // Random interval (5 to 10 mins) [43]
+            newState->nextCameoInterval = 120000.0 + randInit.nextDouble() * 120000.0; // Random interval (2 to 4 mins) [43]
             getProperties().set ("cameoState", newState);
             state = newState;
         }
@@ -401,7 +366,7 @@ void OledDisplay::paint (juce::Graphics& g)
                 state->lastCameoTriggerTime = timeMs;
                 
                 juce::Random randEngine;
-                state->nextCameoInterval = 300000.0 + randEngine.nextDouble() * 180000.0; // 5 to 8 mins [43]
+                state->nextCameoInterval = 120000.0 + randEngine.nextDouble() * 120000.0; // Random interval (2 to 4 mins) [43]
                 
                 int spawnCount = (randEngine.nextFloat() < 0.20f) ? 2 : 1; 
                 for (int k = 0; k < spawnCount; ++k)
@@ -499,7 +464,17 @@ void OledDisplay::paint (juce::Graphics& g)
 
         displayArea.removeFromTop (3.0f);
 
-        // Draw pre-calculated metadata directly [43]
+        // Fetch scale, root key, voice, rates, and octaves choices dynamically from the APVTS parameters
+        // Reused rateIdx safely from the top declaration to prevent multiple redefinition crashes [43]
+        int rateIdx = juce::jlimit (0, 3, static_cast<int> (*processor.apvts.getRawParameterValue (IDs::rate.getParamID())));
+        juce::StringArray rates { "1/4", "1/8", "1/16", "1/32" };
+        juce::String rateStr = rates[rateIdx];
+
+        int rangeShift = static_cast<int> (*processor.apvts.getRawParameterValue (IDs::octaves.getParamID()));
+        juce::String octStr = (rangeShift >= 0 ? "+" : "") + juce::String (rangeShift);
+
+        juce::String metaText = "KEY: " + keyStr + " | SCALE: " + scaleStr + " | VOICE: " + voiceStr + " | RATE: " + rateStr + " | OCT: " + octStr;
+        
         g.setColour (juce::Colour (0xFFFFB300)); // Gold/Yellow metadata font
         g.setFont (juce::FontOptions (9.5f, juce::Font::bold));
         g.drawText (metaText, displayArea.removeFromTop (12.0f), juce::Justification::centred, true);
