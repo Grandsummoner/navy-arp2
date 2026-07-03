@@ -121,6 +121,11 @@ PluginEditor::PluginEditor (PluginProcessor& p)
     scaleTypeBox.addItemList (juce::StringArray { "Major", "Minor", "Pentatonic Minor", "Pentatonic Major", "Dorian", "Phrygian", "Lydian", "Mixolydian", "Harmonic Minor", "Melodic Minor" }, 1);
     cycleLengthBox.addItemList (juce::StringArray { "1 Bar", "2 Bars", "4 Bars", "8 Bars" }, 1);
 
+    // Added new Theme Selector ComboBox components and attachments [43]
+    addAndMakeVisible (panelThemeBox);
+    panelThemeBox.addItemList (juce::StringArray { "Navy Cyber", "Skyline", "Monochrome", "Matrix" }, 1);
+    panelThemeAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment> (processor.apvts, IDs::panelTheme.getParamID(), panelThemeBox);
+
     fader1Attachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (processor.apvts, IDs::fader1.getParamID(), fader1);
     fader2Attachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (processor.apvts, IDs::fader2.getParamID(), fader2);
     fader3Attachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (processor.apvts, IDs::fader3.getParamID(), fader3);
@@ -313,7 +318,13 @@ void PluginEditor::mouseUp (const juce::MouseEvent& event)
 void PluginEditor::paint (juce::Graphics& g)
 {
     int themeIdx = static_cast<int> (processor.apvts.getRawParameterValue ("panelTheme")->load()); auto t = AppTheme::get (themeIdx);
-    g.fillAll (t.background); g.setColour (t.border); g.drawRect (getLocalBounds().toFloat(), 3.0f);
+    
+    // Smooth vertical background linear gradient [43]
+    juce::ColourGradient bg (t.backgroundStart, 0.0f, 0.0f, t.backgroundEnd, 0.0f, static_cast<float> (getHeight()), false);
+    g.setGradientFill (bg);
+    g.fillAll();
+    
+    g.setColour (t.border); g.drawRect (getLocalBounds().toFloat(), 3.0f);
     
     // Title names (High-Contrast dynamic rendering for clean reading) [43]
     g.setColour (t.textDim); g.setFont (juce::Font (juce::FontOptions (14.0f).withStyle ("Bold")));
@@ -349,9 +360,14 @@ void PluginEditor::resized()
     int diceStartX = getWidth() - 165;
     diceMeloButton.setBounds (diceStartX, gridY, 72, 36); diceArtiButton.setBounds (diceStartX + 78, gridY, 72, 36); diceTimeButton.setBounds (diceStartX, gridY + 42, 72, 36); diceNavyButton.setBounds (diceStartX + 78, gridY + 42, 72, 36);
 
-    int dropWidth = static_cast<int> ((centerWidth * 0.45f) / 3), perfWidth = static_cast<int> ((centerWidth * 0.55f) / 4);
-    rootKeyBox.setBounds (centerStartX, 15, dropWidth - 5, 24); scaleTypeBox.setBounds (centerStartX + dropWidth, 15, dropWidth - 5, 24); cycleLengthBox.setBounds (centerStartX + dropWidth * 2, 15, dropWidth - 5, 24);
-    int perfStartX = centerStartX + dropWidth * 3 + 10;
+    // Divides top row dropdown space into 4 equal columns instead of 3 to include theme selector [43]
+    int dropWidth = static_cast<int> ((centerWidth * 0.45f) / 4), perfWidth = static_cast<int> ((centerWidth * 0.55f) / 4);
+    rootKeyBox.setBounds (centerStartX, 15, dropWidth - 5, 24); 
+    scaleTypeBox.setBounds (centerStartX + dropWidth, 15, dropWidth - 5, 24); 
+    cycleLengthBox.setBounds (centerStartX + dropWidth * 2, 15, dropWidth - 5, 24);
+    panelThemeBox.setBounds (centerStartX + dropWidth * 3, 15, dropWidth - 5, 24); // Renders cleanly in the 4th slot [43]
+    
+    int perfStartX = centerStartX + dropWidth * 4 + 10;
     latchButton.setBounds (perfStartX, 15, perfWidth - 5, 24); arpSeqButton.setBounds (perfStartX + perfWidth, 15, perfWidth - 5, 24); polyButton.setBounds (perfStartX + perfWidth * 2, 15, perfWidth - 5, 24); freezeButton.setBounds (perfStartX + perfWidth * 3, 15, perfWidth - 5, 24);
 
     int oledY = 50, presetsY = static_cast<int> (gridY + 6), crossfaderY = static_cast<int> (gridY + 48), oledHeight = presetsY - oledY - 10;

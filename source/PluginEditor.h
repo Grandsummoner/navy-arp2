@@ -52,7 +52,7 @@ public:
     juce::TextButton presetButtons[8];
 
     // Top Control bar Dropdowns
-    juce::ComboBox rootKeyBox, scaleTypeBox, cycleLengthBox;
+    juce::ComboBox rootKeyBox, scaleTypeBox, cycleLengthBox, panelThemeBox; // Added panelThemeBox [43]
 
     // PUBLIC Flash Timers for LookAndFeel Animation Access
     int sceneAFlashTimer = 0;
@@ -82,7 +82,7 @@ private:
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> latchAttachment, arpSeqAttachment, polyAttachment, freezeAttachment;
 
     // Dropdown Attachments
-    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> rootKeyAttachment, scaleTypeAttachment, cycleLengthAttachment;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> rootKeyAttachment, scaleTypeAttachment, cycleLengthAttachment, panelThemeAttachment; // Added panelThemeAttachment [43]
 
     // Timing States
     std::uint32_t presetPressStartTime[8] { 0 };

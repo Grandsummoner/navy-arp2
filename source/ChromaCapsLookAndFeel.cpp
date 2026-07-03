@@ -57,7 +57,6 @@ void ChromaCapsLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, i
     float centerY = static_cast<float> (y) + static_cast<float> (height) * 0.5f;
     float knobRadius = juce::jmin (static_cast<float> (width), static_cast<float> (height)) * 0.28f;
     float ledRadius = knobRadius + 8.0f;
-    float ledDiameter = 3.5f;
 
     bool isLeftKnob = (cid == "rhythmMorph" || cid == "rest" || cid == "legato" || cid == "rate");
     juce::Colour activeColor = isLeftKnob ? t.knobFillLeft : t.knobFillRight;
