@@ -23,13 +23,14 @@ public:
     double lastCameoTriggerTime = 0.0;
     double nextCameoInterval = 300000.0; // 5 minutes minimum (300,000 ms) [43]
 
-    // Persistent structure for the 4-triangle multi-speed kaleidoscope [43]
+    // Persistent structures for the 4-triangle multi-speed kaleidoscope [43]
     struct FacetTriangle
     {
         int v1 = 0, v2 = 1, v3 = 12;
         double lastTeleportTime = 0.0;
         double currentPeriod = 1000.0;
         juce::Colour colour;
+        bool isActive = true; // Visual state flag to support 0-to-4 active sparkle [43]
     };
     
     FacetTriangle triangles[4];
@@ -75,8 +76,8 @@ void OledDisplay::timerCallback()
 void OledDisplay::paint (juce::Graphics& g)
 {
     auto bounds = getLocalBounds().toFloat();
-    float width = bounds.getWidth();   // Restored top-level width declaration [43]
-    float height = bounds.getHeight(); // Restored top-level height declaration [43]
+    float width = bounds.getWidth();   // Made globally visible in paint() [43]
+    float height = bounds.getHeight(); // Made globally visible in paint() [43]
 
     // 1. Fill Screen Background with flat, high-contrast obsidian black void [43]
     g.fillAll (juce::Colour (0xFF05070A));
@@ -150,10 +151,19 @@ void OledDisplay::paint (juce::Graphics& g)
         }
         vertices.push_back ({ 0.0f, -1.0f, 0.0f }); // Bottom pole (Index 61)
 
-        // Slow, continuous rotation angle mapped over system millisecond timers [43]
+        // Calculate dynamic, parameter-driven spinning (Yaw) and tumbling (Pitch) physics [43]
+        int rateIdx = juce::jlimit (0, 3, static_cast<int> (*processor.apvts.getRawParameterValue (IDs::rate.getParamID())));
+        float ratePct = static_cast<float> (rateIdx) / 3.0f; // 0.0 to 1.0 range
+        float spinMultiplier = 0.2f + ratePct * 1.1f;        // Limits speed to exactly 0.2x to 1.3x [43]
+        float yawSpeed = 0.00012f * spinMultiplier;
+
+        float chaosVal = *processor.apvts.getRawParameterValue (IDs::chaos.getParamID()); // 0.0 to 1.0 range
+        float tumbleMultiplier = 0.2f + chaosVal * 1.1f;    // Limits speed to exactly 0.2x to 1.3x [43]
+        float pitchSpeed = 0.00005f * tumbleMultiplier;
+
         double timeMs = juce::Time::getMillisecondCounterHiRes();
-        float yaw = static_cast<float> (timeMs * 0.00012);
-        float pitch = static_cast<float> (timeMs * 0.00005);
+        float yaw = static_cast<float> (timeMs * yawSpeed);
+        float pitch = static_cast<float> (timeMs * pitchSpeed);
 
         auto rotatePoint = [&](Point3D p, float yAngle, float pAngle) -> Point3D
         {
@@ -188,16 +198,17 @@ void OledDisplay::paint (juce::Graphics& g)
         // LOAD PERSISTENT INSTANCE-SAFE CAMEO DATA [43]
         // =====================================================================
         auto* cameoVar = getProperties().getVarPointer ("cameoState");
-        juce::ReferenceCountedObjectPtr<CameoState> state;
+        CameoState* state = nullptr; // Bypassed ReferenceCountedObjectPtr template for MSVC [43]
 
         if (cameoVar == nullptr || cameoVar->getObject() == nullptr)
         {
-            state = new CameoState();
-            state->lastCameoTriggerTime = timeMs;
+            auto* newState = new CameoState();
+            newState->lastCameoTriggerTime = timeMs;
             
             juce::Random randInit;
-            state->nextCameoInterval = 300000.0 + randInit.nextDouble() * 180000.0; // Random interval (5 to 8 mins) [43]
-            getProperties().set ("cameoState", state.get());
+            newState->nextCameoInterval = 300000.0 + randInit.nextDouble() * 180000.0; // Random interval (5 to 10 mins) [43]
+            getProperties().set ("cameoState", newState);
+            state = newState;
         }
         else
         {
@@ -223,7 +234,7 @@ void OledDisplay::paint (juce::Graphics& g)
         {
             int offset1 = 1 + ringIdx * 12;
             int offset2 = 1 + (ringIdx + 1) * 12;
-            for (int i = 0; i < 6; ++i)
+            for (int i = 0; i < 12; ++i) // FIXED: Connected all 12 nodes across entire circumference [43]
             {
                 // Horizontal ring connections
                 drawEdge (offset1 + i, offset1 + (i + 1) % 12);
@@ -270,6 +281,7 @@ void OledDisplay::paint (juce::Graphics& g)
                     state->triangles[i].lastTeleportTime = timeMs - (triRand.nextDouble() * 300.0);
                     state->triangles[i].currentPeriod = speeds[i];
                     state->triangles[i].colour = colors[i];
+                    state->triangles[i].isActive = (triRand.nextFloat() < 0.55f); // 55% active chance on start [43]
                 }
             }
 
@@ -288,20 +300,26 @@ void OledDisplay::paint (juce::Graphics& g)
                     // Randomly assign a new color and a new speed out of the palettes [43]
                     tri.currentPeriod = speeds[triRand.nextInt (4)];
                     tri.colour = colors[triRand.nextInt (4)];
+                    
+                    // Roll 55% chance of being active for this cycle, allowing 0-4 active triangles [43]
+                    tri.isActive = (triRand.nextFloat() < 0.55f);
                 }
 
-                // Smoothly oscillate flicker frequency depending on its active speed [43]
-                float frequencyFactor = static_cast<float> (500.0 / tri.currentPeriod);
-                float flicker = static_cast<float> (std::sin (timeMs * 0.05f * frequencyFactor)) * 0.4f + 0.6f;
+                if (tri.isActive)
+                {
+                    // Smoothly oscillate flicker frequency depending on its active speed [43]
+                    float frequencyFactor = static_cast<float> (500.0 / tri.currentPeriod);
+                    float flicker = static_cast<float> (std::sin (timeMs * 0.05f * frequencyFactor)) * 0.4f + 0.6f;
 
-                juce::Path triPath;
-                triPath.startNewSubPath (projectedPoints[tri.v1]);
-                triPath.lineTo (projectedPoints[tri.v2]);
-                triPath.lineTo (projectedPoints[tri.v3]);
-                triPath.closeSubPath();
+                    juce::Path triPath;
+                    triPath.startNewSubPath (projectedPoints[tri.v1]);
+                    triPath.lineTo (projectedPoints[tri.v2]);
+                    triPath.lineTo (projectedPoints[tri.v3]);
+                    triPath.closeSubPath();
 
-                g.setColour (tri.colour.withAlpha (0.28f * flicker));
-                g.fillPath (triPath);
+                    g.setColour (tri.colour.withAlpha (0.28f * flicker));
+                    g.fillPath (triPath);
+                }
             }
         }
 
