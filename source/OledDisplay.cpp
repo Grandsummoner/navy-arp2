@@ -76,8 +76,8 @@ void OledDisplay::timerCallback()
 void OledDisplay::paint (juce::Graphics& g)
 {
     auto bounds = getLocalBounds().toFloat();
-    float width = bounds.getWidth();   // Restored top-level width declaration [43]
-    float height = bounds.getHeight(); // Restored top-level height declaration [43]
+    float width = bounds.getWidth();   // Made globally visible in paint() [43]
+    float height = bounds.getHeight(); // Made globally visible in paint() [43]
 
     // 1. Fill Screen Background with flat, high-contrast obsidian black void [43]
     g.fillAll (juce::Colour (0xFF05070A));
@@ -127,11 +127,38 @@ void OledDisplay::paint (juce::Graphics& g)
     else
     {
         // =====================================================================
-        // MATH SETUP: DEEP GEODESIC 3D CONSTELLATION GLOBE [43]
+        // MATH & STATE SETUP: METADATA, MOTION, AND GLOBE CONFIGURATIONS [43]
         // =====================================================================
         float morphVal = *processor.apvts.getRawParameterValue (IDs::morph.getParamID());
-        const int activeStep = processor.currentStep.load();          // Made globally visible in the else-block [43]
-        const bool isPlaying = processor.isCurrentlyPlayingUI.load(); // Made globally visible in the else-block [43]
+        const int activeStep = processor.currentStep.load();          
+        const bool isPlaying = processor.isCurrentlyPlayingUI.load(); 
+
+        // Unified Metadata parsing at the top of the else-block to ensure scope safety [43]
+        int rootKeyIdx = juce::jlimit (0, 11, static_cast<int> (*processor.apvts.getRawParameterValue (IDs::rootKey.getParamID())));
+        juce::StringArray keys { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "Bb", "B" }, scales { "Major", "Natural Minor", "Pentatonic Minor", "Pentatonic Major", "Dorian", "Phrygian", "Lydian", "Mixolydian", "Harmonic Minor", "Melodic Minor" };
+        juce::String keyStr = keys[rootKeyIdx];
+
+        int scaleIdx = juce::jlimit (0, 9, static_cast<int> (*processor.apvts.getRawParameterValue (IDs::scaleType.getParamID())));
+        juce::String scaleStr = scales[scaleIdx];
+
+        bool isPolyActive = *processor.apvts.getRawParameterValue (IDs::poly.getParamID()) > 0.5f;
+        float currentHarmony = *processor.apvts.getRawParameterValue (IDs::harmony.getParamID());
+        juce::String voiceStr = "MONO";
+        if (isPolyActive)
+        {
+            if (currentHarmony >= 0.25f && currentHarmony < 0.5f) voiceStr = "DUO";
+            else if (currentHarmony >= 0.5f) voiceStr = "TRIAD";
+            else voiceStr = "MONO";
+        }
+
+        int rateIdx = juce::jlimit (0, 3, static_cast<int> (*processor.apvts.getRawParameterValue (IDs::rate.getParamID())));
+        juce::StringArray rates { "1/4", "1/8", "1/16", "1/32" };
+        juce::String rateStr = rates[rateIdx];
+
+        int rangeShift = static_cast<int> (*processor.apvts.getRawParameterValue (IDs::octaves.getParamID()));
+        juce::String octStr = (rangeShift >= 0 ? "+" : "") + juce::String (rangeShift);
+
+        juce::String metaText = "KEY: " + keyStr + " | SCALE: " + scaleStr + " | VOICE: " + voiceStr + " | RATE: " + rateStr + " | OCT: " + octStr;
 
         struct Point3D { float x, y, z; };
         std::vector<Point3D> vertices;
@@ -152,7 +179,6 @@ void OledDisplay::paint (juce::Graphics& g)
         vertices.push_back ({ 0.0f, -1.0f, 0.0f }); // Bottom pole (Index 61)
 
         // Calculate dynamic, parameter-driven spinning (Yaw) and tumbling (Pitch) physics [43]
-        int rateIdx = juce::jlimit (0, 3, static_cast<int> (*processor.apvts.getRawParameterValue (IDs::rate.getParamID())));
         float ratePct = static_cast<float> (rateIdx) / 3.0f; // 0.0 to 1.0 range
         float spinMultiplier = 0.2f + ratePct * 1.1f;        // Limits speed to exactly 0.2x to 1.3x [43]
         float yawSpeed = 0.00012f * spinMultiplier;
@@ -222,56 +248,74 @@ void OledDisplay::paint (juce::Graphics& g)
         juce::Colour nodeGlowColour = juce::Colour::fromString ("#FF00E1FF");                  // Electric Cyan Glow [43]
         juce::Colour nodeCoreColour = juce::Colour::fromString ("#FF80F3FF");                  // White/Cyan Core
 
-        // 1. Draw glowing, step-reactive facets (triangles) [43]
+        // 1. Draw step-reactive dynamic triangles [43]
         if (isPlaying && state != nullptr)
         {
-            double teleportPeriodA = 400.0; // Triangle 1 (Magenta) teleports every 400ms [43]
-            double teleportPeriodB = 600.0; // Triangle 2 (Orange) teleports every 600ms [43]
-            
             juce::Random triRand (static_cast<int64_t> (timeMs));
-            
-            // Triangle 1 Teleport & Flicker [43]
-            if (timeMs - state->lastTeleportTimeA >= teleportPeriodA)
+
+            juce::Colour colors[] = {
+                juce::Colour::fromString ("#FFFF3366"), // Coral Red / Neon Magenta [43]
+                juce::Colour::fromString ("#FFFF8D11"), // Sun Orange [43]
+                juce::Colour::fromString ("#FF00FF66"), // Emerald Green [43]
+                juce::Colour::fromString ("#FF0055FF")  // Sapphire Blue [43]
+            };
+            double speeds[] = { 533.0, 1200.0, 1600.0, 8000.0 }; // Multi-speed definitions [43]
+
+            // Initialize triangles on first play run [43]
+            if (! state->isInitialized)
             {
-                state->lastTeleportTimeA = timeMs;
-                state->tri1_v1 = triRand.nextInt (62);
-                state->tri1_v2 = (state->tri1_v1 + 1) % 62;
-                state->tri1_v3 = (state->tri1_v1 + 12) % 62;
+                state->isInitialized = true;
+                for (int i = 0; i < 4; ++i)
+                {
+                    state->triangles[i].v1 = triRand.nextInt (62);
+                    state->triangles[i].v2 = (state->triangles[i].v1 + 1) % 62;
+                    state->triangles[i].v3 = (state->triangles[i].v1 + 12) % 62;
+                    state->triangles[i].lastTeleportTime = timeMs - (triRand.nextDouble() * 300.0);
+                    state->triangles[i].currentPeriod = speeds[i];
+                    state->triangles[i].colour = colors[i];
+                    state->triangles[i].isActive = (triRand.nextFloat() < 0.55f); // 55% active chance on start [43]
+                }
             }
-            
-            // Triangle 2 Teleport & Flicker [43]
-            if (timeMs - state->lastTeleportTimeB >= teleportPeriodB)
+
+            for (int i = 0; i < 4; ++i)
             {
-                state->lastTeleportTimeB = timeMs;
-                state->tri2_v1 = triRand.nextInt (62);
-                state->tri2_v2 = (state->tri2_v1 + 1) % 62;
-                state->tri2_v3 = (state->tri2_v1 + 12) % 62;
+                auto& tri = state->triangles[i];
+
+                // Teleport when the current randomized period has elapsed [43]
+                if (timeMs - tri.lastTeleportTime >= tri.currentPeriod)
+                {
+                    tri.lastTeleportTime = timeMs;
+                    tri.v1 = triRand.nextInt (62);
+                    tri.v2 = (tri.v1 + 1) % 62;
+                    tri.v3 = (tri.v1 + 12) % 62;
+
+                    // Randomly assign a new color and a new speed out of the palettes [43]
+                    tri.currentPeriod = speeds[triRand.nextInt (4)];
+                    tri.colour = colors[triRand.nextInt (4)];
+                    
+                    // Roll 55% chance of being active for this cycle, allowing 0-4 active triangles [43]
+                    tri.isActive = (triRand.nextFloat() < 0.55f);
+                }
+
+                if (tri.isActive)
+                {
+                    // Smoothly oscillate flicker frequency depending on its active speed [43]
+                    float frequencyFactor = static_cast<float> (500.0 / tri.currentPeriod);
+                    float flicker = static_cast<float> (std::sin (timeMs * 0.05f * frequencyFactor)) * 0.4f + 0.6f;
+
+                    juce::Path triPath;
+                    triPath.startNewSubPath (projectedPoints[tri.v1]);
+                    triPath.lineTo (projectedPoints[tri.v2]);
+                    triPath.lineTo (projectedPoints[tri.v3]);
+                    triPath.closeSubPath();
+
+                    g.setColour (tri.colour.withAlpha (0.28f * flicker));
+                    g.fillPath (triPath);
+                }
             }
-            
-            // Calculate high-frequency flicker (12Hz and 15Hz modulator waves) [43]
-            float flickerA = static_cast<float> (std::sin (timeMs * 0.075)) * 0.4f + 0.6f;
-            float flickerB = static_cast<float> (std::sin (timeMs * 0.095)) * 0.4f + 0.6f;
-            
-            // Draw Triangle 1 (Cyberpunk Coral Red / Neon Magenta) [43]
-            juce::Path path1;
-            path1.startNewSubPath (projectedPoints[state->tri1_v1]);
-            path1.lineTo (projectedPoints[state->tri1_v2]);
-            path1.lineTo (projectedPoints[state->tri1_v3]);
-            path1.closeSubPath();
-            g.setColour (juce::Colour::fromString ("#FFFF3366").withAlpha (0.28f * flickerA));
-            g.fillPath (path1);
-            
-            // Draw Triangle 2 (Sun Orange) [43]
-            juce::Path path2;
-            path2.startNewSubPath (projectedPoints[state->tri2_v1]);
-            path2.lineTo (projectedPoints[state->tri2_v2]);
-            path2.lineTo (projectedPoints[state->tri2_v3]);
-            path2.closeSubPath();
-            g.setColour (juce::Colour::fromString ("#FFFF8D11").withAlpha (0.28f * flickerB));
-            g.fillPath (path2);
         }
 
-        // Draw active glowing star nodes, modulated in vertical waves by the 8 LFOs! [43]
+        // 2. Draw active glowing star nodes, modulated in vertical waves by the 8 LFOs! [43]
         if (state != nullptr)
         {
             for (size_t i = 0; i < projectedPoints.size(); ++i)
@@ -314,7 +358,7 @@ void OledDisplay::paint (juce::Graphics& g)
             }
         }
 
-        // Draw wireframe connection lines (Intricate 276-line geodesic mesh) [43]
+        // 3. Draw wireframe connection lines (Symmetrical 276-line geodesic mesh) [43]
         g.setColour (lineColour);
         auto drawEdge = [&](int idx1, int idx2)
         {
@@ -326,7 +370,7 @@ void OledDisplay::paint (juce::Graphics& g)
         {
             int offset1 = 1 + ringIdx * 12;
             int offset2 = 1 + (ringIdx + 1) * 12;
-            for (int i = 0; i < 12; ++i) // FIXED: Connected all 12 nodes across entire circumference [43]
+            for (int i = 0; i < 12; ++i) // FIXED: Symmetrically connected all 12 nodes [43]
             {
                 // Horizontal ring connections
                 drawEdge (offset1 + i, offset1 + (i + 1) % 12);
@@ -456,7 +500,7 @@ void OledDisplay::paint (juce::Graphics& g)
         displayArea.removeFromTop (3.0f);
 
         // Fetch scale, root key, voice, rates, and octaves choices dynamically from the APVTS parameters
-        // Corrected reuse of the outer rateIdx variable to prevent duplicate redefinition crashes [43]
+        // Reused rateIdx safely from the top declaration to prevent multiple redefinition crashes [43]
         rateIdx = juce::jlimit (0, 3, static_cast<int> (*processor.apvts.getRawParameterValue (IDs::rate.getParamID())));
         juce::StringArray rates { "1/4", "1/8", "1/16", "1/32" };
         juce::String rateStr = rates[rateIdx];
