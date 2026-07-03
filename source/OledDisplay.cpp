@@ -2,34 +2,6 @@
 #include "PluginProcessor.h"
 #include "AppTheme.h"
 
-// =====================================================================
-// PERSISTENT INSTANCE-SAFE STATE CONTAINER (ZERO HEADER OVERHEAD) [43]
-// =====================================================================
-class CameoState : public juce::DynamicObject
-{
-public:
-    struct ActiveCameo
-    {
-        int type = 0;              // 0 = Voyager, 1 = James Webb, 2 = Cartoon UFO
-        float startX = 0.0f, startY = 0.0f;
-        float targetX = 0.0f, targetY = 0.0f;
-        double startTimeMs = 0.0;
-        double durationMs = 0.0;   // Flight duration
-        int trajectoryPattern = 0; // 0 = Straight, 1 = Massive Arc, 2 = Zig-Zag
-        float arcAmplitude = 0.0f;
-    };
-    
-    std::vector<ActiveCameo> activeCameos;
-    double lastCameoTriggerTime = 0.0;
-    double nextCameoInterval = 300000.0; // 5 minutes minimum (300,000 ms) [43]
-
-    // Persistent vertex indices for the teleporting triangles [43]
-    int tri1_v1 = 0,  tri1_v2 = 1,  tri1_v3 = 12;
-    int tri2_v1 = 15, tri2_v2 = 16, tri2_v3 = 28;
-    double lastTeleportTimeA = 0.0;
-    double lastTeleportTimeB = 0.0;
-};
-
 OledDisplay::OledDisplay (PluginProcessor& p)
     : processor (p)
 {
@@ -69,6 +41,8 @@ void OledDisplay::timerCallback()
 void OledDisplay::paint (juce::Graphics& g)
 {
     auto bounds = getLocalBounds().toFloat();
+    float width = bounds.getWidth();   // Restored top-level width declaration [43]
+    float height = bounds.getHeight(); // Restored top-level height declaration [43]
 
     // 1. Fill Screen Background with flat, high-contrast obsidian black void [43]
     g.fillAll (juce::Colour (0xFF05070A));
@@ -121,6 +95,8 @@ void OledDisplay::paint (juce::Graphics& g)
         // MATH SETUP: DEEP GEODESIC 3D CONSTELLATION GLOBE [43]
         // =====================================================================
         float morphVal = *processor.apvts.getRawParameterValue (IDs::morph.getParamID());
+        const int activeStep = processor.currentStep.load();          // Made globally visible in the else-block [43]
+        const bool isPlaying = processor.isCurrentlyPlayingUI.load(); // Made globally visible in the else-block [43]
 
         struct Point3D { float x, y, z; };
         std::vector<Point3D> vertices;
@@ -175,6 +151,15 @@ void OledDisplay::paint (juce::Graphics& g)
         }
 
         // =====================================================================
+        // RENDER: LAYER 2 - BACKGROUND DENSE 3D GLOBE (276 lines) [43]
+        // =====================================================================
+        // Neon Palette colors derived from your visual reference
+        juce::Colour lineColour      = juce::Colour::fromString ("#FF0066FF").withAlpha (0.35f); // High-contrast Cobalt Blue [43]
+        juce::Colour nodeGlowColour  = juce::Colour::fromString ("#FF00E1FF");                  // Electric Cyan Glow [43]
+        juce::Colour nodeCoreColour  = juce::Colour::fromString ("#FF80F3FF");                  // White/Cyan Core
+        juce::Colour triangleColour  = juce::Colour::fromString ("#FFFF3366").withAlpha (0.25f); // Cyberpunk Coral Red [43]
+
+        // =====================================================================
         // LOAD PERSISTENT INSTANCE-SAFE CAMEO DATA [43]
         // =====================================================================
         auto* cameoVar = getProperties().getVarPointer ("cameoState");
@@ -194,48 +179,7 @@ void OledDisplay::paint (juce::Graphics& g)
             state = dynamic_cast<CameoState*> (cameoVar->getObject());
         }
 
-        // =====================================================================
-        // RENDER: LAYER 2 - BACKGROUND DENSE 3D GLOBE (276 lines) [43]
-        // =====================================================================
-        juce::Colour lineColour     = juce::Colour::fromString ("#FF0066FF").withAlpha (0.35f); // High-contrast Cobalt Blue [43]
-        juce::Colour nodeGlowColour = juce::Colour::fromString ("#FF00E1FF");                  // Electric Cyan Glow [43]
-        juce::Colour nodeCoreColour = juce::Colour::fromString ("#FF80F3FF");                  // White/Cyan Core
-
-        // Draw wireframe connection lines (Intricate 276-line geodesic mesh) [43]
-        g.setColour (lineColour);
-        auto drawEdge = [&](int idx1, int idx2)
-        {
-            g.drawLine (projectedPoints[idx1].x, projectedPoints[idx1].y,
-                        projectedPoints[idx2].x, projectedPoints[idx2].y, 0.75f);
-        };
-        for (int i = 1; i <= 12; ++i) drawEdge (0, i); // Top pole to first ring
-        for (int ringIdx = 0; ringIdx < 4; ++ringIdx)
-        {
-            int offset1 = 1 + ringIdx * 12;
-            int offset2 = 1 + (ringIdx + 1) * 12;
-            for (int i = 0; i < 12; ++i)
-            {
-                // Horizontal ring connections
-                drawEdge (offset1 + i, offset1 + (i + 1) % 12);
-                
-                // Vertical bridging lines
-                drawEdge (offset1 + i, offset2 + i);
-                
-                // Diagonal cross connections to increase geometric density to 276 lines [43]
-                drawEdge (offset1 + i, offset2 + (i + 1) % 12);
-                drawEdge (offset1 + (i + 1) % 12, offset2 + i);
-            }
-        }
-        int offset5 = 49;
-        for (int i = 0; i < 12; ++i)
-        {
-            drawEdge (offset5 + i, offset5 + (i + 1) % 12);
-            drawEdge (offset5 + i, 61); // Bottom pole to ring 5
-        }
-
-        // =====================================================================
-        // RENDER: STEP-REACTIVE TELEPORTING & FLICKERING TRIANGLES [43]
-        // =====================================================================
+        // 1. Draw glowing, step-reactive facets (triangles) [43]
         if (isPlaying)
         {
             double teleportPeriodA = 400.0; // Triangle 1 (Magenta) teleports every 400ms [43]
@@ -284,7 +228,39 @@ void OledDisplay::paint (juce::Graphics& g)
             g.fillPath (path2);
         }
 
-        // Draw active glowing star nodes, modulated in vertical waves by the 8 LFOs! [43]
+        // 2. Draw wireframe connection lines (Intricate 276-line geodesic mesh) [43]
+        g.setColour (lineColour);
+        auto drawEdge = [&](int idx1, int idx2)
+        {
+            g.drawLine (projectedPoints[idx1].x, projectedPoints[idx1].y,
+                        projectedPoints[idx2].x, projectedPoints[idx2].y, 0.75f);
+        };
+        for (int i = 1; i <= 12; ++i) drawEdge (0, i); // Top pole to first ring
+        for (int ringIdx = 0; ringIdx < 4; ++ringIdx)
+        {
+            int offset1 = 1 + ringIdx * 12;
+            int offset2 = 1 + (ringIdx + 1) * 12;
+            for (int i = 0; i < 12; ++i)
+            {
+                // Horizontal ring connections
+                drawEdge (offset1 + i, offset1 + (i + 1) % 12);
+                
+                // Vertical bridging lines
+                drawEdge (offset1 + i, offset2 + i);
+                
+                // Diagonal cross connections to increase geometric density to 276 lines [43]
+                drawEdge (offset1 + i, offset2 + (i + 1) % 12);
+                drawEdge (offset1 + (i + 1) % 12, offset2 + i);
+            }
+        }
+        int offset5 = 49;
+        for (int i = 0; i < 12; ++i)
+        {
+            drawEdge (offset5 + i, offset5 + (i + 1) % 12);
+            drawEdge (offset5 + i, 61); // Bottom pole to ring 5
+        }
+
+        // 3. Draw active glowing star nodes, modulated in vertical waves by the 8 LFOs! [43]
         for (size_t i = 0; i < projectedPoints.size(); ++i)
         {
             float nodeAlpha = 0.40f; // Default baseline brightness
@@ -333,10 +309,8 @@ void OledDisplay::paint (juce::Graphics& g)
             state->lastCameoTriggerTime = timeMs;
             
             juce::Random randEngine;
-            // Unpredictable next interval (minimum 5 mins / 300,000 ms) [43]
             state->nextCameoInterval = 300000.0 + randEngine.nextDouble() * 180000.0; // 5 to 8 mins
             
-            // Roll chance to spawn single or double cameos [43]
             int spawnCount = (randEngine.nextFloat() < 0.20f) ? 2 : 1; 
             for (int k = 0; k < spawnCount; ++k)
             {
@@ -347,7 +321,6 @@ void OledDisplay::paint (juce::Graphics& g)
                 cameo.trajectoryPattern = randEngine.nextInt (3); // 0 = Straight, 1 = Arc, 2 = Jitter
                 cameo.arcAmplitude = 15.0f + randEngine.nextFloat() * 25.0f;
                 
-                // Randomized start and exit boundaries [43]
                 cameo.startX = (k == 1 || randEngine.nextBool()) ? -30.0f : (width + 30.0f);
                 cameo.targetX = (cameo.startX < 0.0f) ? (width + 30.0f) : -30.0f;
                 cameo.startY = displayArea.getY() + randEngine.nextFloat() * displayArea.getHeight() * 0.7f;
@@ -369,11 +342,9 @@ void OledDisplay::paint (juce::Graphics& g)
             }
             else
             {
-                // Interpolate real-time vector coordinates [43]
                 float camX = it->startX + (it->targetX - it->startX) * progress;
                 float camY = it->startY + (it->targetY - it->startY) * progress;
 
-                // Apply custom vertical trajectory modifiers [43]
                 if (it->trajectoryPattern == 1) // Massive Arc [43]
                 {
                     camY -= std::sin (progress * juce::MathConstants<float>::pi) * it->arcAmplitude;
@@ -427,7 +398,7 @@ void OledDisplay::paint (juce::Graphics& g)
         }
 
         // =====================================================================
-        // RENDER: HIGHLIGHTS & TITLE HEADERS
+        // RENDER: HIGHLIGHTS, HEADERS, AND LABELS
         // =====================================================================
         g.setColour (juce::Colours::white);
         g.setFont (juce::FontOptions (12.0f, juce::Font::bold));
