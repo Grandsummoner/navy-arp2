@@ -2,6 +2,34 @@
 #include "PluginProcessor.h"
 #include "AppTheme.h"
 
+// =====================================================================
+// PERSISTENT INSTANCE-SAFE STATE CONTAINER (ZERO HEADER OVERHEAD) [43]
+// =====================================================================
+class CameoState : public juce::ReferenceCountedObject
+{
+public:
+    struct ActiveCameo
+    {
+        int type = 0;              // 0 = Voyager, 1 = James Webb, 2 = Cartoon UFO
+        float startX = 0.0f, startY = 0.0f;
+        float targetX = 0.0f, targetY = 0.0f;
+        double startTimeMs = 0.0;
+        double durationMs = 0.0;   // Flight duration
+        int trajectoryPattern = 0; // 0 = Straight, 1 = Arc, 2 = Jitter
+        float arcAmplitude = 0.0f;
+    };
+    
+    std::vector<ActiveCameo> activeCameos;
+    double lastCameoTriggerTime = 0.0;
+    double nextCameoInterval = 300000.0; // 5 minutes minimum (300,000 ms) [43]
+
+    // Persistent vertex indices for the teleporting triangles [43]
+    int tri1_v1 = 0,  tri1_v2 = 1,  tri1_v3 = 12;
+    int tri2_v1 = 15, tri2_v2 = 16, tri2_v3 = 28;
+    double lastTeleportTimeA = 0.0;
+    double lastTeleportTimeB = 0.0;
+};
+
 OledDisplay::OledDisplay (PluginProcessor& p)
     : processor (p)
 {
@@ -151,36 +179,69 @@ void OledDisplay::paint (juce::Graphics& g)
         }
 
         // =====================================================================
-        // RENDER: LAYER 2 - BACKGROUND DENSE 3D GLOBE (276 lines) [43]
-        // =====================================================================
-        // Neon Palette colors derived from your visual reference
-        juce::Colour lineColour      = juce::Colour::fromString ("#FF0066FF").withAlpha (0.35f); // High-contrast Cobalt Blue [43]
-        juce::Colour nodeGlowColour  = juce::Colour::fromString ("#FF00E1FF");                  // Electric Cyan Glow [43]
-        juce::Colour nodeCoreColour  = juce::Colour::fromString ("#FF80F3FF");                  // White/Cyan Core
-        juce::Colour triangleColour  = juce::Colour::fromString ("#FFFF3366").withAlpha (0.25f); // Cyberpunk Coral Red [43]
-
-        // =====================================================================
         // LOAD PERSISTENT INSTANCE-SAFE CAMEO DATA [43]
         // =====================================================================
         auto* cameoVar = getProperties().getVarPointer ("cameoState");
-        juce::ReferenceCountedObjectPtr<CameoState> state;
+        CameoState* state = nullptr; // Bypassed ReferenceCountedObjectPtr template for MSVC [43]
 
         if (cameoVar == nullptr || cameoVar->getObject() == nullptr)
         {
-            state = new CameoState();
-            state->lastCameoTriggerTime = timeMs;
+            auto* newState = new CameoState();
+            newState->lastCameoTriggerTime = timeMs;
             
             juce::Random randInit;
-            state->nextCameoInterval = 300000.0 + randInit.nextDouble() * 300000.0; // Random interval (5 to 10 mins) [43]
-            getProperties().set ("cameoState", state.get());
+            newState->nextCameoInterval = 300000.0 + randInit.nextDouble() * 300000.0; // Random interval (5 to 10 mins) [43]
+            getProperties().set ("cameoState", newState);
+            state = newState;
         }
         else
         {
             state = dynamic_cast<CameoState*> (cameoVar->getObject());
         }
 
-        // 1. Draw glowing, step-reactive facets (triangles) [43]
-        if (isPlaying)
+        // =====================================================================
+        // RENDER: LAYER 2 - BACKGROUND DENSE 3D GLOBE (276 lines) [43]
+        // =====================================================================
+        juce::Colour lineColour     = juce::Colour::fromString ("#FF0066FF").withAlpha (0.35f); // High-contrast Cobalt Blue [43]
+        juce::Colour nodeGlowColour = juce::Colour::fromString ("#FF00E1FF");                  // Electric Cyan Glow [43]
+        juce::Colour nodeCoreColour = juce::Colour::fromString ("#FF80F3FF");                  // White/Cyan Core
+
+        // Draw wireframe connection lines (Intricate 276-line geodesic mesh) [43]
+        g.setColour (lineColour);
+        auto drawEdge = [&](int idx1, int idx2)
+        {
+            g.drawLine (projectedPoints[idx1].x, projectedPoints[idx1].y,
+                        projectedPoints[idx2].x, projectedPoints[idx2].y, 0.75f);
+        };
+        for (int i = 1; i <= 12; ++i) drawEdge (0, i); // Top pole to first ring
+        for (int ringIdx = 0; ringIdx < 4; ++ringIdx)
+        {
+            int offset1 = 1 + ringIdx * 12;
+            int offset2 = 1 + (ringIdx + 1) * 12;
+            for (int i = 0; i < 6; ++i)
+            {
+                // Horizontal ring connections
+                drawEdge (offset1 + i, offset1 + (i + 1) % 12);
+                
+                // Vertical bridging lines
+                drawEdge (offset1 + i, offset2 + i);
+                
+                // Diagonal cross connections to increase geometric density to 276 lines [43]
+                drawEdge (offset1 + i, offset2 + (i + 1) % 12);
+                drawEdge (offset1 + (i + 1) % 12, offset2 + i);
+            }
+        }
+        int offset5 = 49;
+        for (int i = 0; i < 12; ++i)
+        {
+            drawEdge (offset5 + i, offset5 + (i + 1) % 12);
+            drawEdge (offset5 + i, 61); // Bottom pole to ring 5
+        }
+
+        // =====================================================================
+        // RENDER: STEP-REACTIVE TELEPORTING & FLICKERING TRIANGLES [43]
+        // =====================================================================
+        if (isPlaying && state != nullptr)
         {
             double teleportPeriodA = 400.0; // Triangle 1 (Magenta) teleports every 400ms [43]
             double teleportPeriodB = 600.0; // Triangle 2 (Orange) teleports every 600ms [43]
@@ -228,172 +289,146 @@ void OledDisplay::paint (juce::Graphics& g)
             g.fillPath (path2);
         }
 
-        // 2. Draw wireframe connection lines (Intricate 276-line geodesic mesh) [43]
-        g.setColour (lineColour);
-        auto drawEdge = [&](int idx1, int idx2)
+        // Draw active glowing star nodes, modulated in vertical waves by the 8 LFOs! [43]
+        if (state != nullptr)
         {
-            g.drawLine (projectedPoints[idx1].x, projectedPoints[idx1].y,
-                        projectedPoints[idx2].x, projectedPoints[idx2].y, 0.75f);
-        };
-        for (int i = 1; i <= 12; ++i) drawEdge (0, i); // Top pole to first ring
-        for (int ringIdx = 0; ringIdx < 4; ++ringIdx)
-        {
-            int offset1 = 1 + ringIdx * 12;
-            int offset2 = 1 + (ringIdx + 1) * 12;
-            for (int i = 0; i < 12; ++i)
+            for (size_t i = 0; i < projectedPoints.size(); ++i)
             {
-                // Horizontal ring connections
-                drawEdge (offset1 + i, offset1 + (i + 1) % 12);
+                float nodeAlpha = 0.40f; // Default baseline brightness
                 
-                // Vertical bridging lines
-                drawEdge (offset1 + i, offset2 + i);
-                
-                // Diagonal cross connections to increase geometric density to 276 lines [43]
-                drawEdge (offset1 + i, offset2 + (i + 1) % 12);
-                drawEdge (offset1 + (i + 1) % 12, offset2 + i);
-            }
-        }
-        int offset5 = 49;
-        for (int i = 0; i < 12; ++i)
-        {
-            drawEdge (offset5 + i, offset5 + (i + 1) % 12);
-            drawEdge (offset5 + i, 61); // Bottom pole to ring 5
-        }
+                // Map rings of the globe to different LFOs [43]
+                int lfoIdx = -1;
+                if (i == 0 || i == 61) lfoIdx = 0;       // Poles -> Morph LFO (LFO 0)
+                else if (i >= 1 && i <= 12) lfoIdx = 1;   // Ring 1 -> Rest LFO (LFO 1)
+                else if (i >= 13 && i <= 24) lfoIdx = 2;  // Ring 2 -> Legato LFO (LFO 2)
+                else if (i >= 25 && i <= 36) lfoIdx = 3;  // Ring 3 -> Rate LFO (LFO 3)
+                else if (i >= 37 && i <= 48) lfoIdx = 4;  // Ring 4 -> Entropy LFO (LFO 4)
+                else if (i >= 49 && i <= 60) lfoIdx = 5;  // Ring 5 -> Harmony LFO (LFO 5)
 
-        // 3. Draw active glowing star nodes, modulated in vertical waves by the 8 LFOs! [43]
-        for (size_t i = 0; i < projectedPoints.size(); ++i)
-        {
-            float nodeAlpha = 0.40f; // Default baseline brightness
-            
-            // Map rings of the globe to different LFOs [43]
-            int lfoIdx = -1;
-            if (i == 0 || i == 61) lfoIdx = 0;       // Poles -> Morph LFO (LFO 0)
-            else if (i >= 1 && i <= 12) lfoIdx = 1;   // Ring 1 -> Rest LFO (LFO 1)
-            else if (i >= 13 && i <= 24) lfoIdx = 2;  // Ring 2 -> Legato LFO (LFO 2)
-            else if (i >= 25 && i <= 36) lfoIdx = 3;  // Ring 3 -> Rate LFO (LFO 3)
-            else if (i >= 37 && i <= 48) lfoIdx = 4;  // Ring 4 -> Entropy LFO (LFO 4)
-            else if (i >= 49 && i <= 60) lfoIdx = 5;  // Ring 5 -> Harmony LFO (LFO 5)
-
-            if (lfoIdx != -1)
-            {
-                auto* ratePtr = processor.lfoRatePtrs[lfoIdx];
-                auto* depthPtr = processor.lfoDepthPtrs[lfoIdx];
-                if (ratePtr != nullptr && depthPtr != nullptr)
+                if (lfoIdx != -1)
                 {
-                    int rateChoice = static_cast<int> (ratePtr->load());
-                    float depth = depthPtr->load();
-                    if (rateChoice > 0 && depth > 0.02f)
+                    auto* ratePtr = processor.lfoRatePtrs[lfoIdx];
+                    auto* depthPtr = processor.lfoDepthPtrs[lfoIdx];
+                    if (ratePtr != nullptr && depthPtr != nullptr)
                     {
-                        double currentPhase = processor.lfoPhases[lfoIdx];
-                        float mod = static_cast<float> (std::sin (currentPhase * juce::MathConstants<double>::twoPi)) * depth * 0.5f + 0.5f;
-                        nodeAlpha = juce::jlimit (0.15f, 1.0f, nodeAlpha + mod * 0.6f);
+                        int rateChoice = static_cast<int> (ratePtr->load());
+                        float depth = depthPtr->load();
+                        if (rateChoice > 0 && depth > 0.02f)
+                        {
+                            double currentPhase = processor.lfoPhases[lfoIdx];
+                            float mod = static_cast<float> (std::sin (currentPhase * juce::MathConstants<double>::twoPi)) * depth * 0.5f + 0.5f;
+                            nodeAlpha = juce::jlimit (0.15f, 1.0f, nodeAlpha + mod * 0.6f);
+                        }
                     }
                 }
+
+                // Draw Level 2: Outer Cyan Glow [43]
+                g.setColour (nodeGlowColour.withAlpha (nodeAlpha * 0.7f));
+                g.fillEllipse (projectedPoints[i].x - 2.5f, projectedPoints[i].y - 2.5f, 5.0f, 5.0f);
+
+                // Draw Level 1: Bright White/Cyan Core [43]
+                g.setColour (nodeCoreColour.withAlpha (nodeAlpha));
+                g.fillEllipse (projectedPoints[i].x - 1.0f, projectedPoints[i].y - 1.0f, 2.0f, 2.0f);
             }
-
-            // Draw Level 2: Outer Cyan Glow [43]
-            g.setColour (nodeGlowColour.withAlpha (nodeAlpha * 0.7f));
-            g.fillEllipse (projectedPoints[i].x - 2.5f, projectedPoints[i].y - 2.5f, 5.0f, 5.0f);
-
-            // Draw Level 1: Bright White/Cyan Core [43]
-            g.setColour (nodeCoreColour.withAlpha (nodeAlpha));
-            g.fillEllipse (projectedPoints[i].x - 1.0f, projectedPoints[i].y - 1.0f, 2.0f, 2.0f);
         }
 
         // =====================================================================
         // RENDER: ACTIVE SPACE CAMEOS (VECTORS & TRAJECTORIES) [43]
         // =====================================================================
-        // 1. Spawning / Scheduling Engine
-        if (timeMs - state->lastCameoTriggerTime >= state->nextCameoInterval)
+        if (state != nullptr)
         {
-            state->lastCameoTriggerTime = timeMs;
-            
-            juce::Random randEngine;
-            state->nextCameoInterval = 300000.0 + randEngine.nextDouble() * 180000.0; // 5 to 8 mins
-            
-            int spawnCount = (randEngine.nextFloat() < 0.20f) ? 2 : 1; 
-            for (int k = 0; k < spawnCount; ++k)
+            // 1. Spawning / Scheduling Engine
+            if (timeMs - state->lastCameoTriggerTime >= state->nextCameoInterval)
             {
-                CameoState::ActiveCameo cameo;
-                cameo.type = randEngine.nextInt (3); // 0 = Voyager, 1 = Webb, 2 = UFO
-                cameo.startTimeMs = timeMs;
-                cameo.durationMs = 5000.0 + randEngine.nextDouble() * 7000.0; // 5 to 12 second flight speeds [43]
-                cameo.trajectoryPattern = randEngine.nextInt (3); // 0 = Straight, 1 = Arc, 2 = Jitter
-                cameo.arcAmplitude = 15.0f + randEngine.nextFloat() * 25.0f;
+                state->lastCameoTriggerTime = timeMs;
                 
-                cameo.startX = (k == 1 || randEngine.nextBool()) ? -30.0f : (width + 30.0f);
-                cameo.targetX = (cameo.startX < 0.0f) ? (width + 30.0f) : -30.0f;
-                cameo.startY = displayArea.getY() + randEngine.nextFloat() * displayArea.getHeight() * 0.7f;
-                cameo.targetY = displayArea.getY() + randEngine.nextFloat() * displayArea.getHeight() * 0.7f;
+                juce::Random randEngine;
+                state->nextCameoInterval = 300000.0 + randEngine.nextDouble() * 180000.0; // 5 to 8 mins [43]
                 
-                state->activeCameos.push_back (cameo);
+                int spawnCount = (randEngine.nextFloat() < 0.20f) ? 2 : 1; 
+                for (int k = 0; k < spawnCount; ++k)
+                {
+                    CameoState::ActiveCameo cameo;
+                    cameo.type = randEngine.nextInt (3); // 0 = Voyager, 1 = Webb, 2 = UFO
+                    cameo.startTimeMs = timeMs;
+                    cameo.durationMs = 5000.0 + randEngine.nextDouble() * 7000.0; // 5 to 12 second flight speeds [43]
+                    cameo.trajectoryPattern = randEngine.nextInt (3); // 0 = Straight, 1 = Arc, 2 = Jitter
+                    cameo.arcAmplitude = 15.0f + randEngine.nextFloat() * 25.0f;
+                    
+                    cameo.startX = (k == 1 || randEngine.nextBool()) ? -30.0f : (width + 30.0f);
+                    cameo.targetX = (cameo.startX < 0.0f) ? (width + 30.0f) : -30.0f;
+                    cameo.startY = displayArea.getY() + randEngine.nextFloat() * displayArea.getHeight() * 0.7f;
+                    cameo.targetY = displayArea.getY() + randEngine.nextFloat() * displayArea.getHeight() * 0.7f;
+                    
+                    state->activeCameos.push_back (cameo);
+                }
             }
-        }
 
-        // 2. Flight Math and Rendering [43]
-        for (auto it = state->activeCameos.begin(); it != state->activeCameos.end();)
-        {
-            double elapsed = timeMs - it->startTimeMs;
-            float progress = static_cast<float> (elapsed / it->durationMs);
-
-            if (progress >= 1.0f)
+            // 2. Flight Math and Rendering [43]
+            for (auto it = state->activeCameos.begin(); it != state->activeCameos.end();)
             {
-                it = state->activeCameos.erase (it); // Safely delete completed cameo to free memory [43]
-            }
-            else
-            {
-                float camX = it->startX + (it->targetX - it->startX) * progress;
-                float camY = it->startY + (it->targetY - it->startY) * progress;
+                double elapsed = timeMs - it->startTimeMs;
+                float progress = static_cast<float> (elapsed / it->durationMs);
 
-                if (it->trajectoryPattern == 1) // Massive Arc [43]
+                if (progress >= 1.0f)
                 {
-                    camY -= std::sin (progress * juce::MathConstants<float>::pi) * it->arcAmplitude;
+                    it = state->activeCameos.erase (it); // Safely delete completed cameo to free memory [43]
                 }
-                else if (it->trajectoryPattern == 2) // Erratic Jitter/Zig-Zag [43]
+                else
                 {
-                    camY += std::sin (progress * juce::MathConstants<float>::pi * 6.0f) * 8.0f;
-                }
+                    float camX = it->startX + (it->targetX - it->startX) * progress;
+                    float camY = it->startY + (it->targetY - it->startY) * progress;
 
-                // Render vector-line glyphs [43]
-                if (it->type == 0) // Voyager MK II [43]
-                {
-                    g.setColour (juce::Colours::lightgrey.withAlpha (0.75f));
-                    g.drawLine (camX - 10.0f, camY + 4.0f, camX + 10.0f, camY - 4.0f, 0.75f);
-                    g.setColour (juce::Colours::white.withAlpha (0.90f));
-                    g.fillEllipse (camX - 4.0f, camY - 4.0f, 8.0f, 8.0f);
-                    g.setColour (juce::Colour (0xFF05070A));
-                    g.fillEllipse (camX - 2.5f, camY - 2.5f, 5.0f, 5.0f);
-                    g.setColour (juce::Colours::white);
-                    g.drawLine (camX, camY, camX + 6.0f, camY - 6.0f, 1.25f);
-                }
-                else if (it->type == 1) // James Webb Space Telescope [43]
-                {
-                    juce::Path shieldPath;
-                    shieldPath.startNewSubPath (camX - 12.0f, camY + 2.0f);
-                    shieldPath.lineTo (camX, camY - 5.0f);
-                    shieldPath.lineTo (camX + 12.0f, camY + 2.0f);
-                    shieldPath.lineTo (camX, camY + 6.0f);
-                    shieldPath.closeSubPath();
-                    g.setColour (juce::Colours::grey.withAlpha (0.55f));
-                    g.fillPath (shieldPath);
+                    if (it->trajectoryPattern == 1) // Massive Arc [43]
+                    {
+                        camY -= std::sin (progress * juce::MathConstants<float>::pi) * it->arcAmplitude;
+                    }
+                    else if (it->trajectoryPattern == 2) // Erratic Jitter/Zig-Zag [43]
+                    {
+                        camY += std::sin (progress * juce::MathConstants<float>::pi * 6.0f) * 8.0f;
+                    }
 
-                    g.setColour (juce::Colour (0xFFFFB300).withAlpha (0.90f)); // Gold mirrors [43]
-                    g.fillEllipse (camX - 3.5f, camY - 3.0f, 7.0f, 6.0f);
-                    g.setColour (juce::Colours::white.withAlpha (0.6f));
-                    g.drawEllipse (camX - 3.5f, camY - 3.0f, 7.0f, 6.0f, 0.75f);
+                    // Render vector-line glyphs [43]
+                    if (it->type == 0) // Voyager MK II [43]
+                    {
+                        g.setColour (juce::Colours::lightgrey.withAlpha (0.75f));
+                        g.drawLine (camX - 10.0f, camY + 4.0f, camX + 10.0f, camY - 4.0f, 0.75f);
+                        g.setColour (juce::Colours::white.withAlpha (0.90f));
+                        g.fillEllipse (camX - 4.0f, camY - 4.0f, 8.0f, 8.0f);
+                        g.setColour (juce::Colour (0xFF05070A));
+                        g.fillEllipse (camX - 2.5f, camY - 2.5f, 5.0f, 5.0f);
+                        g.setColour (juce::Colours::white);
+                        g.drawLine (camX, camY, camX + 6.0f, camY - 6.0f, 1.25f);
+                    }
+                    else if (it->type == 1) // James Webb Space Telescope [43]
+                    {
+                        juce::Path shieldPath;
+                        shieldPath.startNewSubPath (camX - 12.0f, camY + 2.0f);
+                        shieldPath.lineTo (camX, camY - 5.0f);
+                        shieldPath.lineTo (camX + 12.0f, camY + 2.0f);
+                        shieldPath.lineTo (camX, camY + 6.0f);
+                        shieldPath.closeSubPath();
+                        g.setColour (juce::Colours::grey.withAlpha (0.55f));
+                        g.fillPath (shieldPath);
+
+                        g.setColour (juce::Colour (0xFFFFB300).withAlpha (0.90f)); // Gold mirrors [43]
+                        g.fillEllipse (camX - 3.5f, camY - 3.0f, 7.0f, 6.0f);
+                        g.setColour (juce::Colours::white.withAlpha (0.6f));
+                        g.drawEllipse (camX - 3.5f, camY - 3.0f, 7.0f, 6.0f, 0.75f);
+                    }
+                    else if (it->type == 2) // Cartoon UFO [43]
+                    {
+                        g.setColour (juce::Colour (0xFF00D2FF).withAlpha (0.75f)); // Glowing Cyan body [43]
+                        g.fillEllipse (camX - 9.0f, camY - 3.0f, 18.0f, 6.0f);
+                        g.setColour (juce::Colours::white);
+                        g.fillEllipse (camX - 4.5f, camY - 6.0f, 9.0f, 4.5f); // Glass cockpit
+                        g.setColour (juce::Colour (0xFFFF3366)); // Blinking magenta lights [43]
+                        g.fillEllipse (camX - 6.0f, camY, 1.5f, 1.5f);
+                        g.fillEllipse (camX, camY + 1.0f, 1.5f, 1.5f);
+                        g.fillEllipse (camX + 4.5f, camY, 1.5f, 1.5f);
+                    }
+                    ++it;
                 }
-                else if (it->type == 2) // Cartoon UFO [43]
-                {
-                    g.setColour (juce::Colour (0xFF00D2FF).withAlpha (0.75f)); // Glowing Cyan body [43]
-                    g.fillEllipse (camX - 9.0f, camY - 3.0f, 18.0f, 6.0f);
-                    g.setColour (juce::Colours::white);
-                    g.fillEllipse (camX - 4.5f, camY - 6.0f, 9.0f, 4.5f); // Glass cockpit
-                    g.setColour (juce::Colour (0xFFFF3366)); // Blinking magenta lights [43]
-                    g.fillEllipse (camX - 6.0f, camY, 1.5f, 1.5f);
-                    g.fillEllipse (camX, camY + 1.0f, 1.5f, 1.5f);
-                    g.fillEllipse (camX + 4.5f, camY, 1.5f, 1.5f);
-                }
-                ++it;
             }
         }
 
