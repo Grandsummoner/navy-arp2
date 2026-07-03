@@ -96,7 +96,7 @@ void OledDisplay::paint (juce::Graphics& g)
         std::vector<Point3D> vertices;
 
         // Generate a highly complex sphere layout with 5 rings of 12 points each plus poles [43]
-        vertices.push_back ({ 0.0f, 1.0f, 0.0f }); // Top pole
+        vertices.push_back ({ 0.0f, 1.0f, 0.0f }); // Top pole (Index 0)
         for (int ring = 1; ring <= 5; ++ring)
         {
             float ringPitch = juce::MathConstants<float>::pi * (static_cast<float> (ring) / 6.0f);
@@ -108,7 +108,7 @@ void OledDisplay::paint (juce::Graphics& g)
                 vertices.push_back ({ sinPitch * std::cos (yawAngle), cosPitch, sinPitch * std::sin (yawAngle) });
             }
         }
-        vertices.push_back ({ 0.0f, -1.0f, 0.0f }); // Bottom pole
+        vertices.push_back ({ 0.0f, -1.0f, 0.0f }); // Bottom pole (Index 61)
 
         // Slow, continuous rotation angle mapped over system millisecond timers [43]
         double timeMs = juce::Time::getMillisecondCounterHiRes();
@@ -129,7 +129,7 @@ void OledDisplay::paint (juce::Graphics& g)
         };
 
         // Project 3D coordinates onto central background viewport
-        float globeCenterX = displayArea.getCentreX(); // Corrected to British English spelling [43]
+        float globeCenterX = displayArea.getCentreX(); // British English spelling [43]
         float globeCenterY = displayArea.getCentreY() + 8.0f; // Shift slightly down to center
         float globeRadius = displayArea.getHeight() * 0.45f;
         float cameraDistance = 2.2f;
@@ -145,13 +145,16 @@ void OledDisplay::paint (juce::Graphics& g)
         }
 
         // =====================================================================
-        // RENDER: LAYER 2 - BACKGROUND DENSE 3D GLOBE (270+ lines) [43]
+        // RENDER: LAYER 2 - BACKGROUND DENSE 3D GLOBE (276 lines) [43]
         // =====================================================================
-        float morphVal = *processor.apvts.getRawParameterValue (IDs::morph.getParamID());
-        juce::Colour activeColor = t.knobFillLeft.interpolatedWith (t.knobFillRight, morphVal);
-
         const int activeStep = processor.currentStep.load();
         const bool isPlaying = processor.isCurrentlyPlayingUI.load();
+
+        // Neon Palette colors derived from your visual reference
+        juce::Colour lineColour      = juce::Colour::fromString ("#FF0066FF").withAlpha (0.35f); // High-contrast Cobalt Blue [43]
+        juce::Colour nodeGlowColour  = juce::Colour::fromString ("#FF00E1FF");                  // Electric Cyan Glow [43]
+        juce::Colour nodeCoreColour  = juce::Colour::fromString ("#FF80F3FF");                  // White/Cyan Core
+        juce::Colour triangleColour  = juce::Colour::fromString ("#FFFF3366").withAlpha (0.25f); // Cyberpunk Coral Red [43]
 
         // 1. Draw glowing, step-reactive facets (triangles) [43]
         if (isPlaying)
@@ -168,12 +171,12 @@ void OledDisplay::paint (juce::Graphics& g)
             triPath.lineTo (projectedPoints[v3]);
             triPath.closeSubPath();
 
-            g.setColour (activeColor.withAlpha (0.15f));
+            g.setColour (triangleColour);
             g.fillPath (triPath);
         }
 
         // 2. Draw wireframe connection lines (Intricate 276-line geodesic mesh) [43]
-        g.setColour (activeColor.withAlpha (0.12f));
+        g.setColour (lineColour);
         auto drawEdge = [&](int idx1, int idx2)
         {
             g.drawLine (projectedPoints[idx1].x, projectedPoints[idx1].y,
@@ -204,15 +207,49 @@ void OledDisplay::paint (juce::Graphics& g)
             drawEdge (offset5 + i, 61); // Bottom pole to ring 5
         }
 
-        // 3. Draw active glowing star nodes [43]
-        for (const auto& pt : projectedPoints)
+        // 3. Draw active glowing star nodes, modulated in vertical waves by the 8 LFOs! [43]
+        for (size_t i = 0; i < projectedPoints.size(); ++i)
         {
-            g.setColour (activeColor.withAlpha (0.4f));
-            g.fillEllipse (pt.x - 1.0f, pt.y - 1.0f, 2.0f, 2.0f);
+            float nodeAlpha = 0.40f; // Default baseline brightness
+            
+            // Map rings of the globe to different LFOs [43]
+            int lfoIdx = -1;
+            if (i == 0 || i == 61) lfoIdx = 0;       // Poles -> Morph LFO (LFO 0)
+            else if (i >= 1 && i <= 12) lfoIdx = 1;   // Ring 1 -> Rest LFO (LFO 1)
+            else if (i >= 13 && i <= 24) lfoIdx = 2;  // Ring 2 -> Legato LFO (LFO 2)
+            else if (i >= 25 && i <= 36) lfoIdx = 3;  // Ring 3 -> Rate LFO (LFO 3)
+            else if (i >= 37 && i <= 48) lfoIdx = 4;  // Ring 4 -> Entropy LFO (LFO 4)
+            else if (i >= 49 && i <= 60) lfoIdx = 5;  // Ring 5 -> Harmony LFO (LFO 5)
+
+            if (lfoIdx != -1)
+            {
+                auto* ratePtr = processor.lfoRatePtrs[lfoIdx];
+                auto* depthPtr = processor.lfoDepthPtrs[lfoIdx];
+                if (ratePtr != nullptr && depthPtr != nullptr)
+                {
+                    int rateChoice = static_cast<int> (ratePtr->load());
+                    float depth = depthPtr->load();
+                    if (rateChoice > 0 && depth > 0.02f)
+                    {
+                        double currentPhase = processor.lfoPhases[lfoIdx];
+                        // Modulate nodeAlpha dynamically based on LFO wave
+                        float mod = static_cast<float> (std::sin (currentPhase * juce::MathConstants<double>::twoPi)) * depth * 0.5f + 0.5f;
+                        nodeAlpha = juce::jlimit (0.15f, 1.0f, nodeAlpha + mod * 0.6f);
+                    }
+                }
+            }
+
+            // Draw Level 2: Outer Cyan Glow
+            g.setColour (nodeGlowColour.withAlpha (nodeAlpha * 0.7f));
+            g.fillEllipse (projectedPoints[i].x - 2.5f, projectedPoints[i].y - 2.5f, 5.0f, 5.0f);
+
+            // Draw Level 1: Bright White/Cyan Core
+            g.setColour (nodeCoreColour.withAlpha (nodeAlpha));
+            g.fillEllipse (projectedPoints[i].x - 1.0f, projectedPoints[i].y - 1.0f, 2.0f, 2.0f);
         }
 
-        // =================================────────────────====================
-        // RENDER: HIGHLIGHTS & TITLE HEADERS
+        // =====================================================================
+        // RENDER: HIGHLIGHTS, HEADERS, AND LABELS
         // =====================================================================
         g.setColour (juce::Colours::white);
         g.setFont (juce::FontOptions (12.0f, juce::Font::bold));
