@@ -10,18 +10,18 @@ class CameoState : public juce::ReferenceCountedObject
 public:
     struct ActiveCameo
     {
-        int type = 0;              // 0 = Voyager, 1 = James Webb, 2 = Cartoon UFO
+        int type = 0;              
         float startX = 0.0f, startY = 0.0f;
         float targetX = 0.0f, targetY = 0.0f;
         double startTimeMs = 0.0;
-        double durationMs = 0.0;   // Flight duration
-        int trajectoryPattern = 0; // 0 = Straight, 1 = Arc, 2 = Jitter
+        double durationMs = 0.0;   
+        int trajectoryPattern = 0; 
         float arcAmplitude = 0.0f;
     };
     
     std::vector<ActiveCameo> activeCameos;
     double lastCameoTriggerTime = 0.0;
-    double nextCameoInterval = 120000.0; // 2 minutes minimum
+    double nextCameoInterval = 120000.0; 
 
     struct FacetTriangle
     {
@@ -53,7 +53,7 @@ void OledDisplay::showParameterOverlay (const juce::String& paramName, float bas
     isOverlayActive = true;
     
     repaint();
-    startTimer (1500); // 1.5 second display timeout
+    startTimer (1500); 
 }
 
 void OledDisplay::setFreezeActive (bool shouldBeActive)
@@ -78,11 +78,7 @@ void OledDisplay::paint (juce::Graphics& g)
     float width = bounds.getWidth();   
     float height = bounds.getHeight(); 
 
-    // 1. Fill Screen Background with high-contrast obsidian black void
     g.fillAll (juce::Colour (0xFF05070A));
-
-    // Note: We skip drawing artificial 2D glass bezel borders here,
-    // as your high-resolution background asset has a photorealistic bezel.
 
     auto displayArea = bounds.reduced (16.0f);
 
@@ -91,9 +87,6 @@ void OledDisplay::paint (juce::Graphics& g)
 
     if (isOverlayActive)
     {
-        // =====================================================================
-        // RENDER: MOMENTARY PARAMETER OVERLAY SCREEN
-        // =====================================================================
         g.setColour (isFreezeActive ? juce::Colour::fromString ("#FF80D8FF") : juce::Colour (0xFFFF5533));
         g.setFont (juce::FontOptions (14.0f, juce::Font::bold));
         g.drawText (activeParamName.toUpperCase(), displayArea.removeFromTop (22.0f), juce::Justification::left, true);
@@ -119,9 +112,6 @@ void OledDisplay::paint (juce::Graphics& g)
     }
     else
     {
-        // =====================================================================
-        // MATH & STATE SETUP: METADATA, MOTION, AND GLOBE CONFIGURATIONS
-        // =====================================================================
         float morphVal = *processor.apvts.getRawParameterValue (IDs::morph.getParamID());
         const int activeStep = processor.currentStep.load();          
         const bool isPlaying = processor.isCurrentlyPlayingUI.load(); 
@@ -155,7 +145,6 @@ void OledDisplay::paint (juce::Graphics& g)
         struct Point3D { float x, y, z; };
         std::vector<Point3D> vertices;
 
-        // Generate 3D Geodesic sphere nodes
         vertices.push_back ({ 0.0f, 1.0f, 0.0f }); 
         for (int ring = 1; ring <= 5; ++ring)
         {
@@ -183,10 +172,9 @@ void OledDisplay::paint (juce::Graphics& g)
             return { x1, y2, z2 };
         };
 
-        // Project sphere coordinates onto display viewport
         float globeCenterX = displayArea.getCentreX(); 
-        float globeCenterY = displayArea.getCentreY() - 15.0f; // Centered inside the bezel view
-        float globeRadius = displayArea.getHeight() * 0.42f;
+        float globeCenterY = displayArea.getCentreY() - 32.0f; // Shifted up to clear the fader monitor [1.1.8]
+        float globeRadius = displayArea.getHeight() * 0.35f;   // Scaled radius to prevent bezel overlap [1.1.8]
         float cameraDistance = 2.2f;
 
         std::vector<juce::Point<float>> projectedPoints;
@@ -199,9 +187,6 @@ void OledDisplay::paint (juce::Graphics& g)
             projectedPoints.push_back ({ px, py });
         }
 
-        // =====================================================================
-        // LOAD PERSISTENT INSTANCE-SAFE CAMEO DATA
-        // =====================================================================
         auto* cameoVar = getProperties().getVarPointer ("cameoState");
         CameoState* state = nullptr; 
 
@@ -220,14 +205,11 @@ void OledDisplay::paint (juce::Graphics& g)
             state = dynamic_cast<CameoState*> (cameoVar->getObject());
         }
 
-        // =====================================================================
-        // RENDER: LAYER 2 - BACKGROUND DENSE 3D GLOBE
-        // =====================================================================
-        juce::Colour lineColour     = juce::Colour::fromString ("#FF0066FF").withAlpha (0.28f); 
+        // RENDER: BACKGROUND DENSE 3D GLOBE
+        juce::Colour lineColour     = juce::Colour::fromString ("#FF0066FF").withAlpha (0.24f); 
         juce::Colour nodeGlowColour = juce::Colour::fromString ("#FF00E1FF");                  
         juce::Colour nodeCoreColour = juce::Colour::fromString ("#FF80F3FF");                  
 
-        // 1. Draw glowing, step-reactive facets (triangles)
         if (isPlaying && state != nullptr)
         {
             juce::Random triRand (static_cast<int64_t> (timeMs));
@@ -281,13 +263,12 @@ void OledDisplay::paint (juce::Graphics& g)
                     triPath.lineTo (projectedPoints[tri.v3]);
                     triPath.closeSubPath();
 
-                    g.setColour (tri.colour.withAlpha (0.24f * flicker));
+                    g.setColour (tri.colour.withAlpha (0.22f * flicker));
                     g.fillPath (triPath);
                 }
             }
         }
 
-        // Draw active glowing star nodes, modulated by the LFOs
         if (state != nullptr)
         {
             for (size_t i = 0; i < projectedPoints.size(); ++i)
@@ -319,17 +300,14 @@ void OledDisplay::paint (juce::Graphics& g)
                     }
                 }
 
-                // Outer Cyan Glow
                 g.setColour (nodeGlowColour.withAlpha (nodeAlpha * 0.65f));
                 g.fillEllipse (projectedPoints[i].x - 2.5f, projectedPoints[i].y - 2.5f, 5.0f, 5.0f);
 
-                // Bright White/Cyan Core
                 g.setColour (nodeCoreColour.withAlpha (nodeAlpha));
                 g.fillEllipse (projectedPoints[i].x - 1.0f, projectedPoints[i].y - 1.0f, 2.0f, 2.0f);
             }
         }
 
-        // Draw wireframe connection lines
         g.setColour (lineColour);
         auto drawEdge = [&](int idx1, int idx2)
         {
@@ -356,9 +334,7 @@ void OledDisplay::paint (juce::Graphics& g)
             drawEdge (offset5 + i, 61); 
         }
 
-        // =====================================================================
         // RENDER: ACTIVE SPACE CAMEOS
-        // =====================================================================
         if (state != nullptr)
         {
             if (timeMs - state->lastCameoTriggerTime >= state->nextCameoInterval)
@@ -453,17 +429,15 @@ void OledDisplay::paint (juce::Graphics& g)
             }
         }
 
-        // =====================================================================
-        // RENDER: MONITOR META-DATA STATUS LINE [1.1.8]
-        // =====================================================================
-        g.setColour (juce::Colour (0xFF00D2FF)); // High-tech neon cyan
+        // RENDER: MONITOR HEADER LABEL
+        g.setColour (juce::Colour (0xFF00D2FF)); 
         g.setFont (juce::FontOptions (12.0f, juce::Font::bold));
         g.drawText ("NAVY-ARP MONITOR", displayArea.removeFromTop (20.0f), juce::Justification::centred, true);
 
         displayArea.removeFromTop (4.0f);
 
-        // System information matches the graphic's layout bar
-        g.setColour (juce::Colour (0xFF00FF66).withAlpha(0.85f)); // Status green
+        // System information status bar
+        g.setColour (juce::Colour (0xFF00FF66).withAlpha(0.85f)); 
         g.setFont (juce::FontOptions (10.0f, juce::Font::bold));
         g.drawText (metaText, displayArea.removeFromTop (15.0f), juce::Justification::centred, true);
 
@@ -474,12 +448,12 @@ void OledDisplay::paint (juce::Graphics& g)
         const float colWidth = (displayArea.getWidth() - (7.0f * spacing)) / 8.0f;
 
         const int numSegments = 16;
-        const float segmentHeight = 8.0f;      // Chunky, bold hardware-style LEDs
-        const float segmentSpacing = 3.0f;
-        const float maxLaddersHeight = (numSegments * segmentHeight) + ((numSegments - 1) * segmentSpacing);
+        const float segmentHeight = 6.0f;      // Scaled down to prevent overlapping preset row [1.1.8]
+        const float segmentSpacing = 2.0f;     // Scaled spacing [1.1.8]
+        const float maxLaddersHeight = (numSegments * segmentHeight) + ((numSegments - 1) * segmentSpacing); // 126px height [1.1.8]
 
-        // Position ladders exactly in the bottom portion of our display
-        float fadersY = bounds.getHeight() - maxLaddersHeight - 35.0f;
+        // Shift up fader monitor area so it sits perfectly inside the shorter OLED bezel [1.1.8]
+        float fadersY = bounds.getHeight() - maxLaddersHeight - 24.0f;
         auto laddersArea = juce::Rectangle<float> (displayArea.getX(), fadersY, displayArea.getWidth(), maxLaddersHeight);
 
         for (int i = 0; i < 8; ++i)
@@ -491,7 +465,7 @@ void OledDisplay::paint (juce::Graphics& g)
 
             const bool isActiveStep = isPlaying && (i == activeStep);
 
-            // Draw segmented bars bottom-up
+            // Draw segmented bars
             for (int seg = 0; seg < numSegments; ++seg)
             {
                 float segY = colBounds.getY() + maxLaddersHeight - ((seg + 1) * (segmentHeight + segmentSpacing));
@@ -500,21 +474,20 @@ void OledDisplay::paint (juce::Graphics& g)
                 if (seg < activeSegments)
                 {
                     if (isActiveStep)
-                        g.setColour (juce::Colour (0xFFFF4500)); // Glowing orange-red playhead
+                        g.setColour (juce::Colour (0xFFFF4500)); 
                     else
-                        g.setColour (juce::Colour (0xFF441105).withAlpha (0.75f)); // Muted dim red
+                        g.setColour (juce::Colour (0xFF441105).withAlpha (0.75f)); 
                 }
                 else
                 {
-                    // Empty segments
                     g.setColour (juce::Colour (0xFF111317).withAlpha (0.65f));
                 }
 
                 g.fillRect (segmentRect);
             }
 
-            // Draw small step number sitting inside display bounds
-            float textY = colBounds.getY() + maxLaddersHeight + 10.0f;
+            // Draw step indicator numbers
+            float textY = colBounds.getY() + maxLaddersHeight + 4.0f;
             auto stepNumRect = juce::Rectangle<float> (colBounds.getX(), textY, colBounds.getWidth(), 15.0f);
             
             if (isActiveStep)

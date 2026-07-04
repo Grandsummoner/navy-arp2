@@ -118,14 +118,16 @@ void ChromaCapsLookAndFeel::drawButtonText (juce::Graphics& g, juce::TextButton&
     const bool isUtilButton = (text == "Save" || text == "Recall" || text == "Copy" || text == "Init");
     const bool isDiceButton = (text == "Melo" || text == "Arti" || text == "Time" || text == "Navy");
     const bool isPresetButton = (text == "1" || text == "2" || text == "3" || text == "4" || text == "5" || text == "6" || text == "7" || text == "8");
+    
+    // Add Latch, Poly, Freeze and default "Seq" to the skip list so they don't double-render
+    const bool isStaticTopButton = (text == "Latch" || text == "Poly" || text == "Freeze" || text == "Seq");
 
-    // Skip drawing text for static buttons to prevent blurry double-label overlaps with the PNG faceplate
-    if (isUtilButton || isDiceButton || isPresetButton || isButtonA || isButtonB)
+    if (isUtilButton || isDiceButton || isPresetButton || isButtonA || isButtonB || isStaticTopButton)
     {
         return; 
     }
 
-    // For dynamic toggle buttons (like "Arp" / "Seq"), we draw high-contrast white text centered over the button [1.1.8]
+    // If the sequencer toggles to "Arp", render it cleanly in C++ [1.1.8]
     g.setFont (juce::FontOptions (12.0f, juce::Font::bold));
     
     if (button.getToggleState())
@@ -142,6 +144,7 @@ void ChromaCapsLookAndFeel::drawButtonBackground (juce::Graphics& g, juce::Butto
     const float cornerSize = 4.0f;
     bool isFlashing = false;
     juce::Colour flashColour = backgroundColour;
+    const juce::String text = button.getButtonText();
 
     // 1. Process active preset and utility flash states
     if (auto* editor = dynamic_cast<PluginEditor*> (parentEditor))
@@ -192,6 +195,17 @@ void ChromaCapsLookAndFeel::drawButtonBackground (juce::Graphics& g, juce::Butto
         g.setColour (flashColour.withAlpha (0.6f));
         g.fillRoundedRectangle (bounds, cornerSize);
     }
+    else if (text == "Arp")
+    {
+        // Smart Masking: Draw a dark-blue fill to mask the printed "Seq" text underneath, then draw active highlight [1.1.8]
+        g.setColour (juce::Colour (0xFF1E222A)); 
+        g.fillRoundedRectangle (bounds, cornerSize);
+        
+        g.setColour (juce::Colour (0xFF00D2FF).withAlpha (0.25f));
+        g.fillRoundedRectangle (bounds, cornerSize);
+        g.setColour (juce::Colour (0xFF00D2FF).withAlpha (0.6f));
+        g.drawRoundedRectangle (bounds.reduced(0.5f), cornerSize, 1.25f);
+    }
     else if (button.getClickingTogglesState() && button.getToggleState())
     {
         // Active Toggle state (draw a beautiful cyan highlight box over the panel button asset)
@@ -202,20 +216,17 @@ void ChromaCapsLookAndFeel::drawButtonBackground (juce::Graphics& g, juce::Butto
     }
     else if (shouldDrawButtonAsDown)
     {
-        // Darken button slightly on click
         g.setColour (juce::Colours::black.withAlpha (0.35f));
         g.fillRoundedRectangle (bounds, cornerSize);
     }
     else if (shouldDrawButtonAsHighlighted)
     {
-        // Brighten button slightly on hover
         g.setColour (juce::Colours::white.withAlpha (0.12f));
         g.fillRoundedRectangle (bounds, cornerSize);
     }
     else
     {
-        // Completely transparent when idle so the photorealistic button asset shows through [1.1.8]
-        return;
+        return; // Transparent to reveal asset buttons [1.1.8]
     }
 }
 
@@ -249,38 +260,31 @@ void ChromaCapsLookAndFeel::drawLinearSlider (juce::Graphics& g, int x, int y, i
         const float thumbX = sliderPos - (thumbWidth * 0.5f);
         const float thumbY = static_cast<float>(y) + (static_cast<float>(height) - thumbHeight) * 0.5f;
 
-        // Metallic dark-grey cap background
         g.setColour (juce::Colour (0xFF1E222A));
         g.fillRoundedRectangle (thumbX, thumbY, thumbWidth, thumbHeight, 2.0f);
         g.setColour (juce::Colours::black.withAlpha (0.4f));
         g.drawRoundedRectangle (thumbX, thumbY, thumbWidth, thumbHeight, 2.0f, 1.0f);
 
-        // Vertical indicator line blending from Scene A to Scene B color
         juce::Colour notchColor = t.crossfaderTrackA.interpolatedWith (t.crossfaderTrackB, progress);
         g.setColour (notchColor);
         g.fillRect (sliderPos - 1.0f, thumbY + 1.0f, 2.0f, thumbHeight - 2.0f);
     }
     else if (isVertical)
     {
-        // Skip drawing vertical fader tracks entirely so your high-resolution PNG tracks show through [1.1.8]
-
         // Draw fader cap handle thumb
         const float thumbHeight = 12.0f;
         const float thumbWidth = 22.0f;
         const float thumbX = static_cast<float>(x) + (static_cast<float>(width) - thumbWidth) * 0.5f;
         const float thumbY = sliderPos - (thumbHeight * 0.5f);
 
-        // Navy blue thumb cap color [43]
         g.setColour (t.faderCap);
         g.fillRoundedRectangle (thumbX, thumbY, thumbWidth, thumbHeight, 1.5f);
 
-        // Horizontal white indicator line across the middle of the Navy cap [43]
         g.setColour (juce::Colours::white);
         g.fillRect (thumbX + 1.0f, thumbY + (thumbHeight * 0.5f) - 1.0f, thumbWidth - 2.0f, 2.0f);
     }
     else
     {
-        // Horizontal fallback sliders
         const float thumbWidth = 14.0f;
         const float thumbHeight = 22.0f;
         const float thumbX = sliderPos - (thumbWidth * 0.5f);
