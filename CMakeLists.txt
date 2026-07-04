@@ -54,9 +54,16 @@ target_compile_definitions(NavyArp
         JUCE_IGNORE_VST3_MISMATCHED_PARAMETER_ID_WARNING=1 # Added to bypass parameter automation ID conflict checks
 )
 
+# NEW: Add and define binary data target to compile our background asset [1.1.2, 1.1.8]
+juce_add_binary_data(NavyArpAssets
+    SOURCES
+        assets/images/panel.png
+)
+
 # 7. Library dependencies
 target_link_libraries(NavyArp
     PRIVATE
+        NavyArpAssets       # NEW: Link compiled asset target here [1.1.2]
         juce::juce_audio_utils
         juce::juce_audio_processors
         juce::juce_dsp
