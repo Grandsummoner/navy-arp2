@@ -38,7 +38,7 @@ public:
     juce::Slider entropyKnob, harmonyKnob, chaosKnob, octavesKnob;
     juce::Label entropyTitle, harmonyTitle, chaosTitle, octavesTitle;
 
-    // NEW: Repurposed Master Knobs [1.1.8]
+    // Repurposed Master Knobs
     juce::Slider masterVelocityKnob, masterSwingKnob;
     juce::Label masterVelocityTitle, masterSwingTitle;
 
@@ -58,7 +58,7 @@ public:
     // Top Control bar Dropdowns
     juce::ComboBox rootKeyBox, scaleTypeBox, cycleLengthBox, panelThemeBox;
 
-    // PUBLIC Flash Timers for LookAndFeel Animation Access
+    // Public Flash Timers for LookAndFeel Animation Access
     int sceneAFlashTimer = 0;
     int sceneBFlashTimer = 0;
     int saveFlashTimer = 0;
@@ -76,7 +76,7 @@ private:
     void timerCallback() override;
     void updateSliderTextBoxThemeColors(); 
 
-    // NEW: Background Image Container [1.1.8]
+    // Background Image Container
     juce::Image backgroundImage;
 
     // Slide Attachments
@@ -85,7 +85,7 @@ private:
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> entropyAttachment, harmonyAttachment, chaosAttachment, octavesAttachment;
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> morphAttachment;
 
-    // NEW: Master slide attachments [1.1.8]
+    // Master slide attachments
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> masterVelocityAttachment, masterSwingAttachment;
 
     // Toggle Attachments
@@ -116,5 +116,5 @@ private:
     std::uint32_t sceneBPressStartTime = 0;
     bool sceneBAlreadySaved = false;
 
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PluginEditor)
+    JURE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PluginEditor)
 };

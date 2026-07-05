@@ -52,13 +52,29 @@ void ChromaCapsLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, i
     int themeIdx = static_cast<int> (processor.apvts.getRawParameterValue ("panelTheme")->load());
     auto t = AppTheme::get (themeIdx);
 
-    float centerX = static_cast<float> (x) + static_cast<float> (width) * 0.5f;
-    float centerY = static_cast<float> (y) + static_cast<float> (height) * 0.5f;
+    // Calculate centers using the full local component bounds rather than shrunken active bounds
+    auto localBounds = slider.getLocalBounds().toFloat();
+    float centerX = localBounds.getCentreX();
+    float centerY = localBounds.getCentreY();
     
-    // Scale the rotary sizes to match the 1241x848 layout
-    float knobRadius = juce::jmin (static_cast<float> (width), static_cast<float> (height)) * 0.35f;
-    float ledRadius = knobRadius + 7.0f;
-    float ledDiameter = 3.5f;
+    bool isMasterKnob = (cid == "masterVelocity" || cid == "masterSwing");
+    float knobRadius = 26.0f;
+
+    if (isMasterKnob)
+    {
+        // Master knobs have no text boxes, meaning they center vertically exactly in their bounds
+        centerY = localBounds.getCentreY();
+        knobRadius = 45.0f; // Scale vector indicators to match the giant pre-baked dials
+    }
+    else
+    {
+        // Small knobs are offset upwards to account for the textboxes underneath
+        centerY = localBounds.getCentreY() - 7.0f;
+        knobRadius = 26.0f;
+    }
+
+    float ledRadius = knobRadius + 8.0f;
+    float ledDiameter = isMasterKnob ? 4.5f : 3.5f;
 
     bool isLeftKnob = (cid == "rhythmMorph" || cid == "rest" || cid == "legato" || cid == "rate" || cid == "masterVelocity");
     juce::Colour activeColor = isLeftKnob ? t.knobFillLeft : t.knobFillRight;
@@ -73,7 +89,7 @@ void ChromaCapsLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, i
         if (i < litCount)
         {
             // Outer soft radial bloom halo
-            float outerRadius = 5.0f;
+            float outerRadius = isMasterKnob ? 7.0f : 5.0f;
             juce::ColourGradient glow (activeColor.withAlpha (0.6f), ledX, ledY,
                                        activeColor.withAlpha (0.0f), ledX + outerRadius, ledY + outerRadius,
                                        true);
@@ -81,7 +97,7 @@ void ChromaCapsLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, i
             g.fillEllipse (ledX - outerRadius, ledY - outerRadius, outerRadius * 2.0f, outerRadius * 2.0f);
 
             // Bright inner core
-            float innerRadius = 1.5f;
+            float innerRadius = isMasterKnob ? 2.0f : 1.5f;
             g.setColour (juce::Colours::white.interpolatedWith (activeColor, 0.2f));
             g.fillEllipse (ledX - innerRadius, ledY - innerRadius, innerRadius * 2.0f, innerRadius * 2.0f);
         }
@@ -94,13 +110,10 @@ void ChromaCapsLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, i
         }
     }
 
-    // Note: We skip drawing the solid background ellipse to let the
-    // photorealistic brushed metallic knob asset from the PNG panel show through!
-
     // 4. Draw pointer needle centered over the asset knob
     float angle = rotaryStartAngle + sliderPos * (rotaryEndAngle - rotaryStartAngle);
     juce::Path path;
-    float pointerThickness = 2.0f;
+    float pointerThickness = isMasterKnob ? 3.0f : 2.0f;
     float pointerLength = knobRadius * 0.65f;
     path.addRectangle (-pointerThickness * 0.5f, -knobRadius + 2.0f, pointerThickness, pointerLength);
     path.applyTransform (juce::AffineTransform::rotation (angle).translated (centerX, centerY));
@@ -118,8 +131,6 @@ void ChromaCapsLookAndFeel::drawButtonText (juce::Graphics& g, juce::TextButton&
     const bool isUtilButton = (text == "Save" || text == "Recall" || text == "Copy" || text == "Init");
     const bool isDiceButton = (text == "Melo" || text == "Arti" || text == "Time" || text == "Navy");
     const bool isPresetButton = (text == "1" || text == "2" || text == "3" || text == "4" || text == "5" || text == "6" || text == "7" || text == "8");
-    
-    // Add Latch, Poly, Freeze and default "Seq" / "SEQ" to the skip list so they don't double-render [1.1.8]
     const bool isStaticTopButton = (text == "Latch" || text == "Poly" || text == "Freeze" || text == "Seq" || text == "SEQ");
 
     if (isUtilButton || isDiceButton || isPresetButton || isButtonA || isButtonB || isStaticTopButton)
@@ -127,7 +138,6 @@ void ChromaCapsLookAndFeel::drawButtonText (juce::Graphics& g, juce::TextButton&
         return; 
     }
 
-    // If the sequencer toggles to "Arp", render it cleanly in C++ [1.1.8]
     g.setFont (juce::FontOptions (12.0f, juce::Font::bold));
     
     if (button.getToggleState())
@@ -199,7 +209,6 @@ void ChromaCapsLookAndFeel::drawButtonBackground (juce::Graphics& g, juce::Butto
     }
     else if (text == "Arp")
     {
-        // Smart Masking: Draw a dark-blue fill to mask the printed "Seq" text underneath, then draw active highlight [1.1.8]
         g.setColour (juce::Colour (0xFF1E222A)); 
         g.fillRoundedRectangle (bounds, cornerSize);
         
@@ -210,7 +219,6 @@ void ChromaCapsLookAndFeel::drawButtonBackground (juce::Graphics& g, juce::Butto
     }
     else if (isDiceButton)
     {
-        // Watermark Masking: Draw solid dark-slate backing to completely hide the Gemini symbol [1.1.8]
         g.setColour (juce::Colour (0xFF1E222A));
         g.fillRoundedRectangle (bounds, cornerSize);
         
@@ -224,7 +232,6 @@ void ChromaCapsLookAndFeel::drawButtonBackground (juce::Graphics& g, juce::Butto
     }
     else if (isStaticTopButton)
     {
-        // Fully transparent when inactive, or draw a subtle highlight when toggled active [1.1.8]
         if (button.getClickingTogglesState() && button.getToggleState())
         {
             g.setColour (juce::Colour (0xFF00D2FF).withAlpha (0.25f));
@@ -245,7 +252,6 @@ void ChromaCapsLookAndFeel::drawButtonBackground (juce::Graphics& g, juce::Butto
     }
     else if (button.getClickingTogglesState() && button.getToggleState())
     {
-        // Active Toggle state (draw a beautiful cyan highlight box over the panel button asset)
         g.setColour (juce::Colour (0xFF00D2FF).withAlpha (0.25f));
         g.fillRoundedRectangle (bounds, cornerSize);
         g.setColour (juce::Colour (0xFF00D2FF).withAlpha (0.6f));
@@ -263,7 +269,7 @@ void ChromaCapsLookAndFeel::drawButtonBackground (juce::Graphics& g, juce::Butto
     }
     else
     {
-        return; // Transparent to reveal asset buttons [1.1.8]
+        return; 
     }
 }
 
@@ -291,34 +297,77 @@ void ChromaCapsLookAndFeel::drawLinearSlider (juce::Graphics& g, int x, int y, i
         g.setColour (t.crossfaderTrackB.withAlpha (alphaB * 0.5f + 0.1f));
         g.fillRoundedRectangle (sliderPos, trackY, static_cast<float>(x + width) - sliderPos, trackHeight, 1.5f);
 
-        // Custom Widescreen Fader Cap
-        const float thumbWidth = 20.0f;
-        const float thumbHeight = 15.0f;
+        // Render horizontal metallic crossfader handle matching vertical ones
+        const float thumbWidth = 22.0f;
+        const float thumbHeight = 18.0f;
         const float thumbX = sliderPos - (thumbWidth * 0.5f);
         const float thumbY = static_cast<float>(y) + (static_cast<float>(height) - thumbHeight) * 0.5f;
 
-        g.setColour (juce::Colour (0xFF1E222A));
-        g.fillRoundedRectangle (thumbX, thumbY, thumbWidth, thumbHeight, 2.0f);
+        // Outer drop shadow
         g.setColour (juce::Colours::black.withAlpha (0.4f));
+        g.fillRoundedRectangle (thumbX + 1.0f, thumbY + 2.0f, thumbWidth, thumbHeight, 2.0f);
+
+        // Silver gradient base
+        juce::ColourGradient silverBody (juce::Colour (0xFFECEFF1), thumbX, thumbY,
+                                         juce::Colour (0xFF90A4AE), thumbX, thumbY + thumbHeight,
+                                         false);
+        g.setGradientFill (silverBody);
+        g.fillRoundedRectangle (thumbX, thumbY, thumbWidth, thumbHeight, 2.0f);
+
+        // 3D Bevel Highlight
+        g.setColour (juce::Colours::white.withAlpha (0.7f));
+        g.drawRoundedRectangle (thumbX + 0.5f, thumbY + 0.5f, thumbWidth - 1.0f, thumbHeight - 1.0f, 2.0f, 1.0f);
+        g.setColour (juce::Colour (0xFF37474F).withAlpha (0.4f));
         g.drawRoundedRectangle (thumbX, thumbY, thumbWidth, thumbHeight, 2.0f, 1.0f);
 
-        juce::Colour notchColor = t.crossfaderTrackA.interpolatedWith (t.crossfaderTrackB, progress);
-        g.setColour (notchColor);
-        g.fillRect (sliderPos - 1.0f, thumbY + 1.0f, 2.0f, thumbHeight - 2.0f);
+        // Black central vertical stripe
+        const float grooveWidth = 4.0f;
+        const float grooveHeight = thumbHeight - 4.0f;
+        const float grooveX = thumbX + (thumbWidth - grooveWidth) * 0.5f;
+        const float grooveY = thumbY + 2.0f;
+
+        g.setColour (juce::Colour (0xFF212121));
+        g.fillRect (grooveX, grooveY, grooveWidth, grooveHeight);
+
+        g.setColour (juce::Colours::white.withAlpha (0.4f));
+        g.fillRect (grooveX + grooveWidth, grooveY, 1.0f, grooveHeight);
     }
     else if (isVertical)
     {
-        // Draw fader cap handle thumb
-        const float thumbHeight = 12.0f;
-        const float thumbWidth = 22.0f;
+        // Render 3D Silver Metallic vertical fader caps
+        const float thumbHeight = 18.0f;
+        const float thumbWidth = 26.0f;
         const float thumbX = static_cast<float>(x) + (static_cast<float>(width) - thumbWidth) * 0.5f;
         const float thumbY = sliderPos - (thumbHeight * 0.5f);
 
-        g.setColour (t.faderCap);
-        g.fillRoundedRectangle (thumbX, thumbY, thumbWidth, thumbHeight, 1.5f);
+        // Soft Outer drop shadow
+        g.setColour (juce::Colours::black.withAlpha (0.4f));
+        g.fillRoundedRectangle (thumbX + 1.0f, thumbY + 2.0f, thumbWidth, thumbHeight, 2.0f);
 
-        g.setColour (juce::Colours::white);
-        g.fillRect (thumbX + 1.0f, thumbY + (thumbHeight * 0.5f) - 1.0f, thumbWidth - 2.0f, 2.0f);
+        // Silver metallic body
+        juce::ColourGradient silverBody (juce::Colour (0xFFECEFF1), thumbX, thumbY,
+                                         juce::Colour (0xFF90A4AE), thumbX, thumbY + thumbHeight,
+                                         false);
+        g.setGradientFill (silverBody);
+        g.fillRoundedRectangle (thumbX, thumbY, thumbWidth, thumbHeight, 2.0f);
+
+        // 3D Highlights and Bevel Borders
+        g.setColour (juce::Colours::white.withAlpha (0.7f));
+        g.drawRoundedRectangle (thumbX + 0.5f, thumbY + 0.5f, thumbWidth - 1.0f, thumbHeight - 1.0f, 2.0f, 1.0f);
+        g.setColour (juce::Colour (0xFF37474F).withAlpha (0.4f));
+        g.drawRoundedRectangle (thumbX, thumbY, thumbWidth, thumbHeight, 2.0f, 1.0f);
+
+        // Black vertical slot notch down the center
+        const float grooveWidth = 4.0f;
+        const float grooveHeight = thumbHeight - 4.0f;
+        const float grooveX = thumbX + (thumbWidth - grooveWidth) * 0.5f;
+        const float grooveY = thumbY + 2.0f;
+
+        g.setColour (juce::Colour (0xFF212121));
+        g.fillRect (grooveX, grooveY, grooveWidth, grooveHeight);
+
+        g.setColour (juce::Colours::white.withAlpha (0.4f));
+        g.fillRect (grooveX + grooveWidth, grooveY, 1.0f, grooveHeight);
     }
     else
     {

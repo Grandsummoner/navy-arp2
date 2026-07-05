@@ -22,8 +22,6 @@ PluginEditor::PluginEditor (PluginProcessor& p)
         faders[i]->setLookAndFeel (&chromaLookAndFeel); 
         faders[i]->setComponentID ("fader" + juce::String (i + 1)); 
         addAndMakeVisible (faders[i]);
-        
-        // Hide local labels to show the pre-baked background labels cleanly
         faderLabels[i]->setText ("", juce::dontSendNotification); 
     }
 
@@ -53,18 +51,18 @@ PluginEditor::PluginEditor (PluginProcessor& p)
         rightTitles[i]->setText ("", juce::dontSendNotification); 
     }
 
-    // Initialize Left Master Knob (Mast)
+    // Initialize Left Master Knob (mast) - Hide Textbox to match intended design
     masterVelocityKnob.setSliderStyle (juce::Slider::RotaryHorizontalVerticalDrag);
-    masterVelocityKnob.setTextBoxStyle (juce::Slider::TextBoxBelow, false, 55, 14);
+    masterVelocityKnob.setTextBoxStyle (juce::Slider::NoTextBox, false, 0, 0);
     masterVelocityKnob.setLookAndFeel (&chromaLookAndFeel);
     masterVelocityKnob.setComponentID ("masterVelocity");
     masterVelocityKnob.addMouseListener (this, false);
     addAndMakeVisible (masterVelocityKnob);
     masterVelocityTitle.setText ("", juce::dontSendNotification);
 
-    // Initialize Right Master Knob (Mlart)
+    // Initialize Right Master Knob (misn) - Hide Textbox to match intended design
     masterSwingKnob.setSliderStyle (juce::Slider::RotaryHorizontalVerticalDrag);
-    masterSwingKnob.setTextBoxStyle (juce::Slider::TextBoxBelow, false, 55, 14);
+    masterSwingKnob.setTextBoxStyle (juce::Slider::NoTextBox, false, 0, 0);
     masterSwingKnob.setLookAndFeel (&chromaLookAndFeel);
     masterSwingKnob.setComponentID ("masterSwing");
     masterSwingKnob.addMouseListener (this, false);
@@ -300,7 +298,7 @@ void PluginEditor::mouseDown (const juce::MouseEvent& event)
                         depthParam->setValueNotifyingHost (depthsList[result - 10]);
                     }
                 });
-                return; // Consume right-click event
+                return; 
             }
         }
     }
@@ -371,7 +369,6 @@ void PluginEditor::mouseUp (const juce::MouseEvent& event)
 
 void PluginEditor::paint (juce::Graphics& g)
 {
-    // Draw the static skeuomorphic background PNG panel
     if (backgroundImage.isValid())
     {
         g.drawImage (backgroundImage, getLocalBounds().toFloat(), 
@@ -381,71 +378,68 @@ void PluginEditor::paint (juce::Graphics& g)
     {
         g.fillAll (juce::Colour (0xFF0D1E36));
     }
-    
-    // Note: Temporary pixel coordinate grid has been completely removed to render your beautiful faceplate cleanly!
 }
 
 void PluginEditor::resized()
 {
-    // Mapped bounds coordinate layout [1.1.8]
-    
-    // 1. OLED Display screen fits inside the real screen bezel artwork area [1.1.8]
+    // 1. OLED Display screen fits inside the real screen bezel artwork area
     oledDisplay.setBounds (180, 90, 880, 420);
 
-    // 2. Left side knobs centered over printed backings at exact uniform Y centers (110, 220, 330, 440, 600) [1.1.8]
-    // Top-left Morph sits at Y=65 (center 110), Rest at Y=175 (center 220), Legato at Y=285 (center 330), Rate at Y=395 (center 440), Mast at Y=555 (center 600)
+    // 2. Left side small knobs centered over printed backings (Centers: Y = 110, 220, 330, 440)
     rhythmMorphKnob.setBounds (20, 65, 110, 90);
     restKnob.setBounds (20, 175, 110, 90);
     legatoKnob.setBounds (20, 285, 110, 90);
     rateKnob.setBounds (20, 395, 110, 90);
-    masterVelocityKnob.setBounds (20, 555, 110, 90);
 
-    // 3. Right side knobs centered over printed backings (Centers: Y = 110, 220, 330, 440, and 600) [1.1.8]
+    // 3. Right side small knobs centered over printed backings (Centers: Y = 110, 220, 330, 440)
     entropyKnob.setBounds (1111, 65, 110, 90);
     harmonyKnob.setBounds (1111, 175, 110, 90);
     chaosKnob.setBounds (1111, 285, 110, 90);
     octavesKnob.setBounds (1111, 395, 110, 90);
-    masterSwingKnob.setBounds (1111, 555, 110, 90);
 
-    // 4. Top Row Dropdowns (Aligned inside top bar header slots) [1.1.8]
+    // 4. Giant master knobs positioned exactly over the pre-baked big side scales (Center Y = 600)
+    masterVelocityKnob.setBounds (10, 535, 130, 130);
+    masterSwingKnob.setBounds (1101, 535, 130, 130);
+
+    // 5. Top Row Dropdowns (Aligned inside top bar header slots)
     rootKeyBox.setBounds (180, 20, 105, 24); 
     scaleTypeBox.setBounds (290, 20, 105, 24); 
     cycleLengthBox.setBounds (400, 20, 105, 24);
     panelThemeBox.setBounds (510, 20, 105, 24); 
     
-    // 5. Top Row Performance buttons [1.1.8]
+    // 6. Top Row Performance buttons
     latchButton.setBounds (625, 20, 105, 24); 
     arpSeqButton.setBounds (735, 20, 105, 24); 
     polyButton.setBounds (845, 20, 105, 24); 
     freezeButton.setBounds (955, 20, 105, 24);
 
-    // 6. Preset Matrix Switches (Y=530, height=30) centered horizontally over the upfader tracks [1.1.8]
+    // 7. Preset Matrix Switches (Y=530, height=30) centered horizontally over the upfader tracks
     for (int i = 0; i < 8; ++i) 
     {
         float trackCenter = 232.0f + static_cast<float> (i) * 110.85f;
         presetButtons[i].setBounds (static_cast<int> (trackCenter) - 50, 530, 100, 30);
     }
 
-    // 7. Central Crossfader Row shifted to Y=575 to sit exactly inside its slot [1.1.8]
+    // 8. Central Crossfader Row shifted to Y=575
     int rowWidth = 350;
     int rowStartX = 180 + (880 - rowWidth) / 2;
     sceneAButton.setBounds (rowStartX, 575, 40, 30);
     morphCrossfader.setBounds (rowStartX + 45, 575, 260, 30);
     sceneBButton.setBounds (rowStartX + 310, 575, 40, 30);
 
-    // 8. Left 2x2 Utility Grid Buttons (Save/Recall: Y=530, Copy/Init: Y=575, aligns with printed faceplate) [1.1.8]
-    saveButton.setBounds (18, 530, 68, 36); 
-    recallButton.setBounds (91, 530, 68, 36); 
-    copyButton.setBounds (18, 575, 68, 36); 
-    initButton.setBounds (91, 575, 68, 36);
+    // 9. Relocated Left 2x2 Utility Grid Buttons at the very bottom left below the giant dial (Y=755, Y=800)
+    saveButton.setBounds (18, 755, 68, 36); 
+    recallButton.setBounds (91, 755, 68, 36); 
+    copyButton.setBounds (18, 800, 68, 36); 
+    initButton.setBounds (91, 800, 68, 36);
 
-    // 9. Right 2x2 Dice Grid Buttons (Melo/Arti: Y=530, Time/Navy: Y=575, covers the watermark) [1.1.8]
-    diceMeloButton.setBounds (1082, 530, 68, 36); 
-    diceArtiButton.setBounds (1155, 530, 68, 36); 
-    diceTimeButton.setBounds (1082, 575, 68, 36); 
-    diceNavyButton.setBounds (1155, 575, 68, 36);
+    // 10. Relocated Right 2x2 Dice Grid Buttons at the very bottom right below the giant dial (Y=755, Y=800)
+    diceMeloButton.setBounds (1082, 755, 68, 36); 
+    diceArtiButton.setBounds (1155, 755, 68, 36); 
+    diceTimeButton.setBounds (1082, 800, 68, 36); 
+    diceNavyButton.setBounds (1155, 800, 68, 36);
 
-    // 10. Upfaders (Centered over 200px vertical track slots, Y=620 to 820) [1.1.8]
+    // 11. Upfaders (Centered over 200px vertical track slots, Y=620 to 820)
     juce::Slider* faders[] = { &fader1, &fader2, &fader3, &fader4, &fader5, &fader6, &fader7, &fader8 };
     for (int i = 0; i < 8; ++i) {
         float trackCenter = 232.0f + static_cast<float> (i) * 110.85f;
@@ -547,18 +541,22 @@ void PluginEditor::timerCallback()
 
 void PluginEditor::updateSliderTextBoxThemeColors()
 {
-    // Override standard theme configurations to lock the textboxes to high-contrast dark panels [1.1.8]
-    juce::Slider* allKnobs[] = { &rhythmMorphKnob, &restKnob, &legatoKnob, &rateKnob, &entropyKnob, &harmonyKnob, &chaosKnob, &octavesKnob, &masterVelocityKnob, &masterSwingKnob };
+    // Override standard theme configurations to lock the textboxes to high-contrast dark panels
+    juce::Slider* allKnobs[] = { &rhythmMorphKnob, &restKnob, &legatoKnob, &rateKnob, &entropyKnob, &harmonyKnob, &chaosKnob, &octavesKnob };
     for (auto* k : allKnobs)
     {
-        // Force textbox colors to lock onto dark-midnight theme styling [1.1.8]
+        // Force textbox colors to lock onto dark-midnight theme styling, removing outlines to blend into graphics
         k->setColour (juce::Slider::textBoxTextColourId, juce::Colour (0xFF00D2FF));      // Glowing Electric Cyan Text
         k->setColour (juce::Slider::textBoxBackgroundColourId, juce::Colour (0xFF0F1116)); // Matte Dark Backing
-        k->setColour (juce::Slider::textBoxOutlineColourId, juce::Colour (0xFF181C24));    // Dark subtle border outline
+        k->setColour (juce::Slider::textBoxOutlineColourId, juce::Colours::transparentBlack); // Translucent/None Border
     }
 
-    juce::Label* leftTitles[] = { &rhythmMorphTitle, &restTitle, &legatoTitle, &rateTitle, &masterVelocityTitle };
-    juce::Label* rightTitles[] = { &entropyTitle, &harmonyTitle, &chaosTitle, &octavesTitle, &masterSwingTitle };
+    // Explicitly hide the textboxes on master dials so they render as clean pure physical knobs
+    masterVelocityKnob.setTextBoxStyle (juce::Slider::NoTextBox, false, 0, 0);
+    masterSwingKnob.setTextBoxStyle (juce::Slider::NoTextBox, false, 0, 0);
+
+    juce::Label* leftTitles[] = { &rhythmMorphTitle, &restTitle, &legatoTitle, &rateTitle };
+    juce::Label* rightTitles[] = { &entropyTitle, &harmonyTitle, &chaosTitle, &octavesTitle };
     for (auto* title : leftTitles)
         title->setColour (juce::Label::textColourId, juce::Colours::white.withAlpha (0.8f));
     for (auto* title : rightTitles)
