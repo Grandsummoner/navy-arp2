@@ -17,10 +17,10 @@ juce::Slider::SliderLayout ChromaCapsLookAndFeel::getSliderLayout (juce::Slider&
     juce::Slider::SliderLayout layout;
     auto localBounds = slider.getLocalBounds();
     
-    // Allow the rotary slider to occupy the full bounds so its center remains exactly at the component's geometric center
+    // The active rotary area occupies the full component height so its vertical center sits at 35px
     layout.sliderBounds = localBounds;
     
-    // Position the textbox in the bottom 14px of the component bounds
+    // The textbox is positioned exactly at the bottom 14px of the 70px bounds
     layout.textBoxBounds = juce::Rectangle<int> (0, localBounds.getHeight() - 14, localBounds.getWidth(), 14);
     
     return layout;
@@ -71,11 +71,11 @@ void ChromaCapsLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, i
     float centerY = localBounds.getCentreY();
     
     const bool isMasterKnob = (cid == "masterVelocity" || cid == "masterSwing");
-    float knobRadius = 14.0f; // Sized tightly to fit within your small printed caps
+    float knobRadius = 21.0f; // Sized for the small knobs at 1521x1034 resolution
 
     if (isMasterKnob)
     {
-        // Enforce the exact pixel coordinates measured from your diagnostic screenshots
+        // Enforce the exact coordinate readings measured from your diagnostic screenshots
         if (cid == "masterVelocity")
         {
             centerX = 73.0f - static_cast<float> (slider.getX());
@@ -86,18 +86,18 @@ void ChromaCapsLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, i
             centerX = 927.0f - static_cast<float> (slider.getX());
             centerY = 440.0f - static_cast<float> (slider.getY());
         }
-        knobRadius = 35.0f; // Master knob vector size
+        knobRadius = 53.0f; // Master knob vector size
     }
     else
     {
-        // Small knobs utilize the getSliderLayout center line
-        centerY = localBounds.getCentreY() - 7.0f;
-        knobRadius = 14.0f; 
+        // Small knobs utilize the full component vertical center
+        centerY = localBounds.getCentreY();
+        knobRadius = 21.0f; 
     }
 
-    // Symmetrical LED rings tightly wrapped to your knob caps
-    float ledRadius = isMasterKnob ? (knobRadius + 8.5f) : (knobRadius + 5.5f);
-    float ledDiameter = isMasterKnob ? 3.5f : 2.0f;
+    // Spacing ratios centered exactly on the printed spindle centers
+    float ledRadius = isMasterKnob ? (knobRadius + 13.0f) : (knobRadius + 8.5f);
+    float ledDiameter = isMasterKnob ? 5.0f : 3.0f;
 
     bool isLeftKnob = (cid == "rhythmMorph" || cid == "rest" || cid == "legato" || cid == "rate" || cid == "masterVelocity");
     juce::Colour activeColor = isLeftKnob ? t.knobFillLeft : t.knobFillRight;
@@ -111,20 +111,20 @@ void ChromaCapsLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, i
 
         if (i < litCount)
         {
-            float outerRadius = isMasterKnob ? 6.0f : 3.5f;
+            float outerRadius = isMasterKnob ? 8.0f : 4.5f;
             juce::ColourGradient glow (activeColor.withAlpha (0.6f), ledX, ledY,
                                        activeColor.withAlpha (0.0f), ledX + outerRadius, ledY + outerRadius,
                                        true);
             g.setGradientFill (glow);
             g.fillEllipse (ledX - outerRadius, ledY - outerRadius, outerRadius * 2.0f, outerRadius * 2.0f);
 
-            float innerRadius = isMasterKnob ? 1.8f : 0.8f;
+            float innerRadius = isMasterKnob ? 2.5f : 1.2f;
             g.setColour (juce::Colours::white.interpolatedWith (activeColor, 0.2f));
             g.fillEllipse (ledX - innerRadius, ledY - innerRadius, innerRadius * 2.0f, innerRadius * 2.0f);
         }
         else
         {
-            float innerRadius = 0.5f;
+            float innerRadius = 0.8f;
             g.setColour (juce::Colour (0xFF1F2229).withAlpha (0.25f));
             g.fillEllipse (ledX - innerRadius, ledY - innerRadius, innerRadius * 2.0f, innerRadius * 2.0f);
         }
@@ -133,7 +133,7 @@ void ChromaCapsLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, i
     // 4. Draw pointer needle centered over the asset knob
     float angle = rotaryStartAngle + sliderPos * (rotaryEndAngle - rotaryStartAngle);
     juce::Path path;
-    float pointerThickness = isMasterKnob ? 2.5f : 1.5f;
+    float pointerThickness = isMasterKnob ? 3.0f : 2.0f;
     float pointerLength = knobRadius * 0.65f;
     path.addRectangle (-pointerThickness * 0.5f, -knobRadius + 2.0f, pointerThickness, pointerLength);
     path.applyTransform (juce::AffineTransform::rotation (angle).translated (centerX, centerY));
@@ -174,14 +174,20 @@ void ChromaCapsLookAndFeel::drawButtonText (juce::Graphics& g, juce::TextButton&
         if (button.getToggleState() || button.isDown())
             g.setColour (juce::Colour (0xFF00D2FF));
         else
-            g.setColour (juce::Colour (0xFF888F9D)); // Upgraded from 0xFF555A65 for legibility
+            g.setColour (juce::Colour (0xFF888F9D));
 
         g.setFont (juce::FontOptions (10.0f, juce::Font::bold));
         g.drawFittedText (text, bounds.toNearestInt(), juce::Justification::centred, 1);
     }
     else if (text == "A" || text == "B")
     {
-        // Highlight active scene letter dynamically on the button cap
+        // Align C++ text with the visual offset of your printed letters
+        auto textRect = button.getLocalBounds().toFloat();
+        if (text == "A")
+            textRect = textRect.translated (4.0f, 1.0f);
+        else if (text == "B")
+            textRect = textRect.translated (-5.0f, 0.0f);
+
         bool isSceneActive = false;
         if (text == "A") isSceneActive = !processor.isSceneBActive();
         else if (text == "B") isSceneActive = processor.isSceneBActive();
@@ -192,7 +198,7 @@ void ChromaCapsLookAndFeel::drawButtonText (juce::Graphics& g, juce::TextButton&
             g.setColour (juce::Colour (0xFF757575)); // Inactive Grey
             
         g.setFont (juce::FontOptions (14.0f, juce::Font::bold));
-        g.drawFittedText (text, button.getLocalBounds(), juce::Justification::centred, 1);
+        g.drawFittedText (text, textRect.toNearestInt(), juce::Justification::centred, 1);
     }
 }
 
@@ -254,7 +260,7 @@ void ChromaCapsLookAndFeel::drawButtonBackground (juce::Graphics& g, juce::Butto
     }
     else if (text == "A" || text == "B")
     {
-        // Symmetrically light up Button A and B frames when active scene focus is held
+        // Highlight active scene frame on Button A or B based on processor state
         bool isSceneActive = false;
         if (text == "A") isSceneActive = !processor.isSceneBActive();
         else if (text == "B") isSceneActive = processor.isSceneBActive();
@@ -319,8 +325,8 @@ void ChromaCapsLookAndFeel::drawLinearSlider (juce::Graphics& g, int x, int y, i
 
     if (cid == "morph") // Active Glow Vector Crossfader centerpiece
     {
-        // 6.0px horizontal bar to sit cleanly inside the printed slot
-        const float trackHeight = 6.0f;
+        // 8.0px horizontal bar to sit cleanly inside the printed track
+        const float trackHeight = 8.0f;
         const float trackY = static_cast<float>(y) + (static_cast<float>(height) - trackHeight) * 0.5f;
 
         float progress = sliderPos / static_cast<float>(width);

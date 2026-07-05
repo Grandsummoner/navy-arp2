@@ -172,9 +172,9 @@ void OledDisplay::paint (juce::Graphics& g)
             return { x1, y2, z2 };
         };
 
-        // Vertically shift the 3D globe upwards to account for the reduced screen height (320px)
+        // Center 3D globe vertically inside the upper display area (Y=136px) above the taller VU ladders
         float globeCenterX = displayArea.getCentreX(); 
-        float globeCenterY = displayArea.getY() + 75.0f; 
+        float globeCenterY = displayArea.getY() + 120.0f; 
         float globeRadius = displayArea.getHeight() * 0.28f;   
         float cameraDistance = 2.2f;
 
@@ -448,17 +448,17 @@ void OledDisplay::paint (juce::Graphics& g)
         const float colWidth = 26.0f;
 
         const int numSegments = 16;
-        const float segmentHeight = 6.0f;      
-        const float segmentSpacing = 2.0f;     
-        const float maxLaddersHeight = (numSegments * segmentHeight) + ((numSegments - 1) * segmentSpacing); // 126px height
+        const float segmentHeight = 8.0f;      
+        const float segmentSpacing = 3.0f;     
+        const float maxLaddersHeight = (numSegments * segmentHeight) + ((numSegments - 1) * segmentSpacing); // 173px height
 
-        // Sits dynamically inside the lower portion of the OLED screen bezel (Y=174px to 300px)
-        float fadersY = bounds.getHeight() - maxLaddersHeight - 20.0f; 
+        // Sits dynamically inside the lower portion of the OLED screen bezel (Y=289px to 462px)
+        float fadersY = bounds.getHeight() - maxLaddersHeight - 25.0f; 
 
         for (int i = 0; i < 8; ++i)
         {
-            // Symmetrical, even spacing mapped inside the 680px bezel width
-            float startX = 40.0f;
+            // Symmetrical, even spacing mapped inside the wider 1035px screen bounds
+            float startX = 60.0f;
             float spacing = (bounds.getWidth() - 2.0f * startX) / 7.0f;
             float relativeCenter = startX + static_cast<float> (i) * spacing;
             auto colBounds = juce::Rectangle<float> (relativeCenter - colWidth * 0.5f, fadersY, colWidth, maxLaddersHeight);

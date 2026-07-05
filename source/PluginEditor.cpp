@@ -1,4 +1,4 @@
-#define DRAW_DIAGNOSTIC_GRID 1  // Set to 1 to show the overlay and coordinate bubble, 0 to hide it
+#define DRAW_DIAGNOSTIC_GRID 0  // Set to 1 to show the overlay and coordinate bubble, 0 to hide it
 
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
@@ -218,7 +218,7 @@ PluginEditor::PluginEditor (PluginProcessor& p)
     updateSliderTextBoxThemeColors();
 
     setResizable (false, false); 
-    setSize (1000, 680); 
+    setSize (1521, 1034); 
 
     if (DRAW_DIAGNOSTIC_GRID)
         setMouseClickGrabsKeyboardFocus (true);
@@ -447,41 +447,43 @@ void PluginEditor::mouseMove (const juce::MouseEvent& event)
 
 void PluginEditor::resized()
 {
-    // Integrated exact pinpoint measurements from your diagnostic screenshots
+    // Integrated exact pinpoint measurements from your $1521x1034 diagnostic screenshots
     
-    // 1. OLED Display screen
-    oledDisplay.setBounds (160, 60, 680, 320);
+    // 1. OLED Display screen bezel (exact bounding box)
+    oledDisplay.setBounds (243, 91, 1035, 487);
 
-    // 2. Left sidebar 2x2 grid centered exactly on your button caps (Centers: X=54.5, 97.5, Y=61.5, 94.0)
+    // 2. Left sidebar 2x2 grid centered exactly on button caps (Centers: X=54.5, 97.5, Y=61.5, 94.0)
+    // Sized to 45x30
     saveButton.setBounds (32, 46, 45, 30); 
     recallButton.setBounds (75, 46, 45, 30); 
     copyButton.setBounds (32, 79, 45, 30); 
     initButton.setBounds (75, 79, 45, 30);
 
-    // 3. Left sidebar small knobs centered exactly on your dials (Centers: X=73.5, Y=145.5, 208, 270.5, 333)
+    // 3. Left sidebar small knobs centered exactly on dials (Centers: X=73.5, Y=145.5, 208.0, 270.5, 333.0)
     // Sized to 111x70, giving them 7px TextBoxBelow height offset alignment
     rhythmMorphKnob.setBounds (18, 110, 111, 70);
     restKnob.setBounds (18, 173, 111, 70);
     legatoKnob.setBounds (18, 235, 111, 70);
     rateKnob.setBounds (18, 298, 111, 70);
 
-    // 4. Left Master Knob sitting exactly on your dial (Center: X=73, Y=438)
+    // 4. Left Master Knob sitting exactly on its dial center (Center: X=73.0, Y=438.0)
     masterVelocityKnob.setBounds (13, 378, 121, 121);
 
-    // 5. Right sidebar 2x2 grid centered exactly on your button caps (Centers: X=902.5, 945.5, Y=61.5, 94.0)
+    // 5. Right sidebar 2x2 grid centered exactly on button caps (Centers: X=902.5, 945.5, Y=61.5, 94.0)
+    // Sized to 45x30
     diceMeloButton.setBounds (880, 46, 45, 30); 
     diceArtiButton.setBounds (923, 46, 45, 30); 
     diceTimeButton.setBounds (880, 79, 45, 30); 
     diceNavyButton.setBounds (923, 79, 45, 30);
 
-    // 6. Right sidebar small knobs centered exactly on your dials (Centers: X=926.5, Y=145.5, 208, 270.5, 333)
+    // 6. Right sidebar small knobs centered exactly on dials (Centers: X=926.5, Y=145.5, 208, 270.5, 333)
     entropyKnob.setBounds (871, 110, 111, 70);
     harmonyKnob.setBounds (871, 173, 111, 70);
     chaosKnob.setBounds (871, 235, 111, 70);
     octavesKnob.setBounds (871, 298, 111, 70);
 
-    // 7. Right Master Knob sitting exactly on your dial (Center: X=927, Y=440)
-    masterSwingKnob.setBounds (866, 379, 121, 121);
+    // 7. Right Master Knob sitting exactly on its dial center (Center: X=927, Y=440)
+    masterSwingKnob.setBounds (866, 378, 121, 121);
 
     // 8. Top Row Dropdowns (Aligned inside header slots, centered vertically on Y = 26)
     rootKeyBox.setBounds (162, 15, 80, 22); 
@@ -501,18 +503,17 @@ void PluginEditor::resized()
     morphCrossfader.setBounds (350, 404, 300, 40);
     sceneBButton.setBounds (723, 402, 44, 44);
 
-    // 11. Symmetrical Column Alignment (Y = 590 to 645 track length)
-    // Centered horizontally on the 8 columns starting at 75 with exact 121.43px spacing
+    // 11. Symmetrical Column Alignment (Y = 897 to 980 vertical upfader tracks)
+    // Centered horizontally on the 8 columns starting at 117 with exact 184px spacing
+    const float trackCenters[8] = { 117.0f, 301.0f, 485.0f, 669.0f, 852.0f, 1036.0f, 1220.0f, 1404.0f };
     for (int i = 0; i < 8; ++i) 
     {
-        float trackCenter = 75.0f + static_cast<float> (i) * 121.43f;
-        
-        // Preset Matrix Switches centered over their tracks (Y = 475 to 545)
-        presetButtons[i].setBounds (static_cast<int> (trackCenter) - 35, 475, 70, 70);
+        // Preset Matrix Switches centered over their tracks (Y = 669 to 775, center Y = 722)
+        presetButtons[i].setBounds (static_cast<int> (trackCenters[i]) - 35, 687, 70, 70);
 
-        // Upfaders aligned inside their slots in the black bottom strip (Y = 565 to 665)
+        // Upfaders aligned inside their slots inside the black bottom strip (Y = 897 to 980 fader slot tracks)
         juce::Slider* faderPtrs[] = { &fader1, &fader2, &fader3, &fader4, &fader5, &fader6, &fader7, &fader8 };
-        faderPtrs[i]->setBounds (static_cast<int> (trackCenter) - 15, 565, 30, 100);
+        faderPtrs[i]->setBounds (static_cast<int> (trackCenters[i]) - 15, 885, 30, 110);
     }
 }
 
