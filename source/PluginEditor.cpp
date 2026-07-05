@@ -1,4 +1,4 @@
-#define DRAW_DIAGNOSTIC_GRID 0  // Set to 1 to show the overlay and coordinate bubble, 0 to hide it
+#define DRAW_DIAGNOSTIC_GRID 0
 
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
@@ -9,7 +9,6 @@
 PluginEditor::PluginEditor (PluginProcessor& p)
     : AudioProcessorEditor (&p), processor (p), oledDisplay (p), chromaLookAndFeel (p, this)
 {
-    // Load the compiled background PNG panel asset
     backgroundImage = juce::ImageCache::getFromMemory (BinaryData::panel_png, 
                                                        BinaryData::panel_pngSize);
 
@@ -53,7 +52,6 @@ PluginEditor::PluginEditor (PluginProcessor& p)
         rightTitles[i]->setText ("", juce::dontSendNotification); 
     }
 
-    // Initialize Left Master Knob (masterVelocity)
     masterVelocityKnob.setSliderStyle (juce::Slider::RotaryHorizontalVerticalDrag);
     masterVelocityKnob.setTextBoxStyle (juce::Slider::NoTextBox, false, 0, 0);
     masterVelocityKnob.setLookAndFeel (&chromaLookAndFeel);
@@ -62,7 +60,6 @@ PluginEditor::PluginEditor (PluginProcessor& p)
     addAndMakeVisible (masterVelocityKnob);
     masterVelocityTitle.setText ("", juce::dontSendNotification);
 
-    // Initialize Right Master Knob (masterSwing)
     masterSwingKnob.setSliderStyle (juce::Slider::RotaryHorizontalVerticalDrag);
     masterSwingKnob.setTextBoxStyle (juce::Slider::NoTextBox, false, 0, 0);
     masterSwingKnob.setLookAndFeel (&chromaLookAndFeel);
@@ -218,7 +215,7 @@ PluginEditor::PluginEditor (PluginProcessor& p)
     updateSliderTextBoxThemeColors();
 
     setResizable (false, false); 
-    setSize (1519, 1035); // Matches exact raw image property dimensions
+    setSize (1519, 1035);
 
     if (DRAW_DIAGNOSTIC_GRID)
         setMouseClickGrabsKeyboardFocus (true);
@@ -375,7 +372,6 @@ void PluginEditor::mouseUp (const juce::MouseEvent& event)
 
 void PluginEditor::paint (juce::Graphics& g)
 {
-    // Draw static faceplate background
     if (backgroundImage.isValid())
     {
         g.drawImage (backgroundImage, getLocalBounds().toFloat(), 
@@ -389,13 +385,11 @@ void PluginEditor::paint (juce::Graphics& g)
 
 void PluginEditor::paintOverChildren (juce::Graphics& g)
 {
-    // Render visual diagnostic grid on top of all UI components [1.1.8]
     if (DRAW_DIAGNOSTIC_GRID)
     {
         const int width = getWidth();
         const int height = getHeight();
 
-        // Vertical Grid lines (Cyan/Blue tint)
         for (int x = 50; x < width; x += 50)
         {
             g.setColour (juce::Colour (0x4400E1FF));
@@ -406,7 +400,6 @@ void PluginEditor::paintOverChildren (juce::Graphics& g)
             g.drawText (juce::String (x), x - 12, height - 12, 24, 10, juce::Justification::centred);
         }
 
-        // Horizontal Grid lines (Pink/Red tint)
         for (int y = 50; y < height; y += 50)
         {
             g.setColour (juce::Colour (0x44FF3366));
@@ -417,7 +410,6 @@ void PluginEditor::paintOverChildren (juce::Graphics& g)
             g.drawText (juce::String (y), 4, y - 5, 24, 10, juce::Justification::left);
         }
 
-        // Track and draw current mouse cursor coordinate bubble
         auto mousePos = getMouseXYRelative();
         if (mousePos.x >= 0 && mousePos.x <= width && mousePos.y >= 0 && mousePos.y <= height)
         {
@@ -442,71 +434,69 @@ void PluginEditor::mouseMove (const juce::MouseEvent& event)
 {
     juce::ignoreUnused (event);
     if (DRAW_DIAGNOSTIC_GRID)
-        repaint(); // Force paintOverChildren to update as cursor tracks
+        repaint(); 
 }
 
 void PluginEditor::resized()
 {
-    // 1. OLED Display screen bezel (exact bounding box from image corners)
-    oledDisplay.setBounds (251, 98, 1017, 452);
+    // Screen bezel
+    oledDisplay.setBounds (243, 91, 1033, 487);
 
-    // 2. Left sidebar 2x2 grid (aligned to physical centers: X=106 group, Y=97, 145)
-    saveButton.setBounds (54, 79, 46, 36); 
-    recallButton.setBounds (112, 79, 46, 36); 
-    copyButton.setBounds (54, 127, 46, 36); 
-    initButton.setBounds (112, 127, 46, 36);
+    // Left 2x2 group
+    saveButton.setBounds (73, 82, 46, 36); 
+    recallButton.setBounds (124, 82, 46, 36); 
+    copyButton.setBounds (73, 137, 46, 36); 
+    initButton.setBounds (124, 137, 46, 36);
 
-    // 3. Left sidebar small knobs (centers at X=106, Y=219, 307, 395, 483)
-    rhythmMorphKnob.setBounds (56, 176, 100, 116);
-    restKnob.setBounds (56, 264, 100, 116);
-    legatoKnob.setBounds (56, 352, 100, 116);
-    rateKnob.setBounds (56, 440, 100, 116);
+    // Left column knobs
+    rhythmMorphKnob.setBounds (71, 189, 100, 116);
+    restKnob.setBounds (71, 279, 100, 116);
+    legatoKnob.setBounds (71, 369, 100, 116);
+    rateKnob.setBounds (71, 459, 100, 116);
+    masterVelocityKnob.setBounds (51, 582, 140, 140);
 
-    // 4. Left Master Knob sitting exactly on its dial center (Center: X=106, Y=652)
-    masterVelocityKnob.setBounds (36, 582, 140, 140);
+    // Right 2x2 group
+    diceMeloButton.setBounds (1349, 82, 46, 36); 
+    diceArtiButton.setBounds (1400, 82, 46, 36); 
+    diceTimeButton.setBounds (1349, 137, 46, 36); 
+    diceNavyButton.setBounds (1400, 137, 46, 36);
 
-    // 5. Right sidebar 2x2 grid (perfect symmetry to left, centers X=1413 group, Y=97, 145)
-    diceMeloButton.setBounds (1361, 79, 46, 36); 
-    diceArtiButton.setBounds (1419, 79, 46, 36); 
-    diceTimeButton.setBounds (1361, 127, 46, 36); 
-    diceNavyButton.setBounds (1419, 127, 46, 36);
+    // Right column knobs
+    entropyKnob.setBounds (1347, 189, 100, 116);
+    harmonyKnob.setBounds (1347, 279, 100, 116);
+    chaosKnob.setBounds (1347, 369, 100, 116);
+    octavesKnob.setBounds (1347, 459, 100, 116);
+    masterSwingKnob.setBounds (1327, 582, 140, 140);
 
-    // 6. Right sidebar small knobs centered exactly on dials (perfect symmetry to left, centers X=1413)
-    entropyKnob.setBounds (1363, 176, 100, 116);
-    harmonyKnob.setBounds (1363, 264, 100, 116);
-    chaosKnob.setBounds (1363, 352, 100, 116);
-    octavesKnob.setBounds (1363, 440, 100, 116);
-
-    // 7. Right Master Knob sitting exactly on its dial center (Center: X=1413, Y=652)
-    masterSwingKnob.setBounds (1343, 582, 140, 140);
-
-    // 8. Top Row Dropdowns (perfectly aligned with slots: width 100, height 36, center Y=38)
-    rootKeyBox.setBounds (213, 20, 100, 36); 
-    scaleTypeBox.setBounds (318, 20, 100, 36); 
-    cycleLengthBox.setBounds (423, 20, 100, 36);
-    panelThemeBox.setBounds (528, 20, 100, 36); 
+    // Top Dropdowns
+    rootKeyBox.setBounds (243, 26, 100, 36); 
+    scaleTypeBox.setBounds (348, 26, 100, 36); 
+    cycleLengthBox.setBounds (453, 26, 100, 36);
+    panelThemeBox.setBounds (558, 26, 100, 36); 
     
-    // 9. Top Row Performance buttons (perfectly aligned with slots: width 100, height 36, center Y=38)
-    latchButton.setBounds (891, 20, 100, 36); 
-    arpSeqButton.setBounds (996, 20, 100, 36); 
-    polyButton.setBounds (1101, 20, 100, 36); 
-    freezeButton.setBounds (1206, 20, 100, 36);
+    // Top Performance buttons
+    latchButton.setBounds (863, 26, 100, 36); 
+    arpSeqButton.setBounds (968, 26, 100, 36); 
+    polyButton.setBounds (1073, 26, 100, 36); 
+    freezeButton.setBounds (1178, 26, 100, 36);
 
-    // 10. Horizontal Crossfader Row restricted between Button A and B (centers at Y=641, fader track Y=633)
-    sceneAButton.setBounds (351, 613, 56, 56);
-    morphCrossfader.setBounds (516, 613, 487, 40);
-    sceneBButton.setBounds (1112, 613, 56, 56);
+    // Horizontal Crossfader Row
+    sceneAButton.setBounds (275, 607, 90, 90);
+    morphCrossfader.setBounds (380, 626, 759, 30);
+    sceneBButton.setBounds (1153, 607, 90, 90);
 
-    // 11. Bottom Matrix Column Alignment (Symmetrical Distribution)
-    const float trackCenters[8] = { 278.0f, 416.0f, 554.0f, 692.0f, 827.0f, 965.0f, 1103.0f, 1241.0f };
+    // Invisible Preset Memory Slots (Centered underneath screen)
+    const float presetCenters[8] = { 307.5f, 436.6f, 565.7f, 694.8f, 823.9f, 953.0f, 1082.1f, 1211.2f };
     for (int i = 0; i < 8; ++i) 
     {
-        // Preset Matrix Switches centered over their vertical track paths (Center Y = 751)
-        presetButtons[i].setBounds (static_cast<int> (trackCenters[i]) - 32, 719, 64, 64);
+        presetButtons[i].setBounds (static_cast<int>(presetCenters[i]) - 45, 725, 90, 90);
+    }
 
-        // Upfaders aligned with fader slot tracks to perfectly span 80px visual slider travel
-        juce::Slider* faderPtrs[] = { &fader1, &fader2, &fader3, &fader4, &fader5, &fader6, &fader7, &fader8 };
-        faderPtrs[i]->setBounds (static_cast<int> (trackCenters[i]) - 15, 840, 30, 120);
+    // Vertical Faders (Distributed across full bottom width)
+    const float faderCenters[8] = { 121.5f, 303.8f, 486.1f, 668.4f, 850.7f, 1033.0f, 1215.3f, 1397.5f };
+    for (int i = 0; i < 8; ++i) 
+    {
+        faderPtrs[i]->setBounds (static_cast<int>(faderCenters[i]) - 15, 874, 30, 120);
     }
 }
 
@@ -608,17 +598,14 @@ void PluginEditor::timerCallback()
 
 void PluginEditor::updateSliderTextBoxThemeColors()
 {
-    // Override standard theme configurations to lock the textboxes to high-contrast dark panels
     juce::Slider* allKnobs[] = { &rhythmMorphKnob, &restKnob, &legatoKnob, &rateKnob, &entropyKnob, &harmonyKnob, &chaosKnob, &octavesKnob };
     for (auto* k : allKnobs)
     {
-        // Force textbox colors to lock onto dark-midnight theme styling, removing outlines to blend into graphics
-        k->setColour (juce::Slider::textBoxTextColourId, juce::Colour (0xFF00D2FF));      // Glowing Electric Cyan Text
-        k->setColour (juce::Slider::textBoxBackgroundColourId, juce::Colour (0xFF0F1116)); // Matte Dark Backing
-        k->setColour (juce::Slider::textBoxOutlineColourId, juce::Colours::transparentBlack); // Translucent/None Border
+        k->setColour (juce::Slider::textBoxTextColourId, juce::Colour (0xFF00D2FF));      
+        k->setColour (juce::Slider::textBoxBackgroundColourId, juce::Colour (0xFF0F1116)); 
+        k->setColour (juce::Slider::textBoxOutlineColourId, juce::Colours::transparentBlack); 
     }
 
-    // Explicitly hide the textboxes on master dials so they render as clean pure physical knobs
     masterVelocityKnob.setTextBoxStyle (juce::Slider::NoTextBox, false, 0, 0);
     masterSwingKnob.setTextBoxStyle (juce::Slider::NoTextBox, false, 0, 0);
 

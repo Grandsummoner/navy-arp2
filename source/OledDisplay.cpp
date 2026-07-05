@@ -2,9 +2,6 @@
 #include "PluginProcessor.h"
 #include "AppTheme.h"
 
-// =====================================================================
-// PERSISTENT INSTANCE-SAFE STATE CONTAINER (ZERO HEADER OVERHEAD)
-// =====================================================================
 class CameoState : public juce::ReferenceCountedObject
 {
 public:
@@ -14,14 +11,14 @@ public:
         float startX = 0.0f, startY = 0.0f;
         float targetX = 0.0f, targetY = 0.0f;
         double startTimeMs = 0.0;
-        double durationMs = 0.0;   // Flight duration
+        double durationMs = 0.0;   
         int trajectoryPattern = 0; // 0 = Straight, 1 = Arc, 2 = Jitter
         float arcAmplitude = 0.0f;
     };
     
     std::vector<ActiveCameo> activeCameos;
     double lastCameoTriggerTime = 0.0;
-    double nextCameoInterval = 120000.0; // 2 minutes minimum
+    double nextCameoInterval = 120000.0; 
 
     struct FacetTriangle
     {
@@ -53,7 +50,7 @@ void OledDisplay::showParameterOverlay (const juce::String& paramName, float bas
     isOverlayActive = true;
     
     repaint();
-    startTimer (1500); // 1.5 second display timeout
+    startTimer (1500); 
 }
 
 void OledDisplay::setFreezeActive (bool shouldBeActive)
@@ -172,7 +169,6 @@ void OledDisplay::paint (juce::Graphics& g)
             return { x1, y2, z2 };
         };
 
-        // Center 3D globe vertically inside the upper display area
         float globeCenterX = displayArea.getCentreX(); 
         float globeCenterY = displayArea.getY() + 120.0f; 
         float globeRadius = displayArea.getHeight() * 0.28f;   
@@ -206,7 +202,6 @@ void OledDisplay::paint (juce::Graphics& g)
             state = dynamic_cast<CameoState*> (cameoVar->getObject());
         }
 
-        // RENDER: BACKGROUND DENSE 3D GLOBE
         juce::Colour lineColour     = juce::Colour::fromString ("#FF0066FF").withAlpha (0.24f); 
         juce::Colour nodeGlowColour = juce::Colour::fromString ("#FF00E1FF");                  
         juce::Colour nodeCoreColour = juce::Colour::fromString ("#FF80F3FF");                  
@@ -335,7 +330,6 @@ void OledDisplay::paint (juce::Graphics& g)
             drawEdge (offset5 + i, 61); 
         }
 
-        // RENDER: ACTIVE SPACE CAMEOS
         if (state != nullptr)
         {
             if (timeMs - state->lastCameoTriggerTime >= state->nextCameoInterval)
@@ -430,34 +424,25 @@ void OledDisplay::paint (juce::Graphics& g)
             }
         }
 
-        // RENDER: MONITOR HEADER LABEL
         g.setColour (juce::Colour (0xFF00D2FF)); 
         g.setFont (juce::FontOptions (12.0f, juce::Font::bold));
         g.drawText ("NAVY-ARP MONITOR", displayArea.removeFromTop (20.0f), juce::Justification::centred, true);
 
         displayArea.removeFromTop (4.0f);
 
-        // System information status bar
         g.setColour (juce::Colour (0xFF00FF66).withAlpha(0.85f)); 
         g.setFont (juce::FontOptions (10.0f, juce::Font::bold));
         g.drawText (metaText, displayArea.removeFromTop (15.0f), juce::Justification::centred, true);
 
-        // =====================================================================
-        // RENDER: LAYER 3 - STEP LEVEL MONITOR (VU SEGMENTED LADDERS)
-        // =====================================================================
         const float colWidth = 26.0f;
-
         const int numSegments = 16;
         const float segmentHeight = 8.0f;      
         const float segmentSpacing = 3.0f;     
-        const float maxLaddersHeight = (numSegments * segmentHeight) + ((numSegments - 1) * segmentSpacing); // 173px height
-
-        // Sits dynamically inside the lower portion of the OLED screen bezel
+        const float maxLaddersHeight = (numSegments * segmentHeight) + ((numSegments - 1) * segmentSpacing); 
         float fadersY = bounds.getHeight() - maxLaddersHeight - 25.0f; 
 
-        // Symmetrical, even spacing mapped inside the OLED screen bounds
-        // These relative centers correspond exactly to the track centers relative to the left OLED edge (X = 251)
-        const float relativeCenters[8] = { 27.0f, 165.0f, 303.0f, 441.0f, 576.0f, 714.0f, 852.0f, 990.0f };
+        // Perfectly mapped screen VU meter centers
+        const float relativeCenters[8] = { 65.0f, 194.0f, 323.0f, 452.0f, 581.0f, 710.0f, 839.0f, 968.0f };
 
         for (int i = 0; i < 8; ++i)
         {
@@ -469,7 +454,6 @@ void OledDisplay::paint (juce::Graphics& g)
 
             const bool isActiveStep = isPlaying && (i == activeStep);
 
-            // Draw segmented bars
             for (int seg = 0; seg < numSegments; ++seg)
             {
                 float segY = colBounds.getY() + maxLaddersHeight - ((seg + 1) * (segmentHeight + segmentSpacing));
@@ -490,7 +474,6 @@ void OledDisplay::paint (juce::Graphics& g)
                 g.fillRect (segmentRect);
             }
 
-            // Draw step indicator numbers
             float textY = colBounds.getY() + maxLaddersHeight + 4.0f;
             auto stepNumRect = juce::Rectangle<float> (colBounds.getX(), textY, colBounds.getWidth(), 15.0f);
             
