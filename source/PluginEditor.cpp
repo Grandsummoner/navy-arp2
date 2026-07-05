@@ -51,7 +51,7 @@ PluginEditor::PluginEditor (PluginProcessor& p)
         rightTitles[i]->setText ("", juce::dontSendNotification); 
     }
 
-    // Initialize Left Master Knob (mast) - Hide Textbox to match intended design
+    // Initialize Left Master Knob (mast) - No textbox, centered dynamically in LookAndFeel
     masterVelocityKnob.setSliderStyle (juce::Slider::RotaryHorizontalVerticalDrag);
     masterVelocityKnob.setTextBoxStyle (juce::Slider::NoTextBox, false, 0, 0);
     masterVelocityKnob.setLookAndFeel (&chromaLookAndFeel);
@@ -60,7 +60,7 @@ PluginEditor::PluginEditor (PluginProcessor& p)
     addAndMakeVisible (masterVelocityKnob);
     masterVelocityTitle.setText ("", juce::dontSendNotification);
 
-    // Initialize Right Master Knob (misn) - Hide Textbox to match intended design
+    // Initialize Right Master Knob (mlart) - No textbox, centered dynamically in LookAndFeel
     masterSwingKnob.setSliderStyle (juce::Slider::RotaryHorizontalVerticalDrag);
     masterSwingKnob.setTextBoxStyle (juce::Slider::NoTextBox, false, 0, 0);
     masterSwingKnob.setLookAndFeel (&chromaLookAndFeel);
@@ -216,7 +216,7 @@ PluginEditor::PluginEditor (PluginProcessor& p)
     updateSliderTextBoxThemeColors();
 
     setResizable (false, false); 
-    setSize (1241, 848); 
+    setSize (1000, 680); // Set standard logical canvas dimensions
     startTimerHz (30);
 }
 
@@ -382,68 +382,70 @@ void PluginEditor::paint (juce::Graphics& g)
 
 void PluginEditor::resized()
 {
-    // 1. OLED Display screen fits inside the real screen bezel artwork area
-    oledDisplay.setBounds (180, 90, 880, 420);
-
-    // 2. Left side small knobs centered over printed backings (Centers: Y = 110, 220, 330, 440)
-    rhythmMorphKnob.setBounds (20, 65, 110, 90);
-    restKnob.setBounds (20, 175, 110, 90);
-    legatoKnob.setBounds (20, 285, 110, 90);
-    rateKnob.setBounds (20, 395, 110, 90);
-
-    // 3. Right side small knobs centered over printed backings (Centers: Y = 110, 220, 330, 440)
-    entropyKnob.setBounds (1111, 65, 110, 90);
-    harmonyKnob.setBounds (1111, 175, 110, 90);
-    chaosKnob.setBounds (1111, 285, 110, 90);
-    octavesKnob.setBounds (1111, 395, 110, 90);
-
-    // 4. Giant master knobs positioned exactly over the pre-baked big side scales (Center Y = 600)
-    masterVelocityKnob.setBounds (10, 535, 130, 130);
-    masterSwingKnob.setBounds (1101, 535, 130, 130);
-
-    // 5. Top Row Dropdowns (Aligned inside top bar header slots)
-    rootKeyBox.setBounds (180, 20, 105, 24); 
-    scaleTypeBox.setBounds (290, 20, 105, 24); 
-    cycleLengthBox.setBounds (400, 20, 105, 24);
-    panelThemeBox.setBounds (510, 20, 105, 24); 
+    // Updated bounds coordinate layout to fit the clean 1000x680 proportions
     
-    // 6. Top Row Performance buttons
-    latchButton.setBounds (625, 20, 105, 24); 
-    arpSeqButton.setBounds (735, 20, 105, 24); 
-    polyButton.setBounds (845, 20, 105, 24); 
-    freezeButton.setBounds (955, 20, 105, 24);
+    // 1. OLED Display screen centered
+    oledDisplay.setBounds (160, 60, 680, 320);
 
-    // 7. Preset Matrix Switches (Y=530, height=30) centered horizontally over the upfader tracks
+    // 2. Left sidebar 2x2 grid repositioned at the top-left corner
+    saveButton.setBounds (20, 15, 50, 35); 
+    recallButton.setBounds (80, 15, 50, 35); 
+    copyButton.setBounds (20, 55, 50, 35); 
+    initButton.setBounds (80, 55, 50, 35);
+
+    // 3. Left sidebar small knobs positioned vertically below the 2x2 grid
+    rhythmMorphKnob.setBounds (20, 100, 110, 70);
+    restKnob.setBounds (20, 170, 110, 70);
+    legatoKnob.setBounds (20, 240, 110, 70);
+    rateKnob.setBounds (20, 310, 110, 70);
+
+    // 4. Left Master Knob sitting exactly on the horizontal axis (Center Y = 430)
+    masterVelocityKnob.setBounds (20, 375, 110, 110);
+
+    // 5. Right sidebar 2x2 grid repositioned at the top-right corner
+    diceMeloButton.setBounds (870, 15, 50, 35); 
+    diceArtiButton.setBounds (930, 15, 50, 35); 
+    diceTimeButton.setBounds (870, 55, 50, 35); 
+    diceNavyButton.setBounds (930, 55, 50, 35);
+
+    // 6. Right sidebar small knobs positioned vertically below the 2x2 grid
+    entropyKnob.setBounds (870, 100, 110, 70);
+    harmonyKnob.setBounds (870, 170, 110, 70);
+    chaosKnob.setBounds (870, 240, 110, 70);
+    octavesKnob.setBounds (870, 310, 110, 70);
+
+    // 7. Right Master Knob sitting exactly on the horizontal axis (Center Y = 430)
+    masterSwingKnob.setBounds (870, 375, 110, 110);
+
+    // 8. Top Row Dropdowns (Aligned inside header slots)
+    rootKeyBox.setBounds (180, 20, 75, 24); 
+    scaleTypeBox.setBounds (260, 20, 75, 24); 
+    cycleLengthBox.setBounds (340, 20, 75, 24);
+    panelThemeBox.setBounds (420, 20, 75, 24); 
+    
+    // 9. Top Row Performance buttons
+    latchButton.setBounds (505, 20, 75, 24); 
+    arpSeqButton.setBounds (585, 20, 75, 24); 
+    polyButton.setBounds (665, 20, 75, 24); 
+    freezeButton.setBounds (745, 20, 75, 24);
+
+    // 10. Horizontal Crossfader Row situated above the preset boxes (Center Y = 430)
+    sceneAButton.setBounds (180, 410, 40, 40);
+    morphCrossfader.setBounds (240, 410, 520, 40);
+    sceneBButton.setBounds (780, 410, 40, 40);
+
+    // 11. Upfader and Preset Box column alignment
+    // Calculate the 8 column centers symmetrically inside the 700px center space
     for (int i = 0; i < 8; ++i) 
     {
-        float trackCenter = 232.0f + static_cast<float> (i) * 110.85f;
-        presetButtons[i].setBounds (static_cast<int> (trackCenter) - 50, 530, 100, 30);
-    }
+        float trackCenter = 195.0f + static_cast<float> (i) * 87.0f;
+        
+        // Preset Matrix Switches (Memory Slots 1-8) centered over their tracks (Y = 475 to 545)
+        presetButtons[i].setBounds (static_cast<int> (trackCenter) - 35, 475, 70, 70);
 
-    // 8. Central Crossfader Row shifted to Y=575
-    int rowWidth = 350;
-    int rowStartX = 180 + (880 - rowWidth) / 2;
-    sceneAButton.setBounds (rowStartX, 575, 40, 30);
-    morphCrossfader.setBounds (rowStartX + 45, 575, 260, 30);
-    sceneBButton.setBounds (rowStartX + 310, 575, 40, 30);
-
-    // 9. Relocated Left 2x2 Utility Grid Buttons at the very bottom left below the giant dial (Y=755, Y=800)
-    saveButton.setBounds (18, 755, 68, 36); 
-    recallButton.setBounds (91, 755, 68, 36); 
-    copyButton.setBounds (18, 800, 68, 36); 
-    initButton.setBounds (91, 800, 68, 36);
-
-    // 10. Relocated Right 2x2 Dice Grid Buttons at the very bottom right below the giant dial (Y=755, Y=800)
-    diceMeloButton.setBounds (1082, 755, 68, 36); 
-    diceArtiButton.setBounds (1155, 755, 68, 36); 
-    diceTimeButton.setBounds (1082, 800, 68, 36); 
-    diceNavyButton.setBounds (1155, 800, 68, 36);
-
-    // 11. Upfaders (Centered over 200px vertical track slots, Y=620 to 820)
-    juce::Slider* faders[] = { &fader1, &fader2, &fader3, &fader4, &fader5, &fader6, &fader7, &fader8 };
-    for (int i = 0; i < 8; ++i) {
-        float trackCenter = 232.0f + static_cast<float> (i) * 110.85f;
-        faders[i]->setBounds (static_cast<int> (trackCenter) - 15, 620, 30, 200);
+        // Upfaders aligned inside their slots inside the black bottom strip (Y = 575 to 675)
+        juce::Slider* faderPtrs[] = { &fader1, &fader2, &fader3, &fader4, &fader5, &fader6, &fader7, &fader8 };
+        faderPtrs[i]->setBounds (static_cast<int> (trackCenter) - 15, 575, 30, 100);
     }
 }
 

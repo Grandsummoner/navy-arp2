@@ -172,9 +172,10 @@ void OledDisplay::paint (juce::Graphics& g)
             return { x1, y2, z2 };
         };
 
+        // Repositioned the 3D globe upwards to account for the reduced screen height (320px)
         float globeCenterX = displayArea.getCentreX(); 
-        float globeCenterY = displayArea.getY() + 140.0f; // Shifted up to clear the VU space [1.1.8]
-        float globeRadius = displayArea.getHeight() * 0.32f;   
+        float globeCenterY = displayArea.getY() + 95.0f; 
+        float globeRadius = displayArea.getHeight() * 0.28f;   
         float cameraDistance = 2.2f;
 
         std::vector<juce::Point<float>> projectedPoints;
@@ -452,12 +453,12 @@ void OledDisplay::paint (juce::Graphics& g)
         const float maxLaddersHeight = (numSegments * segmentHeight) + ((numSegments - 1) * segmentSpacing); // 126px height
 
         // Position fader monitor area to sit inside the lower portion of the OLED screen bezel [cite: 43]
-        float fadersY = bounds.getHeight() - maxLaddersHeight - 20.0f; // 274px absolute Y position [1.1.8]
+        float fadersY = bounds.getHeight() - maxLaddersHeight - 20.0f; // 174px absolute Y position [1.1.8]
 
         for (int i = 0; i < 8; ++i)
         {
-            // Center each VU column relative to the 110.85px fader track centers [cite: 43]
-            float relativeCenter = 52.0f + static_cast<float> (i) * 110.85f; // Aligns with the faders [1.1.8]
+            // Center each VU column relative to the new 87.0px fader track centers [cite: 43]
+            float relativeCenter = 35.0f + static_cast<float> (i) * 87.0f; // Align columns dynamically over the 1000x680 tracks
             auto colBounds = juce::Rectangle<float> (relativeCenter - colWidth * 0.5f, fadersY, colWidth, maxLaddersHeight);
             
             float faderVal = (processor.sceneA.faders[i] * (1.0f - morphVal)) + (processor.sceneB.faders[i] * morphVal);
