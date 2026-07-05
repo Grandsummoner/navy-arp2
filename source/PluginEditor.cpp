@@ -218,7 +218,7 @@ PluginEditor::PluginEditor (PluginProcessor& p)
     updateSliderTextBoxThemeColors();
 
     setResizable (false, false); 
-    setSize (1521, 1034); // Scaled up to perfectly match your target panel dimensions
+    setSize (1521, 1034); // Sized to match your raw high-definition panel PNG dimensions
 
     if (DRAW_DIAGNOSTIC_GRID)
         setMouseClickGrabsKeyboardFocus (true);
@@ -375,7 +375,7 @@ void PluginEditor::mouseUp (const juce::MouseEvent& event)
 
 void PluginEditor::paint (juce::Graphics& g)
 {
-    // 1. Draw static faceplate background
+    // Draw static faceplate background
     if (backgroundImage.isValid())
     {
         g.drawImage (backgroundImage, getLocalBounds().toFloat(), 
@@ -471,10 +471,10 @@ void PluginEditor::resized()
 
     // 5. Right sidebar 2x2 grid centered exactly on button caps (Centers: X=902.5, 945.5, Y=61.5, 94.0)
     // Sized to 45x30
-    diceMeloButton.setBounds (880, 46, 45, 30); 
-    diceArtiButton.setBounds (923, 46, 45, 30); 
-    diceTimeButton.setBounds (880, 79, 45, 30); 
-    diceNavyButton.setBounds (923, 79, 45, 30);
+    diceMeloButton.setBounds (882, 46, 45, 30); 
+    diceArtiButton.setBounds (926, 46, 45, 30); 
+    diceTimeButton.setBounds (882, 80, 45, 30); 
+    diceNavyButton.setBounds (926, 80, 45, 30);
 
     // 6. Right sidebar small knobs centered exactly on dials (Centers: X=926.5, Y=145.5, 208, 270.5, 333)
     entropyKnob.setBounds (871, 110, 111, 70);
