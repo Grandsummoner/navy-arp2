@@ -116,5 +116,5 @@ private:
     std::uint32_t sceneBPressStartTime = 0;
     bool sceneBAlreadySaved = false;
 
-    JURE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PluginEditor)
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PluginEditor)
 };
