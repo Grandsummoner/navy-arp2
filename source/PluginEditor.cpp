@@ -371,7 +371,6 @@ void PluginEditor::mouseUp (const juce::MouseEvent& event)
 
 void PluginEditor::paint (juce::Graphics& g)
 {
-    // Draw background graphic panel
     if (backgroundImage.isValid())
     {
         g.drawImage (backgroundImage, getLocalBounds().toFloat(), 
@@ -415,67 +414,70 @@ void PluginEditor::resized()
 {
     // Mapped bounds coordinate layout [1.1.8]
     
-    // 1. OLED Display screen occupies the giant center bezel
-    oledDisplay.setBounds (150, 50, 941, 650);
+    // 1. OLED Display screen fits inside the real screen bezel artwork area [1.1.8]
+    oledDisplay.setBounds (180, 54, 880, 361);
 
-    // 2. Left side knobs centered precisely using the calculated uniform 130px spacing interval [1.1.8]
-    // Top-left Morph sits at Y=55, followed by Rest at Y=185, Legato at Y=315, Rate at Y=445, and Mast at Y=575
-    rhythmMorphKnob.setBounds (20, 55, 110, 90);
-    restKnob.setBounds (20, 185, 110, 90);
-    legatoKnob.setBounds (20, 315, 110, 90);
-    rateKnob.setBounds (20, 445, 110, 90);
-    masterVelocityKnob.setBounds (20, 575, 110, 90);
+    // 2. Left side knobs centered over printed backings at exact uniform Y centers (110, 220, 330, 440, 600) [1.1.8]
+    rhythmMorphKnob.setBounds (30, 65, 110, 90);
+    restKnob.setBounds (30, 175, 110, 90);
+    legatoKnob.setBounds (30, 285, 110, 90);
+    rateKnob.setBounds (30, 395, 110, 90);
+    
+    // Master velocity knob centered at Y = 600 [1.1.8]
+    masterVelocityKnob.setBounds (30, 555, 110, 90);
 
-    // 3. Right side knobs centered precisely using the same uniform 130px spacing interval [1.1.8]
-    entropyKnob.setBounds (1111, 55, 110, 90);
-    harmonyKnob.setBounds (1111, 185, 110, 90);
-    chaosKnob.setBounds (1111, 315, 110, 90);
-    octavesKnob.setBounds (1111, 445, 110, 90);
-    masterSwingKnob.setBounds (1111, 575, 110, 90);
+    // 3. Right side knobs centered over printed backings [1.1.8]
+    entropyKnob.setBounds (1101, 65, 110, 90);
+    harmonyKnob.setBounds (1101, 175, 110, 90);
+    chaosKnob.setBounds (1101, 285, 110, 90);
+    octavesKnob.setBounds (1101, 395, 110, 90);
+    
+    // Master swing knob centered at Y = 600 [1.1.8]
+    masterSwingKnob.setBounds (1101, 555, 110, 90);
 
     // 4. Top Row Dropdowns (Aligned inside top bar header slots) [1.1.8]
-    rootKeyBox.setBounds (150, 16, 105, 24); 
-    scaleTypeBox.setBounds (267, 16, 105, 24); 
-    cycleLengthBox.setBounds (384, 16, 105, 24);
-    panelThemeBox.setBounds (501, 16, 105, 24); 
+    rootKeyBox.setBounds (180, 20, 105, 24); 
+    scaleTypeBox.setBounds (290, 20, 105, 24); 
+    cycleLengthBox.setBounds (400, 20, 105, 24);
+    panelThemeBox.setBounds (510, 20, 105, 24); 
     
     // 5. Top Row Performance buttons shifted down [1.1.8]
-    latchButton.setBounds (618, 16, 105, 24); 
-    arpSeqButton.setBounds (735, 16, 105, 24); 
-    polyButton.setBounds (852, 16, 105, 24); 
-    freezeButton.setBounds (969, 16, 117, 24);
+    latchButton.setBounds (625, 20, 105, 24); 
+    arpSeqButton.setBounds (735, 20, 105, 24); 
+    polyButton.setBounds (845, 20, 105, 24); 
+    freezeButton.setBounds (955, 20, 105, 24);
 
-    // 6. Preset Matrix Switches (Y=710, height=30) centered horizontally over the upfader tracks [1.1.8]
+    // 6. Preset Matrix Switches centered horizontally over fader track columns (Y=432) [1.1.8]
     for (int i = 0; i < 8; ++i) 
     {
-        float trackCenter = 150.0f + 58.8f + static_cast<float> (i) * 117.6f;
-        presetButtons[i].setBounds (static_cast<int> (trackCenter) - 50, 710, 100, 30);
+        float trackCenter = 232.0f + static_cast<float> (i) * 110.85f;
+        presetButtons[i].setBounds (static_cast<int> (trackCenter) - 50, 432, 100, 26);
     }
 
-    // 7. Central Crossfader Row shifted to Y=750 to sit exactly inside its slot [1.1.8]
+    // 7. Central Crossfader Row shifted to Y=478 [1.1.8]
     int rowWidth = 350;
-    int rowStartX = 150 + (941 - rowWidth) / 2;
-    sceneAButton.setBounds (rowStartX, 750, 40, 30);
-    morphCrossfader.setBounds (rowStartX + 45, 750, 260, 30);
-    sceneBButton.setBounds (rowStartX + 310, 750, 40, 30);
+    int rowStartX = 180 + (880 - rowWidth) / 2;
+    sceneAButton.setBounds (rowStartX, 478, 40, 26);
+    morphCrossfader.setBounds (rowStartX + 45, 478, 260, 26);
+    sceneBButton.setBounds (rowStartX + 310, 478, 40, 26);
 
-    // 8. Left 2x2 Utility Grid Buttons (Y=710 to 780, aligned in left square slot) [1.1.8]
-    saveButton.setBounds (20, 710, 52, 32); 
-    recallButton.setBounds (78, 710, 52, 32); 
-    copyButton.setBounds (20, 750, 52, 32); 
-    initButton.setBounds (78, 750, 52, 32);
+    // 8. Left 2x2 Utility Grid Buttons (Y=675 to 747, aligned in left square slot) [1.1.8]
+    saveButton.setBounds (25, 675, 52, 32); 
+    recallButton.setBounds (83, 675, 52, 32); 
+    copyButton.setBounds (25, 715, 52, 32); 
+    initButton.setBounds (83, 715, 52, 32);
 
-    // 9. Right 2x2 Dice Grid Buttons (Y=710 to 780, aligned in right square slot over the watermark) [1.1.8]
-    diceMeloButton.setBounds (1110, 710, 52, 32); 
-    diceArtiButton.setBounds (1168, 710, 52, 32); 
-    diceTimeButton.setBounds (1110, 750, 52, 32); 
-    diceNavyButton.setBounds (1168, 750, 52, 32);
+    // 9. Right 2x2 Dice Grid Buttons (Y=675 to 747, covers the watermark) [1.1.8]
+    diceMeloButton.setBounds (1106, 675, 52, 32); 
+    diceArtiButton.setBounds (1164, 675, 52, 32); 
+    diceTimeButton.setBounds (1106, 715, 52, 32); 
+    diceNavyButton.setBounds (1164, 715, 52, 32);
 
-    // 10. Upfaders (Aligned over short slots at the very bottom, Y=790 to 840) [1.1.8]
+    // 10. Upfaders (Centered over 250px vertical track slots, Y=530 to 780) [1.1.8]
     juce::Slider* faders[] = { &fader1, &fader2, &fader3, &fader4, &fader5, &fader6, &fader7, &fader8 };
     for (int i = 0; i < 8; ++i) {
-        float trackCenter = 150.0f + 58.8f + static_cast<float> (i) * 117.6f;
-        faders[i]->setBounds (static_cast<int> (trackCenter) - 15, 790, 30, 50);
+        float trackCenter = 232.0f + static_cast<float> (i) * 110.85f;
+        faders[i]->setBounds (static_cast<int> (trackCenter) - 15, 530, 30, 250);
     }
 }
 
