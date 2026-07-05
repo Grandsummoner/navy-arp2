@@ -1,3 +1,5 @@
+--- START OF FILE OledDisplay.cpp ---
+
 #include "OledDisplay.h"
 #include "PluginProcessor.h"
 #include "AppTheme.h"
@@ -172,7 +174,7 @@ void OledDisplay::paint (juce::Graphics& g)
             return { x1, y2, z2 };
         };
 
-        // Center 3D globe vertically inside the upper display area (Y=136px) above fader ladders
+        // Center 3D globe vertically inside the upper display area
         float globeCenterX = displayArea.getCentreX(); 
         float globeCenterY = displayArea.getY() + 120.0f; 
         float globeRadius = displayArea.getHeight() * 0.28f;   
@@ -452,13 +454,12 @@ void OledDisplay::paint (juce::Graphics& g)
         const float segmentSpacing = 3.0f;     
         const float maxLaddersHeight = (numSegments * segmentHeight) + ((numSegments - 1) * segmentSpacing); // 173px height
 
-        // Sits dynamically inside the lower portion of the OLED screen bezel (Y=289px to 462px)
+        // Sits dynamically inside the lower portion of the OLED screen bezel
         float fadersY = bounds.getHeight() - maxLaddersHeight - 25.0f; 
 
-        // Symmetrical, even spacing mapped inside the wider 1035px screen bounds
-        // These relative centers correspond exactly to the track centers in the editor layout: 
-        // 304, 487, 669, 852, 1034, 1217 (after subtracting screen left offset 243)
-        const float relativeCenters[8] = { 61.0f, 244.0f, 426.0f, 609.0f, 791.0f, 974.0f, 1157.0f, 1340.0f };
+        // Symmetrical, even spacing mapped inside the OLED screen bounds
+        // These relative centers correspond exactly to the track centers relative to the left OLED edge (X = 251)
+        const float relativeCenters[8] = { 27.0f, 165.0f, 303.0f, 441.0f, 576.0f, 714.0f, 852.0f, 990.0f };
 
         for (int i = 0; i < 8; ++i)
         {
@@ -514,3 +515,4 @@ void OledDisplay::paint (juce::Graphics& g)
 void OledDisplay::resized()
 {
 }
+--- END OF FILE OledDisplay.cpp ---

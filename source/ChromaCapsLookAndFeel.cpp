@@ -1,3 +1,5 @@
+--- START OF FILE ChromaCapsLookAndFeel.cpp ---
+
 #include "ChromaCapsLookAndFeel.h"
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
@@ -80,21 +82,10 @@ void ChromaCapsLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, i
     float centerY = localBounds.getCentreY();
     
     const bool isMasterKnob = (cid == "masterVelocity" || cid == "masterSwing");
-    float knobRadius = 24.0f; // Sized exactly for the small knobs at 1521x1034 resolution
+    float knobRadius = 24.0f; // Sized exactly for the small knobs at new 1519x1035 resolution
 
     if (isMasterKnob)
     {
-        // Centers mapped to the exact coordinate readings measured from your background
-        if (cid == "masterVelocity")
-        {
-            centerX = 121.5f - static_cast<float> (slider.getX());
-            centerY = 652.0f - static_cast<float> (slider.getY());
-        }
-        else // masterSwing
-        {
-            centerX = 1399.5f - static_cast<float> (slider.getX());
-            centerY = 652.0f - static_cast<float> (slider.getY());
-        }
         knobRadius = 50.0f; // Sized for the big master master velocity/swing knobs
     }
     else
@@ -385,11 +376,11 @@ void ChromaCapsLookAndFeel::drawLinearSlider (juce::Graphics& g, int x, int y, i
         const float thumbWidth = 26.0f;
         const float thumbX = static_cast<float>(x) + (static_cast<float>(width) - thumbWidth) * 0.5f;
         
-        // Exact travel restriction to sit between top dot (Y=19) and bottom dot (Y=102) of fader tracks
+        // Exact travel restriction to sit between top absolute dot and bottom absolute dot of fader tracks
         float travelRange = maxSliderPos - minSliderPos;
         float progress = (sliderPos - minSliderPos) / (travelRange > 0.0f ? travelRange : 1.0f);
         
-        float restrictedMinY = 19.0f;
+        float restrictedMinY = 22.0f;
         float restrictedMaxY = 102.0f;
         float restrictedSliderPos = restrictedMinY + progress * (restrictedMaxY - restrictedMinY);
         
@@ -451,3 +442,4 @@ void ChromaCapsLookAndFeel::drawLabel (juce::Graphics& g, juce::Label& label)
                       textArea.getWidth(), textArea.getHeight(), 
                       label.getJustificationType(), 1);
 }
+--- END OF FILE ChromaCapsLookAndFeel.cpp ---
