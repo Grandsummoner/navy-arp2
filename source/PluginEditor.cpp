@@ -352,7 +352,7 @@ void PluginEditor::mouseDown (const juce::MouseEvent& event)
             }
             else if (recallButton.getToggleState()) {
                 processor.loadPreset (i); presetFlashTimer[i] = 24; presetFlashType[i] = 2;
-                recallButton.setToggleState (false, juce::dontSendNotification); recallButton.repaint();
+                // REMOVED untoggling recallButton to allow instant preset slot surfing [1.2.0]
             }
             else if (event.mods.isRightButtonDown()) { 
                 processor.savePreset (i); presetFlashTimer[i] = 24; presetFlashType[i] = 1; 
@@ -491,7 +491,7 @@ void PluginEditor::paintOverChildren (juce::Graphics& g)
     g.setColour (themeColor.withAlpha (0.4f));
     g.drawRoundedRectangle (denBox.toFloat(), 2.0f, 1.0f);
 
-    g.setColour (themeColor);
+    g.setColour (themeColor); // RESET COLOR TO FULL THEME COLOR [1.2.0]
     g.setFont (juce::FontOptions (9.5f, juce::Font::bold));
     juce::String denText = "DEN: " + juce::String (static_cast<int> (std::round (masterVelocityKnob.getValue() * 100.0f))) + "%";
     g.drawFittedText (denText, denBox, juce::Justification::centred, 1);
@@ -503,6 +503,8 @@ void PluginEditor::paintOverChildren (juce::Graphics& g)
     g.setColour (themeColor.withAlpha (0.4f));
     g.drawRoundedRectangle (swgBox.toFloat(), 2.0f, 1.0f);
 
+    g.setColour (themeColor); // RESET COLOR TO FULL THEME COLOR [1.2.0] (Fixes greyed-out text bug)
+    g.setFont (juce::FontOptions (9.5f, juce::Font::bold));
     juce::String swgText = "SWG: " + juce::String (static_cast<int> (std::round (masterSwingKnob.getValue() * 100.0f))) + "%";
     g.drawFittedText (swgText, swgBox, juce::Justification::centred, 1);
 }
@@ -768,6 +770,8 @@ void PluginEditor::timerCallback()
         }
     }
 
+    // Force parent repaint to redraw all black HUD display boxes and active LFO knob rings smoothly at 30 fps [1.2.0]
+    repaint();
     oledDisplay.repaint();
 }
 

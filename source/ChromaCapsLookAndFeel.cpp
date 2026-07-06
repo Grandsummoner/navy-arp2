@@ -79,14 +79,40 @@ void ChromaCapsLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, i
     if (themeIdx == 1)      activeColor = juce::Colour (0xFFECEFF1); // Theme 1 (Monochrome): White/Silver
     else if (themeIdx == 2) activeColor = juce::Colour (0xFF00FF66); // Theme 2 (Matrix): Neon Green
 
-    // Draw the 15 outer LED indicator ring dots [1.2.0]
+    // 1. Draw custom rotating metallic knob cap over the background PNG to mask static highlights [1.2.0]
+    g.setColour (juce::Colour (0xFF1F2229)); // Bezel base
+    g.fillEllipse (centerX - knobRadius, centerY - knobRadius, knobRadius * 2.0f, knobRadius * 2.0f);
+
+    juce::ColourGradient steelGrad (juce::Colour (0xFFECEFF1), centerX, centerY - knobRadius,
+                                    juce::Colour (0xFF90A4AE), centerX, centerY + knobRadius,
+                                    false);
+    g.setGradientFill (steelGrad);
+    g.fillEllipse (centerX - (knobRadius - 1.0f), centerY - (knobRadius - 1.0f), (knobRadius - 1.0f) * 2.0f, (knobRadius - 1.0f) * 2.0f);
+
+    // Draw active rotating anisotropic light-reflection wedge [1.2.0]
+    float angle = rotaryStartAngle + sliderPos * (rotaryEndAngle - rotaryStartAngle);
+    juce::Path reflectPath;
+    reflectPath.addPieSegment (centerX - knobRadius, centerY - knobRadius, knobRadius * 2.0f, knobRadius * 2.0f, angle - 0.25f, angle + 0.25f, 0.0f);
+    g.setColour (juce::Colours::white.withAlpha (0.15f));
+    g.fillPath (reflectPath);
+
+    // 2. Draw pointer needle [1.2.0]
+    juce::Path path;
+    float pointerThickness = isMasterKnob ? 2.5f : 1.5f;
+    float pointerLength = knobRadius * 0.65f;
+    path.addRectangle (-pointerThickness * 0.5f, -knobRadius + 2.0f, pointerThickness, pointerLength);
+    path.applyTransform (juce::AffineTransform::rotation (angle).translated (centerX, centerY));
+    g.setColour (juce::Colours::white.withAlpha (0.95f));
+    g.fillPath (path);
+
+    // 3. Draw the 15 outer LED indicator ring dots [1.2.0]
     for (int i = 0; i < 15; ++i)
     {
-        float angle = rotaryStartAngle + (static_cast<float> (i) / 14.0f) * (rotaryEndAngle - rotaryStartAngle);
-        float ledX = centerX + ledRadius * std::sin (angle) - ledDiameter * 0.5f;
-        float ledY = centerY - ledRadius * std::cos (angle) - ledDiameter * 0.5f;
+        float ledAngle = rotaryStartAngle + (static_cast<float> (i) / 14.0f) * (rotaryEndAngle - rotaryStartAngle);
+        float ledX = centerX + ledRadius * std::sin (ledAngle) - ledDiameter * 0.5f;
+        float ledY = centerY - ledRadius * std::cos (ledAngle) - ledDiameter * 0.5f;
 
-        // 1. Draw baseline indicator arc (Dim White) [1.2.0]
+        // Draw base representation (Dim White Arc) up to litCountBase [1.2.0]
         if (i < litCountBase)
         {
             float innerRadius = isMasterKnob ? 1.5f : 1.0f;
@@ -100,7 +126,7 @@ void ChromaCapsLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, i
             g.fillEllipse (ledX - innerRadius, ledY - innerRadius, innerRadius * 2.0f, innerRadius * 2.0f);
         }
 
-        // 2. Draw active LFO target value as a single, bright, glowing theme-colored dot [1.2.0]
+        // Draw active LFO target value as a single, bright, glowing theme-colored dot [1.2.0]
         if (i == litCountTarget - 1 || (litCountTarget == 0 && i == 0))
         {
             // Draw radial glow matching the active scheme
@@ -117,16 +143,6 @@ void ChromaCapsLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, i
             g.fillEllipse (ledX - innerRadius, ledY - innerRadius, innerRadius * 2.0f, innerRadius * 2.0f);
         }
     }
-
-    // Draw pointer needle
-    float angle = rotaryStartAngle + sliderPos * (rotaryEndAngle - rotaryStartAngle);
-    juce::Path path;
-    float pointerThickness = isMasterKnob ? 2.5f : 1.5f;
-    float pointerLength = knobRadius * 0.65f;
-    path.addRectangle (-pointerThickness * 0.5f, -knobRadius + 2.0f, pointerThickness, pointerLength);
-    path.applyTransform (juce::AffineTransform::rotation (angle).translated (centerX, centerY));
-    g.setColour (juce::Colours::white.withAlpha (0.95f));
-    g.fillPath (path);
 }
 
 void ChromaCapsLookAndFeel::drawButtonText (juce::Graphics& g, juce::TextButton& button, bool shouldDrawButtonAsHighlighted, bool shouldDrawButtonAsDown)
@@ -273,9 +289,9 @@ void ChromaCapsLookAndFeel::drawButtonBackground (juce::Graphics& g, juce::Butto
         else if (text == "Copy") ledColor = juce::Colour::fromString ("#FF00B0FF");     // Sky Blue
         else if (text == "Init") ledColor = juce::Colour::fromString ("#FFFF1744");     // Crimson/Red
         else if (text == "Melo") ledColor = juce::Colour::fromString ("#FFD500F9");     // Purple/Violet
-        else if (text == "Arti") ledColor = juce::Colour::fromString ("#FFFF6D00");     // Orange/Coral
-        else if (text == "Time") ledColor = juce::Colour::fromString ("#FFFFEA00");     // Bright Yellow
-        else if (text == "Navy") ledColor = juce::Colour::fromString ("#FF18FFFF");     // Electric Teal/Cyan
+        else if (text == "Arti") ledColor = ledColor = juce::Colour::fromString ("#FFFF6D00"); // Orange/Coral
+        else if (text == "Time") ledColor = ledColor = juce::Colour::fromString ("#FFFFEA00"); // Bright Yellow
+        else if (text == "Navy") ledColor = ledColor = juce::Colour::fromString ("#FF18FFFF"); // Electric Teal/Cyan
 
         if (isLit)
         {
@@ -312,7 +328,7 @@ void ChromaCapsLookAndFeel::drawButtonBackground (juce::Graphics& g, juce::Butto
         if (text == "B") isLit = processor.isSceneBActive();
 
         if (isLit || shouldDrawButtonAsDown) {
-            // High-contrast deep red glowing background & solid red border [1.2.0]
+            // Distinct red glowing background & solid red border [1.2.0]
             g.setColour (juce::Colour (0xFFFF0000).withAlpha (0.15f));
             g.fillRoundedRectangle (bounds, cornerSize);
             g.setColour (juce::Colour (0xFFFF0000).withAlpha (0.8f));
@@ -428,8 +444,8 @@ void ChromaCapsLookAndFeel::drawLinearSlider (juce::Graphics& g, int x, int y, i
         float endX = static_cast<float>(x + width);
         float totalW = static_cast<float>(width);
 
-        // Compress visual range by 5% on both ends so knob won't collide with bezel
-        float margin = totalW * 0.05f;
+        // Minimal safety margin of 2px so the thumb slides all the way to both edges, completely hiding the underlying track [1.2.0]
+        float margin = 2.0f;
         float activeStartX = startX + margin;
         float activeEndX = endX - margin;
         float activeW = totalW - (margin * 2.0f);
