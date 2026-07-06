@@ -126,6 +126,17 @@ void ChromaCapsLookAndFeel::drawButtonText (juce::Graphics& g, juce::TextButton&
 
     if (text == "A" || text == "B")
     {
+        bool isLit = false;
+        if (text == "A") isLit = !processor.isSceneBActive();
+        if (text == "B") isLit = processor.isSceneBActive();
+
+        if (isLit || button.isDown())
+            g.setColour (juce::Colours::white); // Bright white inside red glow
+        else
+            g.setColour (juce::Colour (0xFF757575)); // Dim white/grey when inactive
+
+        g.setFont (juce::FontOptions (22.0f, juce::Font::bold));
+        g.drawFittedText (text, button.getLocalBounds(), juce::Justification::centred, 1);
         return; 
     }
 
@@ -146,23 +157,24 @@ void ChromaCapsLookAndFeel::drawButtonText (juce::Graphics& g, juce::TextButton&
             }
         }
 
-        juce::Colour textCol = juce::Colour (0xFF4F525D); // Dim grey default
+        juce::Colour textCol = juce::Colour (0xFF4F525D); // State 1 (Empty): Dim grey default
 
         if (flashTimer > 0)
         {
             bool flashOn = ((flashTimer / 4) % 2 == 1);
             if (flashOn)
             {
+                // State 3 (Save flash): Emerald Green | State 4 (Recall flash): Electric Cyan
                 textCol = (flashType == 1) ? juce::Colour::fromString ("#FF00E676") : juce::Colour::fromString ("#FF00E5FF");
             }
             else if (isSaved)
             {
-                textCol = juce::Colour::fromString ("#FF00D2FF");
+                textCol = juce::Colour::fromString ("#FFFF6D00"); // State 2 (Stored): Bright Amber/Orange
             }
         }
         else if (isSaved)
         {
-            textCol = button.isMouseOver() ? juce::Colours::white : juce::Colour::fromString ("#FF00D2FF").withAlpha (0.75f);
+            textCol = button.isMouseOver() ? juce::Colours::white : juce::Colour::fromString ("#FFFF6D00").withAlpha (0.85f);
         }
         else if (button.isMouseOver())
         {
@@ -258,72 +270,81 @@ void ChromaCapsLookAndFeel::drawButtonBackground (juce::Graphics& g, juce::Butto
         g.fillRoundedRectangle (bounds, cornerSize);
         g.setColour (juce::Colour (0xFF00D2FF).withAlpha (0.6f));
         g.drawRoundedRectangle (bounds.reduced(0.5f), cornerSize, 1.25f);
+        return;
     }
-    else if (text == "A" || text == "B" || isPresetButton)
+    
+    if (text == "A" || text == "B")
     {
         bool isLit = false;
-        
-        if (isPresetButton) {
-            int pIdx = text.getIntValue() - 1;
-            bool isSaved = false;
-            int flashTimer = 0;
-            int flashType = 0;
+        if (text == "A") isLit = !processor.isSceneBActive();
+        if (text == "B") isLit = processor.isSceneBActive();
 
-            if (auto* editor = dynamic_cast<PluginEditor*> (parentEditor)) {
-                if (pIdx >= 0 && pIdx < 8) {
-                    isSaved = editor->processor.presetSlotsSaved[pIdx];
-                    flashTimer = editor->presetFlashTimer[pIdx];
-                    flashType = editor->presetFlashType[pIdx];
-                }
-            }
-
-            auto innerBounds = bounds.reduced (1.0f);
-            juce::Colour outlineCol = juce::Colour (0xFF1F2229).withAlpha (0.4f);
-            juce::Colour fillCol = juce::Colours::transparentBlack;
-
-            if (flashTimer > 0) {
-                bool flashOn = ((flashTimer / 4) % 2 == 1);
-                if (flashOn) {
-                    outlineCol = (flashType == 1) ? juce::Colour::fromString ("#FF00E676") : juce::Colour::fromString ("#FF00E5FF");
-                    fillCol = outlineCol.withAlpha (0.15f);
-                } else if (isSaved) {
-                    outlineCol = juce::Colour::fromString ("#FF00D2FF").withAlpha (0.4f);
-                }
-            } else if (isSaved) {
-                outlineCol = juce::Colour::fromString ("#FF00D2FF").withAlpha (0.35f);
-                if (button.isMouseOver())
-                    outlineCol = juce::Colour::fromString ("#FF00D2FF").withAlpha (0.7f);
-            } else if (button.isMouseOver()) {
-                outlineCol = juce::Colours::white.withAlpha (0.25f);
-            }
-
-            if (button.isDown()) {
-                fillCol = juce::Colours::white.withAlpha (0.05f);
-                outlineCol = juce::Colour::fromString ("#FF00D2FF").withAlpha (0.9f);
-            }
-
-            if (fillCol != juce::Colours::transparentBlack) {
-                g.setColour (fillCol);
-                g.fillRoundedRectangle (innerBounds, cornerSize);
-            }
-
-            g.setColour (outlineCol);
-            g.drawRoundedRectangle (innerBounds, cornerSize, 1.25f);
+        if (isLit || shouldDrawButtonAsDown) {
+            // Bright red glowing background & solid red border
+            g.setColour (juce::Colour (0xFFFF0000).withAlpha (0.15f));
+            g.fillRoundedRectangle (bounds, cornerSize);
+            g.setColour (juce::Colour (0xFFFF0000).withAlpha (0.8f));
+            g.drawRoundedRectangle (bounds.reduced (0.5f), cornerSize, 1.5f);
+        } else if (shouldDrawButtonAsHighlighted) {
+            g.setColour (juce::Colours::white.withAlpha (0.04f));
+            g.fillRoundedRectangle (bounds, cornerSize);
+            g.setColour (juce::Colour (0xFFFF0000).withAlpha (0.2f)); // Subtle red outline on hover
+            g.drawRoundedRectangle (bounds.reduced (0.5f), cornerSize, 1.0f);
         } else {
-            if (text == "A") isLit = !processor.isSceneBActive();
-            if (text == "B") isLit = processor.isSceneBActive();
+            g.setColour (juce::Colour (0xFF1F2229).withAlpha (0.4f));
+            g.drawRoundedRectangle (bounds.reduced (0.5f), cornerSize, 1.0f);
+        }
+        return;
+    }
 
-            if (isLit || shouldDrawButtonAsDown) {
-                g.setColour (juce::Colour (0xFF00D2FF).withAlpha (0.12f));
-                g.fillRoundedRectangle (bounds, cornerSize);
-                g.setColour (juce::Colour (0xFF00D2FF).withAlpha (0.4f));
-                g.drawRoundedRectangle (bounds.reduced (0.5f), cornerSize, 1.0f);
-            } else if (shouldDrawButtonAsHighlighted) {
-                g.setColour (juce::Colours::white.withAlpha (0.04f));
-                g.fillRoundedRectangle (bounds, cornerSize);
+    if (isPresetButton) {
+        int pIdx = text.getIntValue() - 1;
+        bool isSaved = false;
+        int flashTimer = 0;
+        int flashType = 0;
+
+        if (auto* editor = dynamic_cast<PluginEditor*> (parentEditor)) {
+            if (pIdx >= 0 && pIdx < 8) {
+                isSaved = editor->processor.presetSlotsSaved[pIdx];
+                flashTimer = editor->presetFlashTimer[pIdx];
+                flashType = editor->presetFlashType[pIdx];
             }
         }
-        return; 
+
+        auto innerBounds = bounds.reduced (1.0f);
+        juce::Colour outlineCol = juce::Colour (0xFF1F2229).withAlpha (0.4f); // State 1 (Empty): Dim border
+        juce::Colour fillCol = juce::Colours::transparentBlack;
+
+        if (flashTimer > 0) {
+            bool flashOn = ((flashTimer / 4) % 2 == 1);
+            if (flashOn) {
+                // State 3 (Save flash): Emerald Green | State 4 (Recall flash): Electric Cyan
+                outlineCol = (flashType == 1) ? juce::Colour::fromString ("#FF00E676") : juce::Colour::fromString ("#FF00E5FF");
+                fillCol = outlineCol.withAlpha (0.15f);
+            } else if (isSaved) {
+                outlineCol = juce::Colour::fromString ("#FFFF6D00").withAlpha (0.4f); // State 2 (Stored): Bright Amber
+            }
+        } else if (isSaved) {
+            outlineCol = juce::Colour::fromString ("#FFFF6D00").withAlpha (0.35f); // State 2 (Stored): Bright Amber
+            if (button.isMouseOver())
+                outlineCol = juce::Colour::fromString ("#FFFF6D00").withAlpha (0.7f);
+        } else if (button.isMouseOver()) {
+            outlineCol = juce::Colours::white.withAlpha (0.25f);
+        }
+
+        if (button.isDown()) {
+            fillCol = juce::Colours::white.withAlpha (0.05f);
+            outlineCol = juce::Colour::fromString ("#FF00E5FF").withAlpha (0.9f);
+        }
+
+        if (fillCol != juce::Colours::transparentBlack) {
+            g.setColour (fillCol);
+            g.fillRoundedRectangle (innerBounds, cornerSize);
+        }
+
+        g.setColour (outlineCol);
+        g.drawRoundedRectangle (innerBounds, cornerSize, 1.25f);
+        return;
     }
 
     if (isStaticTopButton)
@@ -350,7 +371,7 @@ void ChromaCapsLookAndFeel::drawButtonBackground (juce::Graphics& g, juce::Butto
 
 void ChromaCapsLookAndFeel::drawLinearSlider (juce::Graphics& g, int x, int y, int width, int height, float sliderPos, float minSliderPos, float maxSliderPos, juce::Slider::SliderStyle style, juce::Slider& slider)
 {
-    juce::ignoreUnused (minSliderPos, maxSliderPos);
+    juce::ignoreUnused (minSliderPos, maxSliderPos, sliderPos);
 
     int themeIdx = static_cast<int> (processor.apvts.getRawParameterValue ("panelTheme")->load());
     auto t = AppTheme::get (themeIdx);
@@ -373,8 +394,8 @@ void ChromaCapsLookAndFeel::drawLinearSlider (juce::Graphics& g, int x, int y, i
         float activeEndX = endX - margin;
         float activeW = totalW - (margin * 2.0f);
 
-        float travelRange = maxSliderPos - minSliderPos;
-        float progress = (sliderPos - minSliderPos) / (travelRange != 0.0f ? travelRange : 1.0f);
+        // Safe value mapping directly via Slider values (prevents flipping or coordinate snapping)
+        float progress = static_cast<float>((slider.getValue() - slider.getMinimum()) / (slider.getMaximum() - slider.getMinimum()));
         progress = juce::jlimit (0.0f, 1.0f, progress);
 
         float visualThumbX = activeStartX + progress * activeW;
@@ -423,8 +444,12 @@ void ChromaCapsLookAndFeel::drawLinearSlider (juce::Graphics& g, int x, int y, i
         const float thumbWidth = 18.0f;
         const float thumbX = static_cast<float>(x) + (static_cast<float>(width) - thumbWidth) * 0.5f;
         
-        // Exact travel translation relative to the parent fader bounds
-        float clampedThumbY = juce::jlimit (static_cast<float> (y), static_cast<float> (y + height - thumbHeight), static_cast<float> (sliderPos - thumbHeight * 0.5f));
+        // Safe value mapping directly via Slider values (prevents vertical snapping/clipping)
+        float progress = static_cast<float>((slider.getValue() - slider.getMinimum()) / (slider.getMaximum() - slider.getMinimum()));
+        progress = juce::jlimit (0.0f, 1.0f, progress);
+
+        float clampedThumbY = static_cast<float>(y + height - thumbHeight) - progress * static_cast<float>(height - thumbHeight);
+        clampedThumbY = juce::jlimit (static_cast<float>(y), static_cast<float>(y + height - thumbHeight), clampedThumbY);
 
         g.setColour (juce::Colours::black.withAlpha (0.4f));
         g.fillRoundedRectangle (thumbX + 1.0f, clampedThumbY + 1.5f, thumbWidth, thumbHeight, 1.5f);

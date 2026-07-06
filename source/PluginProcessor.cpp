@@ -89,13 +89,13 @@ void PluginProcessor::setActiveAnchor (bool useSceneB)
 
 void PluginProcessor::captureActiveParametersToActiveScene()
 {
-    // ONLY capture if we are at one of the clean end points (0.0 or 1.0) of morphing,
-    // to prevent the feedback loop that snaps all parameters to the extremes.
+    // ONLY capture if we are EXACTLY at one of the static end points (0.0 or 1.0) of morphing,
+    // to prevent any feedback loop that snaps faders or the crossfader track.
     float morphVal = morphPtr->load();
-    if (morphVal > 0.01f && morphVal < 0.99f)
+    if (morphVal != 0.0f && morphVal != 1.0f)
         return;
 
-    SceneState& activeScene = (morphVal <= 0.01f) ? sceneA : sceneB;
+    SceneState& activeScene = (morphVal == 0.0f) ? sceneA : sceneB;
     for (int i = 0; i < 8; ++i)
         activeScene.faders[i] = faderPtrs[i]->load();
     activeScene.rhythmMorph = rhythmMorphPtr->load();
@@ -257,7 +257,7 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
         int currentRate = isFreezeActive ? frozenRateIdx : activeRateIdx;
         double stepLengthPPQ = (currentRate == 0) ? 1.0 : (currentRate == 1) ? 0.5 : (currentRate == 2) ? 0.25 : 0.125, stepSamples = samplesPerBeat * stepLengthPPQ;
         
-        // Decouple Swing calculation from Morph. Controlled globally by masterSwingPtr [1.1.8]
+        // Decouple Swing calculation from Morph. Controlled globally by masterSwingPtr
         float currentSwing = masterSwingPtr->load(); 
         double swingFraction = 0.45 * currentSwing; // Support up to 45% delay offset for solid groove
 
@@ -367,7 +367,7 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
                 float currentChaos = isFreezeActive ? frozenChaos : modChaos;
                 float currentLegato = isFreezeActive ? frozenLegato : modLegato;
                 
-                // Scale global velocity using masterVelocityPtr [1.1.8]
+                // Scale global velocity using masterVelocityPtr
                 float masterVel = masterVelocityPtr->load();
                 juce::uint8 scaledVelocity = static_cast<juce::uint8> (juce::jlimit (1, 127, static_cast<int> (127.0f * masterVel)));
 
@@ -467,7 +467,7 @@ void PluginProcessor::loadPreset (int slotIndex)
 void PluginProcessor::captureScene (int side) 
 { 
     float morphVal = morphPtr->load();
-    if (morphVal > 0.01f && morphVal < 0.99f) return; // Protect scene snapshots during morphing
+    if (morphVal != 0.0f && morphVal != 1.0f) return; // Protect scene snapshots during morphing
 
     SceneState& s = (side == 0) ? sceneA : sceneB;
     for (int i = 0; i < 8; ++i) s.faders[i] = faderPtrs[i]->load(); 
@@ -668,7 +668,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout PluginProcessor::createParam
     params.push_back (std::make_unique<juce::AudioParameterInt> (IDs::octaves, "Octaves", -3, 3, 0)); 
     params.push_back (std::make_unique<juce::AudioParameterChoice> (IDs::panelTheme, "Panel Theme", juce::StringArray { "Navy Cyber", "Skyline Eurorack", "Monochrome Minimal", "Matrix Terminal" }, 0));
 
-    // NEW: Register Master Parameters [1.1.8]
+    // NEW: Register Master Parameters
     params.push_back (std::make_unique<juce::AudioParameterFloat> (IDs::masterVelocity, "Master Velocity", 0.0f, 1.0f, 0.8f)); // Default 80%
     params.push_back (std::make_unique<juce::AudioParameterFloat> (IDs::masterSwing, "Master Swing", 0.0f, 1.0f, 0.0f));       // Default 0% (Straight)
 
