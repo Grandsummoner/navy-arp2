@@ -438,12 +438,12 @@ void OledDisplay::paint (juce::Graphics& g)
         g.drawText (metaText, displayArea.removeFromTop (15.0f), juce::Justification::centred, true);
 
         const int numSegments = 16;
-        const float segmentHeight = 10.0f;     // Chunky, fat segments (was 8.0f)
-        const float segmentSpacing = 2.0f;      // Closer segments (was 3.0f)
+        const float segmentHeight = 5.0f;      // Halved segment height (was 10.0f)
+        const float segmentSpacing = 1.0f;     // Closer segment spacing (was 2.0f)
         const float maxLaddersHeight = (numSegments * segmentHeight) + ((numSegments - 1) * segmentSpacing); 
         float fadersY = bounds.getHeight() - maxLaddersHeight; // Ends exactly at the bottom border of the OLED box (320.0f)
 
-        // Symmetrically aligned with the 680px width of the OLED container (8 columns * 85px = 680px, no gaps)
+        // Continuous, fat, gapless columns completely filling the 680px width (8 columns * 85px = 680px)
         const float colWidth = 85.0f;
         const float spacing = 0.0f;
         const float startX = 0.0f;

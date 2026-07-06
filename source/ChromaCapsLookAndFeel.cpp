@@ -71,10 +71,10 @@ void ChromaCapsLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, i
     float ledRadius = isMasterKnob ? (knobRadius + 5.0f) : (knobRadius + 3.5f);
     float ledDiameter = isMasterKnob ? 3.0f : 2.0f;
 
-    // Direct palette override based on active selected theme
+    // Apply color palette directly matching the selected choice
     juce::Colour activeColor = juce::Colour (0xFF00E5FF); // Theme 0 (Navy): Teal
     if (themeIdx == 1)      activeColor = juce::Colour (0xFFECEFF1); // Theme 1 (Monochrome): White/Silver
-    else if (themeIdx == 2) activeColor = juce::Colour (0xFF00FF66); // Theme 2 (Matrix): Green
+    else if (themeIdx == 2) activeColor = juce::Colour (0xFF00FF66); // Theme 2 (Matrix): Neon Green
 
     // Draw the 15 outer LED indicator ring dots
     for (int i = 0; i < 15; ++i)
@@ -125,6 +125,8 @@ void ChromaCapsLookAndFeel::drawButtonText (juce::Graphics& g, juce::TextButton&
     const bool isPresetButton = (text == "1" || text == "2" || text == "3" || text == "4" || text == "5" || text == "6" || text == "7" || text == "8");
     const bool isStaticTopButton = (text == "Latch" || text == "Poly" || text == "Freeze" || text == "Seq" || text == "SEQ" || text == "Arp" || text == "ARP");
 
+    int themeIdx = static_cast<int> (processor.apvts.getRawParameterValue ("panelTheme")->load());
+
     if (text == "A" || text == "B")
     {
         bool isLit = false;
@@ -132,7 +134,7 @@ void ChromaCapsLookAndFeel::drawButtonText (juce::Graphics& g, juce::TextButton&
         if (text == "B") isLit = processor.isSceneBActive();
 
         if (isLit || button.isDown())
-            g.setColour (juce::Colours::white); // Bright white inside red glow
+            g.setColour (juce::Colours::white); // Bright white inside the red glow
         else
             g.setColour (juce::Colour (0xFF757575)); // Dim white/grey when inactive
 
@@ -158,10 +160,9 @@ void ChromaCapsLookAndFeel::drawButtonText (juce::Graphics& g, juce::TextButton&
             }
         }
 
-        int themeIdx = static_cast<int> (processor.apvts.getRawParameterValue ("panelTheme")->load());
         juce::Colour storedColor = juce::Colour (0xFF00E5FF); // Theme 0 (Navy): Teal
         if (themeIdx == 1)      storedColor = juce::Colour (0xFFECEFF1); // Theme 1 (Monochrome): White/Silver
-        else if (themeIdx == 2) storedColor = juce::Colour (0xFF00FF66); // Theme 2 (Matrix): Green
+        else if (themeIdx == 2) storedColor = juce::Colour (0xFF00FF66); // Theme 2 (Matrix): Neon Green
 
         juce::Colour textCol = juce::Colour (0xFF4F525D); // State 1 (Empty): Dim grey default
 
@@ -175,7 +176,7 @@ void ChromaCapsLookAndFeel::drawButtonText (juce::Graphics& g, juce::TextButton&
             }
             else if (isSaved)
             {
-                textCol = storedColor; // State 2 (Stored)
+                textCol = storedColor; // State 2 (Stored): Match active theme
             }
         }
         else if (isSaved)
@@ -207,7 +208,6 @@ void ChromaCapsLookAndFeel::drawButtonText (juce::Graphics& g, juce::TextButton&
         auto bounds = button.getLocalBounds().toFloat();
         if (button.getToggleState() || button.isDown())
         {
-            int themeIdx = static_cast<int> (processor.apvts.getRawParameterValue ("panelTheme")->load());
             juce::Colour activeColor = juce::Colour (0xFF00E5FF);
             if (themeIdx == 1)      activeColor = juce::Colour (0xFFECEFF1);
             else if (themeIdx == 2) activeColor = juce::Colour (0xFF00FF66);
@@ -298,7 +298,7 @@ void ChromaCapsLookAndFeel::drawButtonBackground (juce::Graphics& g, juce::Butto
         if (text == "B") isLit = processor.isSceneBActive();
 
         if (isLit || shouldDrawButtonAsDown) {
-            // Bright red glowing background & solid red border
+            // Distinct red glowing background & strong red border
             g.setColour (juce::Colour (0xFFFF0000).withAlpha (0.15f));
             g.fillRoundedRectangle (bounds, cornerSize);
             g.setColour (juce::Colour (0xFFFF0000).withAlpha (0.8f));
@@ -306,7 +306,7 @@ void ChromaCapsLookAndFeel::drawButtonBackground (juce::Graphics& g, juce::Butto
         } else if (shouldDrawButtonAsHighlighted) {
             g.setColour (juce::Colours::white.withAlpha (0.04f));
             g.fillRoundedRectangle (bounds, cornerSize);
-            g.setColour (juce::Colour (0xFFFF0000).withAlpha (0.2f)); // Subtle red outline on hover
+            g.setColour (juce::Colour (0xFFFF0000).withAlpha (0.2f)); // Subtle red hover border
             g.drawRoundedRectangle (bounds.reduced (0.5f), cornerSize, 1.0f);
         } else {
             g.setColour (juce::Colour (0xFF1F2229).withAlpha (0.4f));
@@ -331,7 +331,7 @@ void ChromaCapsLookAndFeel::drawButtonBackground (juce::Graphics& g, juce::Butto
 
         juce::Colour storedColor = juce::Colour (0xFF00E5FF); // Theme 0 (Navy): Teal
         if (themeIdx == 1)      storedColor = juce::Colour (0xFFECEFF1); // Theme 1 (Monochrome): White/Silver
-        else if (themeIdx == 2) storedColor = juce::Colour (0xFF00FF66); // Theme 2 (Matrix): Green
+        else if (themeIdx == 2) storedColor = juce::Colour (0xFF00FF66); // Theme 2 (Matrix): Neon Green
 
         auto innerBounds = bounds.reduced (1.0f);
         juce::Colour outlineCol = juce::Colour (0xFF1F2229).withAlpha (0.4f); // State 1 (Empty): Dim border
@@ -420,7 +420,7 @@ void ChromaCapsLookAndFeel::drawLinearSlider (juce::Graphics& g, int x, int y, i
         float activeEndX = endX - margin;
         float activeW = totalW - (margin * 2.0f);
 
-        // Safe value mapping directly via Slider values (prevents flipping or coordinate snapping)
+        // Continuous Value Proportions (strictly resolves physical/visual snapping)
         float progress = static_cast<float>((slider.getValue() - slider.getMinimum()) / (slider.getMaximum() - slider.getMinimum()));
         progress = juce::jlimit (0.0f, 1.0f, progress);
 
@@ -470,7 +470,7 @@ void ChromaCapsLookAndFeel::drawLinearSlider (juce::Graphics& g, int x, int y, i
         const float thumbWidth = 18.0f;
         const float thumbX = static_cast<float>(x) + (static_cast<float>(width) - thumbWidth) * 0.5f;
         
-        // Safe value mapping directly via Slider values (prevents vertical snapping/clipping)
+        // Continuous Value Proportions (strictly resolves physical/visual snapping)
         float progress = static_cast<float>((slider.getValue() - slider.getMinimum()) / (slider.getMaximum() - slider.getMinimum()));
         progress = juce::jlimit (0.0f, 1.0f, progress);
 

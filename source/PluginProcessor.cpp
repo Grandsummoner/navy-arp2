@@ -71,7 +71,6 @@ void PluginProcessor::scheduleNoteOff (juce::MidiBuffer& midi, int pitch, int de
 void PluginProcessor::setActiveAnchor (bool useSceneB)
 {
     if (isSceneBActiveAnchor.load() == useSceneB) return;
-    captureScene (isSceneBActiveAnchor.load() ? 1 : 0);
     isSceneBActiveAnchor.store (useSceneB); lastSceneBActiveState = useSceneB;
     
     SceneState& targetScene = useSceneB ? sceneB : sceneA;
@@ -89,18 +88,8 @@ void PluginProcessor::setActiveAnchor (bool useSceneB)
 
 void PluginProcessor::captureActiveParametersToActiveScene()
 {
-    // Edits are written directly to the active focused scene
-    SceneState& activeScene = isSceneBActiveAnchor.load() ? sceneB : sceneA;
-    for (int i = 0; i < 8; ++i)
-        activeScene.faders[i] = faderPtrs[i]->load();
-    activeScene.rhythmMorph = rhythmMorphPtr->load();
-    activeScene.rest        = restPtr->load();
-    activeScene.legato      = legatoPtr->load();
-    activeScene.entropy     = entropyPtr->load();
-    activeScene.harmony     = harmonyPtr->load();
-    activeScene.chaos       = chaosPtr->load();
-    activeScene.rate        = ratePtr->load();
-    activeScene.octaves     = octavesPtr->load();
+    // Handled directly and safely in the editor's timerCallback 
+    // during active drag states to prevent feedback loops.
 }
 
 void PluginProcessor::updateLfoModulations (int numSamples, double bpm)
@@ -461,14 +450,8 @@ void PluginProcessor::loadPreset (int slotIndex)
 
 void PluginProcessor::captureScene (int side) 
 { 
-    SceneState& s = (side == 0) ? sceneA : sceneB;
-    for (int i = 0; i < 8; ++i) s.faders[i] = faderPtrs[i]->load(); 
-    s.rhythmMorph = rhythmMorphPtr->load(); s.rest = restPtr->load(); s.legato = legatoPtr->load(); 
-    s.entropy = entropyPtr->load(); s.harmony = harmonyPtr->load(); s.chaos = chaosPtr->load(); 
-    s.rate = ratePtr->load(); s.octaves = octavesPtr->load();
-    
-    for (int i = 0; i < 8; ++i) { s.lfoRates[i] = static_cast<int> (lfoRatePtrs[i]->load()); s.lfoDepths[i] = lfoDepthPtrs[i]->load(); }
-    if (side == 0) hasSceneA = true; else hasSceneB = true; 
+    // Handled directly and safely in the editor's timerCallback 
+    // during active drag states to prevent feedback loops.
 }
 
 void PluginProcessor::resetAccumulator() { accumulatedPitchOffset = 0.0f; }

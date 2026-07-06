@@ -186,7 +186,7 @@ PluginEditor::PluginEditor (PluginProcessor& p)
     cycleLengthBox.addItemList (juce::StringArray { "1 Bar", "2 Bars", "4 Bars", "8 Bars" }, 1);
 
     addAndMakeVisible (panelThemeBox);
-    // Updated option names: Navy, Monochrome, Matrix
+    // Updated options: Navy (0), Monochrome (1), Matrix (2)
     panelThemeBox.addItemList (juce::StringArray { "Navy", "Monochrome", "Matrix" }, 1);
     panelThemeAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment> (processor.apvts, IDs::panelTheme.getParamID(), panelThemeBox);
 
@@ -556,24 +556,69 @@ void PluginEditor::timerCallback()
     if (copyFlashTimer > 0) { copyFlashTimer--; if (copyFlashTimer == 0) copyButton.repaint(); }
     if (initFlashTimer > 0) { initFlashTimer--; if (initFlashTimer == 0) initButton.repaint(); }
 
-    // Knobs and upfaders are tied to the active focused scene state directly.
-    // The crossfader position is completely independent and only interpolates audio playback (DSP).
+    float morphVal = static_cast<float> (morphCrossfader.getValue());
+    auto interpolate = [morphVal](float valA, float valB) -> float {
+        return (valA * (1.0f - morphVal)) + (valB * morphVal);
+    };
+
+    // Motorized Morphing Behavior (Independent Active Focus Editing)
     bool isSceneB = processor.isSceneBActiveAnchor.load();
     SceneState& activeScene = isSceneB ? processor.sceneB : processor.sceneA;
 
-    if (!rhythmMorphKnob.isMouseButtonDown()) rhythmMorphKnob.setValue (activeScene.rhythmMorph, juce::dontSendNotification);
-    if (!restKnob.isMouseButtonDown())        restKnob.setValue (activeScene.rest,        juce::dontSendNotification);
-    if (!legatoKnob.isMouseButtonDown())      legatoKnob.setValue (activeScene.legato,    juce::dontSendNotification);
-    if (!rateKnob.isMouseButtonDown())        rateKnob.setValue (activeScene.rate,        juce::dontSendNotification);
-    if (!entropyKnob.isMouseButtonDown())     entropyKnob.setValue (activeScene.entropy,   juce::dontSendNotification);
-    if (!harmonyKnob.isMouseButtonDown())     harmonyKnob.setValue (activeScene.harmony,   juce::dontSendNotification);
-    if (!chaosKnob.isMouseButtonDown())       chaosKnob.setValue (activeScene.chaos,     juce::dontSendNotification);
-    if (!octavesKnob.isMouseButtonDown())     octavesKnob.setValue (activeScene.octaves,   juce::dontSendNotification);
+    if (rhythmMorphKnob.isMouseButtonDown()) {
+        activeScene.rhythmMorph = static_cast<float>(rhythmMorphKnob.getValue());
+    } else {
+        rhythmMorphKnob.setValue (interpolate (processor.sceneA.rhythmMorph, processor.sceneB.rhythmMorph), juce::dontSendNotification);
+    }
+
+    if (restKnob.isMouseButtonDown()) {
+        activeScene.rest = static_cast<float>(restKnob.getValue());
+    } else {
+        restKnob.setValue (interpolate (processor.sceneA.rest, processor.sceneB.rest), juce::dontSendNotification);
+    }
+
+    if (legatoKnob.isMouseButtonDown()) {
+        activeScene.legato = static_cast<float>(legatoKnob.getValue());
+    } else {
+        legatoKnob.setValue (interpolate (processor.sceneA.legato, processor.sceneB.legato), juce::dontSendNotification);
+    }
+
+    if (rateKnob.isMouseButtonDown()) {
+        activeScene.rate = static_cast<float>(rateKnob.getValue());
+    } else {
+        rateKnob.setValue (interpolate (processor.sceneA.rate, processor.sceneB.rate), juce::dontSendNotification);
+    }
+
+    if (entropyKnob.isMouseButtonDown()) {
+        activeScene.entropy = static_cast<float>(entropyKnob.getValue());
+    } else {
+        entropyKnob.setValue (interpolate (processor.sceneA.entropy, processor.sceneB.entropy), juce::dontSendNotification);
+    }
+
+    if (harmonyKnob.isMouseButtonDown()) {
+        activeScene.harmony = static_cast<float>(harmonyKnob.getValue());
+    } else {
+        harmonyKnob.setValue (interpolate (processor.sceneA.harmony, processor.sceneB.harmony), juce::dontSendNotification);
+    }
+
+    if (chaosKnob.isMouseButtonDown()) {
+        activeScene.chaos = static_cast<float>(chaosKnob.getValue());
+    } else {
+        chaosKnob.setValue (interpolate (processor.sceneA.chaos, processor.sceneB.chaos), juce::dontSendNotification);
+    }
+
+    if (octavesKnob.isMouseButtonDown()) {
+        activeScene.octaves = static_cast<float>(octavesKnob.getValue());
+    } else {
+        octavesKnob.setValue (interpolate (processor.sceneA.octaves, processor.sceneB.octaves), juce::dontSendNotification);
+    }
 
     juce::Slider* faders[] = { &fader1, &fader2, &fader3, &fader4, &fader5, &fader6, &fader7, &fader8 };
     for (int i = 0; i < 8; ++i) {
-        if (!faders[i]->isMouseButtonDown()) {
-            faders[i]->setValue (activeScene.faders[i], juce::dontSendNotification);
+        if (faders[i]->isMouseButtonDown()) {
+            activeScene.faders[i] = static_cast<float>(faders[i]->getValue());
+        } else {
+            faders[i]->setValue (interpolate (processor.sceneA.faders[i], processor.sceneB.faders[i]), juce::dontSendNotification);
         }
     }
 
