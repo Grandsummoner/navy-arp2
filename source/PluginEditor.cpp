@@ -277,24 +277,24 @@ PluginEditor::PluginEditor (PluginProcessor& p)
         faders[i]->setDoubleClickReturnValue (true, 0.5f); // Default 50% probability
     }
 
-    // Connect slider callbacks to automatically update active scene state [1.2.2]
-    rhythmMorphKnob.onValueChange = [this] { if (!isUpdatingProgrammatically) { if (processor.isSceneBActiveAnchor.load()) processor.sceneB.rhythmMorph = static_cast<float>(rhythmMorphKnob.getValue()); else processor.sceneA.rhythmMorph = static_cast<float>(rhythmMorphKnob.getValue()); } };
-    restKnob.onValueChange        = [this] { if (!isUpdatingProgrammatically) { if (processor.isSceneBActiveAnchor.load()) processor.sceneB.rest = static_cast<float>(restKnob.getValue()); else processor.sceneA.rest = static_cast<float>(restKnob.getValue()); } };
-    legatoKnob.onValueChange      = [this] { if (!isUpdatingProgrammatically) { if (processor.isSceneBActiveAnchor.load()) processor.sceneB.legato = static_cast<float>(legatoKnob.getValue()); else processor.sceneA.legato = static_cast<float>(legatoKnob.getValue()); } };
-    rateKnob.onValueChange        = [this] { if (!isUpdatingProgrammatically) { if (processor.isSceneBActiveAnchor.load()) processor.sceneB.rate = static_cast<float>(rateKnob.getValue()); else processor.sceneA.rate = static_cast<float>(rateKnob.getValue()); } };
-    entropyKnob.onValueChange     = [this] { if (!isUpdatingProgrammatically) { if (processor.isSceneBActiveAnchor.load()) processor.sceneB.entropy = static_cast<float>(entropyKnob.getValue()); else processor.sceneA.entropy = static_cast<float>(entropyKnob.getValue()); } };
-    harmonyKnob.onValueChange     = [this] { if (!isUpdatingProgrammatically) { if (processor.isSceneBActiveAnchor.load()) processor.sceneB.harmony = static_cast<float>(harmonyKnob.getValue()); else processor.sceneA.harmony = static_cast<float>(harmonyKnob.getValue()); } };
-    chaosKnob.onValueChange       = [this] { if (!isUpdatingProgrammatically) { if (processor.isSceneBActiveAnchor.load()) processor.sceneB.chaos = static_cast<float>(chaosKnob.getValue()); else processor.sceneA.chaos = static_cast<float>(chaosKnob.getValue()); } };
-    octavesKnob.onValueChange     = [this] { if (!isUpdatingProgrammatically) { if (processor.isSceneBActiveAnchor.load()) processor.sceneB.octaves = static_cast<float>(octavesKnob.getValue()); else processor.sceneA.octaves = static_cast<float>(octavesKnob.getValue()); } };
+    // Connect slider callbacks to automatically update active scene state [1.2.2] using self-contained getProperties flags [1.2.3]
+    rhythmMorphKnob.onValueChange = [this] { if (! getProperties().getWithDefault ("isUpdatingProgrammatically", false)) { if (processor.isSceneBActiveAnchor.load()) processor.sceneB.rhythmMorph = static_cast<float>(rhythmMorphKnob.getValue()); else processor.sceneA.rhythmMorph = static_cast<float>(rhythmMorphKnob.getValue()); } };
+    restKnob.onValueChange        = [this] { if (! getProperties().getWithDefault ("isUpdatingProgrammatically", false)) { if (processor.isSceneBActiveAnchor.load()) processor.sceneB.rest = static_cast<float>(restKnob.getValue()); else processor.sceneA.rest = static_cast<float>(restKnob.getValue()); } };
+    legatoKnob.onValueChange      = [this] { if (! getProperties().getWithDefault ("isUpdatingProgrammatically", false)) { if (processor.isSceneBActiveAnchor.load()) processor.sceneB.legato = static_cast<float>(legatoKnob.getValue()); else processor.sceneA.legato = static_cast<float>(legatoKnob.getValue()); } };
+    rateKnob.onValueChange        = [this] { if (! getProperties().getWithDefault ("isUpdatingProgrammatically", false)) { if (processor.isSceneBActiveAnchor.load()) processor.sceneB.rate = static_cast<float>(rateKnob.getValue()); else processor.sceneA.rate = static_cast<float>(rateKnob.getValue()); } };
+    entropyKnob.onValueChange     = [this] { if (! getProperties().getWithDefault ("isUpdatingProgrammatically", false)) { if (processor.isSceneBActiveAnchor.load()) processor.sceneB.entropy = static_cast<float>(entropyKnob.getValue()); else processor.sceneA.entropy = static_cast<float>(entropyKnob.getValue()); } };
+    harmonyKnob.onValueChange     = [this] { if (! getProperties().getWithDefault ("isUpdatingProgrammatically", false)) { if (processor.isSceneBActiveAnchor.load()) processor.sceneB.harmony = static_cast<float>(harmonyKnob.getValue()); else processor.sceneA.harmony = static_cast<float>(harmonyKnob.getValue()); } };
+    chaosKnob.onValueChange       = [this] { if (! getProperties().getWithDefault ("isUpdatingProgrammatically", false)) { if (processor.isSceneBActiveAnchor.load()) processor.sceneB.chaos = static_cast<float>(chaosKnob.getValue()); else processor.sceneA.chaos = static_cast<float>(chaosKnob.getValue()); } };
+    octavesKnob.onValueChange     = [this] { if (! getProperties().getWithDefault ("isUpdatingProgrammatically", false)) { if (processor.isSceneBActiveAnchor.load()) processor.sceneB.octaves = static_cast<float>(octavesKnob.getValue()); else processor.sceneA.octaves = static_cast<float>(octavesKnob.getValue()); } };
 
-    fader1.onValueChange = [this] { if (!isUpdatingProgrammatically) { if (processor.isSceneBActiveAnchor.load()) processor.sceneB.faders[0] = static_cast<float>(fader1.getValue()); else processor.sceneA.faders[0] = static_cast<float>(fader1.getValue()); } };
-    fader2.onValueChange = [this] { if (!isUpdatingProgrammatically) { if (processor.isSceneBActiveAnchor.load()) processor.sceneB.faders[1] = static_cast<float>(fader2.getValue()); else processor.sceneA.faders[1] = static_cast<float>(fader2.getValue()); } };
-    fader3.onValueChange = [this] { if (!isUpdatingProgrammatically) { if (processor.isSceneBActiveAnchor.load()) processor.sceneB.faders[2] = static_cast<float>(fader3.getValue()); else processor.sceneA.faders[2] = static_cast<float>(fader3.getValue()); } };
-    fader4.onValueChange = [this] { if (!isUpdatingProgrammatically) { if (processor.isSceneBActiveAnchor.load()) processor.sceneB.faders[3] = static_cast<float>(fader4.getValue()); else processor.sceneA.faders[3] = static_cast<float>(fader4.getValue()); } };
-    fader5.onValueChange = [this] { if (!isUpdatingProgrammatically) { if (processor.isSceneBActiveAnchor.load()) processor.sceneB.faders[4] = static_cast<float>(fader5.getValue()); else processor.sceneA.faders[4] = static_cast<float>(fader5.getValue()); } };
-    fader6.onValueChange = [this] { if (!isUpdatingProgrammatically) { if (processor.isSceneBActiveAnchor.load()) processor.sceneB.faders[5] = static_cast<float>(fader6.getValue()); else processor.sceneA.faders[5] = static_cast<float>(fader6.getValue()); } };
-    fader7.onValueChange = [this] { if (!isUpdatingProgrammatically) { if (processor.isSceneBActiveAnchor.load()) processor.sceneB.faders[6] = static_cast<float>(fader7.getValue()); else processor.sceneA.faders[6] = static_cast<float>(fader7.getValue()); } };
-    fader8.onValueChange = [this] { if (!isUpdatingProgrammatically) { if (processor.isSceneBActiveAnchor.load()) processor.sceneB.faders[7] = static_cast<float>(fader8.getValue()); else processor.sceneA.faders[7] = static_cast<float>(fader8.getValue()); } };
+    fader1.onValueChange = [this] { if (! getProperties().getWithDefault ("isUpdatingProgrammatically", false)) { if (processor.isSceneBActiveAnchor.load()) processor.sceneB.faders[0] = static_cast<float>(fader1.getValue()); else processor.sceneA.faders[0] = static_cast<float>(fader1.getValue()); } };
+    fader2.onValueChange = [this] { if (! getProperties().getWithDefault ("isUpdatingProgrammatically", false)) { if (processor.isSceneBActiveAnchor.load()) processor.sceneB.faders[1] = static_cast<float>(fader2.getValue()); else processor.sceneA.faders[1] = static_cast<float>(fader2.getValue()); } };
+    fader3.onValueChange = [this] { if (! getProperties().getWithDefault ("isUpdatingProgrammatically", false)) { if (processor.isSceneBActiveAnchor.load()) processor.sceneB.faders[2] = static_cast<float>(fader3.getValue()); else processor.sceneA.faders[2] = static_cast<float>(fader3.getValue()); } };
+    fader4.onValueChange = [this] { if (! getProperties().getWithDefault ("isUpdatingProgrammatically", false)) { if (processor.isSceneBActiveAnchor.load()) processor.sceneB.faders[3] = static_cast<float>(fader4.getValue()); else processor.sceneA.faders[3] = static_cast<float>(fader4.getValue()); } };
+    fader5.onValueChange = [this] { if (! getProperties().getWithDefault ("isUpdatingProgrammatically", false)) { if (processor.isSceneBActiveAnchor.load()) processor.sceneB.faders[4] = static_cast<float>(fader5.getValue()); else processor.sceneA.faders[4] = static_cast<float>(fader5.getValue()); } };
+    fader6.onValueChange = [this] { if (! getProperties().getWithDefault ("isUpdatingProgrammatically", false)) { if (processor.isSceneBActiveAnchor.load()) processor.sceneB.faders[5] = static_cast<float>(fader6.getValue()); else processor.sceneA.faders[5] = static_cast<float>(fader6.getValue()); } };
+    fader7.onValueChange = [this] { if (! getProperties().getWithDefault ("isUpdatingProgrammatically", false)) { if (processor.isSceneBActiveAnchor.load()) processor.sceneB.faders[6] = static_cast<float>(fader7.getValue()); else processor.sceneA.faders[6] = static_cast<float>(fader7.getValue()); } };
+    fader8.onValueChange = [this] { if (! getProperties().getWithDefault ("isUpdatingProgrammatically", false)) { if (processor.isSceneBActiveAnchor.load()) processor.sceneB.faders[7] = static_cast<float>(fader8.getValue()); else processor.sceneA.faders[7] = static_cast<float>(fader8.getValue()); } };
 
     setResizable (false, false); 
     setSize (1000, 681); // Matches physical artwork dimension 
@@ -718,8 +718,8 @@ void PluginEditor::timerCallback()
     bool isSceneB = processor.isSceneBActiveAnchor.load();
     SceneState& activeScene = isSceneB ? processor.sceneB : processor.sceneA;
 
-    // Direct programmatic updates are flagged to avoid value-change listener triggers [1.2.2]
-    isUpdatingProgrammatically = true;
+    // Direct programmatic updates are flagged to avoid value-change listener triggers [1.2.2] using self-contained getProperties flags [1.2.3]
+    getProperties().set ("isUpdatingProgrammatically", true);
 
     rhythmMorphKnob.setValue (interpolate (processor.sceneA.rhythmMorph, processor.sceneB.rhythmMorph), juce::dontSendNotification);
     restKnob.setValue (interpolate (processor.sceneA.rest, processor.sceneB.rest), juce::dontSendNotification);
@@ -735,7 +735,7 @@ void PluginEditor::timerCallback()
         faders[i]->setValue (interpolate (processor.sceneA.faders[i], processor.sceneB.faders[i]), juce::dontSendNotification);
     }
 
-    isUpdatingProgrammatically = false;
+    getProperties().set ("isUpdatingProgrammatically", false);
 
     // OLED Parameter HUD Overlay Triggering [1.2.0]
     juce::Slider* smallKnobs[] = { &rhythmMorphKnob, &restKnob, &legatoKnob, &rateKnob, &entropyKnob, &harmonyKnob, &chaosKnob, &octavesKnob };
