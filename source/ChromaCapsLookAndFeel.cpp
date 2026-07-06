@@ -57,9 +57,8 @@ void ChromaCapsLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, i
         }
     }
     
-    // Map states to 15-dot indices [1.2.0]
+    // Discretized base LEDs representing static setting
     int litCountBase = static_cast<int> (std::round (sliderPos * 15.0f));
-    int litCountTarget = static_cast<int> (std::round (targetVal * 15.0f));
 
     int themeIdx = static_cast<int> (processor.apvts.getRawParameterValue ("panelTheme")->load());
 
@@ -74,12 +73,12 @@ void ChromaCapsLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, i
     float ledRadius = isMasterKnob ? (knobRadius + 5.0f) : (knobRadius + 3.5f);
     float ledDiameter = isMasterKnob ? 3.0f : 2.0f;
 
-    // Palette routing matching active chosen panel theme [1.2.0]
+    // Palette routing matching active chosen panel theme
     juce::Colour activeColor = juce::Colour (0xFF00E5FF); // Theme 0 (Navy): Teal
     if (themeIdx == 1)      activeColor = juce::Colour (0xFFECEFF1); // Theme 1 (Monochrome): White/Silver
     else if (themeIdx == 2) activeColor = juce::Colour (0xFF00FF66); // Theme 2 (Matrix): Neon Green
 
-    // 1. Draw custom rotating metallic knob cap over the background PNG to mask static highlights [1.2.0]
+    // 1. Draw custom rotating metallic knob cap over the background PNG to mask static highlights
     g.setColour (juce::Colour (0xFF1F2229)); // Bezel base
     g.fillEllipse (centerX - knobRadius, centerY - knobRadius, knobRadius * 2.0f, knobRadius * 2.0f);
 
@@ -89,14 +88,14 @@ void ChromaCapsLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, i
     g.setGradientFill (steelGrad);
     g.fillEllipse (centerX - (knobRadius - 1.0f), centerY - (knobRadius - 1.0f), (knobRadius - 1.0f) * 2.0f, (knobRadius - 1.0f) * 2.0f);
 
-    // Draw active rotating anisotropic light-reflection wedge [1.2.0]
+    // Draw active rotating anisotropic light-reflection wedge matching parameter value
     float angle = rotaryStartAngle + sliderPos * (rotaryEndAngle - rotaryStartAngle);
     juce::Path reflectPath;
     reflectPath.addPieSegment (centerX - knobRadius, centerY - knobRadius, knobRadius * 2.0f, knobRadius * 2.0f, angle - 0.25f, angle + 0.25f, 0.0f);
     g.setColour (juce::Colours::white.withAlpha (0.15f));
     g.fillPath (reflectPath);
 
-    // 2. Draw pointer needle [1.2.0]
+    // 2. Draw pointer needle
     juce::Path path;
     float pointerThickness = isMasterKnob ? 2.5f : 1.5f;
     float pointerLength = knobRadius * 0.65f;
@@ -105,14 +104,14 @@ void ChromaCapsLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, i
     g.setColour (juce::Colours::white.withAlpha (0.95f));
     g.fillPath (path);
 
-    // 3. Draw the 15 outer LED indicator ring dots [1.2.0]
+    // 3. Draw the 15 outer LED indicator ring background/base dots
     for (int i = 0; i < 15; ++i)
     {
         float ledAngle = rotaryStartAngle + (static_cast<float> (i) / 14.0f) * (rotaryEndAngle - rotaryStartAngle);
         float ledX = centerX + ledRadius * std::sin (ledAngle) - ledDiameter * 0.5f;
         float ledY = centerY - ledRadius * std::cos (ledAngle) - ledDiameter * 0.5f;
 
-        // Draw base representation (Dim White Arc) up to litCountBase [1.2.0]
+        // Draw base representation (Dim White Arc) up to litCountBase
         if (i < litCountBase)
         {
             float innerRadius = isMasterKnob ? 1.5f : 1.0f;
@@ -125,24 +124,25 @@ void ChromaCapsLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, i
             g.setColour (juce::Colour (0xFF1F2229).withAlpha (0.25f));
             g.fillEllipse (ledX - innerRadius, ledY - innerRadius, innerRadius * 2.0f, innerRadius * 2.0f);
         }
-
-        // Draw active LFO target value as a single, bright, glowing theme-colored dot [1.2.0]
-        if (i == litCountTarget - 1 || (litCountTarget == 0 && i == 0))
-        {
-            // Draw radial glow matching the active scheme
-            float outerRadius = isMasterKnob ? 5.0f : 3.0f;
-            juce::ColourGradient glow (activeColor.withAlpha (0.8f), ledX, ledY,
-                                       activeColor.withAlpha (0.0f), ledX + outerRadius, ledY + outerRadius,
-                                       true);
-            g.setGradientFill (glow);
-            g.fillEllipse (ledX - outerRadius, ledY - outerRadius, outerRadius * 2.0f, outerRadius * 2.0f);
-
-            // Draw crisp inner core
-            float innerRadius = isMasterKnob ? 2.0f : 1.25f;
-            g.setColour (juce::Colours::white.interpolatedWith (activeColor, 0.1f));
-            g.fillEllipse (ledX - innerRadius, ledY - innerRadius, innerRadius * 2.0f, innerRadius * 2.0f);
-        }
     }
+
+    // 4. Draw active LFO target value at exact continuous angle (prevents mid-range offset) [1.2.1]
+    float targetAngle = rotaryStartAngle + targetVal * (rotaryEndAngle - rotaryStartAngle);
+    float targetLedX = centerX + ledRadius * std::sin (targetAngle) - ledDiameter * 0.5f;
+    float targetLedY = centerY - ledRadius * std::cos (targetAngle) - ledDiameter * 0.5f;
+
+    // Draw continuous radial LFO glow matching the active theme highlight
+    float outerRadius = isMasterKnob ? 5.0f : 3.0f;
+    juce::ColourGradient glow (activeColor.withAlpha (0.8f), targetLedX, targetLedY,
+                               activeColor.withAlpha (0.0f), targetLedX + outerRadius, targetLedY + outerRadius,
+                               true);
+    g.setGradientFill (glow);
+    g.fillEllipse (targetLedX - outerRadius, targetLedY - outerRadius, outerRadius * 2.0f, outerRadius * 2.0f);
+
+    // Draw crisp continuous inner core
+    float innerRadius = isMasterKnob ? 2.0f : 1.25f;
+    g.setColour (juce::Colours::white.interpolatedWith (activeColor, 0.1f));
+    g.fillEllipse (targetLedX - innerRadius, targetLedY - innerRadius, innerRadius * 2.0f, innerRadius * 2.0f);
 }
 
 void ChromaCapsLookAndFeel::drawButtonText (juce::Graphics& g, juce::TextButton& button, bool shouldDrawButtonAsHighlighted, bool shouldDrawButtonAsDown)
@@ -164,7 +164,7 @@ void ChromaCapsLookAndFeel::drawButtonText (juce::Graphics& g, juce::TextButton&
         if (text == "B") isLit = processor.isSceneBActive();
 
         if (isLit || button.isDown())
-            g.setColour (juce::Colours::white); // Bright white inside the red glow [1.2.0]
+            g.setColour (juce::Colours::white); // Bright white inside the red glow
         else
             g.setColour (juce::Colour (0xFF757575)); // Dim white/grey when inactive
 
@@ -201,7 +201,7 @@ void ChromaCapsLookAndFeel::drawButtonText (juce::Graphics& g, juce::TextButton&
             bool flashOn = ((flashTimer / 4) % 2 == 1);
             if (flashOn)
             {
-                // State 3 (Save flash): Emerald Green | State 4 (Recall flash): Bright Yellow/Amber [1.2.0]
+                // State 3 (Save flash): Emerald Green | State 4 (Recall flash): Bright Yellow/Amber
                 textCol = (flashType == 1) ? juce::Colour::fromString ("#FF00E676") : juce::Colour::fromString ("#FFFFB300");
             }
             else if (isSaved)
@@ -328,7 +328,7 @@ void ChromaCapsLookAndFeel::drawButtonBackground (juce::Graphics& g, juce::Butto
         if (text == "B") isLit = processor.isSceneBActive();
 
         if (isLit || shouldDrawButtonAsDown) {
-            // Distinct red glowing background & solid red border [1.2.0]
+            // Distinct red glowing background & solid red border
             g.setColour (juce::Colour (0xFFFF0000).withAlpha (0.15f));
             g.fillRoundedRectangle (bounds, cornerSize);
             g.setColour (juce::Colour (0xFFFF0000).withAlpha (0.8f));
@@ -370,7 +370,7 @@ void ChromaCapsLookAndFeel::drawButtonBackground (juce::Graphics& g, juce::Butto
         if (flashTimer > 0) {
             bool flashOn = ((flashTimer / 4) % 2 == 1);
             if (flashOn) {
-                // State 3 (Save flash): Emerald Green | State 4 (Recall flash): Bright Yellow/Amber [1.2.0]
+                // State 3 (Save flash): Emerald Green | State 4 (Recall flash): Bright Yellow/Amber
                 outlineCol = (flashType == 1) ? juce::Colour::fromString ("#FF00E676") : juce::Colour::fromString ("#FFFFB300");
                 fillCol = outlineCol.withAlpha (0.15f);
             } else if (isSaved) {

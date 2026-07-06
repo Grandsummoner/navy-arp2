@@ -223,11 +223,38 @@ PluginEditor::PluginEditor (PluginProcessor& p)
 
     updateSliderTextBoxThemeColors();
 
+    // Explicitly enable double-click to reset parameters to default values [1.2.1]
+    rhythmMorphKnob.setDoubleClickReturnValue (true, 0.0f);
+    restKnob.setDoubleClickReturnValue (true, 0.1f);
+    legatoKnob.setDoubleClickReturnValue (true, 0.5f);
+    rateKnob.setDoubleClickReturnValue (true, 2.0f); // Default 1/16
+    entropyKnob.setDoubleClickReturnValue (true, 0.0f);
+    harmonyKnob.setDoubleClickReturnValue (true, 0.0f);
+    chaosKnob.setDoubleClickReturnValue (true, 0.0f);
+    octavesKnob.setDoubleClickReturnValue (true, 0.0f);
+    masterVelocityKnob.setDoubleClickReturnValue (true, 0.5f); // Note Density default (50%)
+    masterSwingKnob.setDoubleClickReturnValue (true, 0.0f); // Master Swing default (0%)
+
+    for (int i = 0; i < 8; ++i) {
+        faders[i]->setDoubleClickReturnValue (true, 0.5f); // Default 50% probability
+    }
+
     setResizable (false, false); 
     setSize (1000, 681); // Matches physical artwork dimension 
 
     if (DRAW_DIAGNOSTIC_GRID)
         setMouseClickGrabsKeyboardFocus (true);
+
+    // Ensure all knobs and upfaders are on the absolute top visual layer [1.2.1]
+    juce::Slider* allSliders[] = { 
+        &fader1, &fader2, &fader3, &fader4, &fader5, &fader6, &fader7, &fader8,
+        &rhythmMorphKnob, &restKnob, &legatoKnob, &rateKnob,
+        &entropyKnob, &harmonyKnob, &chaosKnob, &octavesKnob,
+        &masterVelocityKnob, &masterSwingKnob, &morphCrossfader
+    };
+    for (auto* s : allSliders) {
+        s->toFront (false);
+    }
 
     startTimerHz (30);
 }
