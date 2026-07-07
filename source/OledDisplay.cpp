@@ -96,6 +96,9 @@ void OledDisplay::paint (juce::Graphics& g)
     const int activeStep = processor.currentStep.load();          
     const bool isPlaying = processor.isCurrentlyPlayingUI.load(); 
 
+    // Capture system high-res timer to compute independent decay time steps
+    double timeMs = juce::Time::getMillisecondCounterHiRes();
+
     // =====================================================================
     // 1. DYNAMIC VIEWPORT (UPPER REGION: y = 0 to 225)
     // =====================================================================
@@ -333,7 +336,6 @@ void OledDisplay::paint (juce::Graphics& g)
         }
         vertices.push_back ({ 0.0f, -1.0f, 0.0f }); 
 
-        double timeMs = juce::Time::getMillisecondCounterHiRes();
         float yaw = static_cast<float> (timeMs * 0.00010);
         float pitch = static_cast<float> (timeMs * 0.00004);
 
@@ -586,6 +588,48 @@ void OledDisplay::paint (juce::Graphics& g)
     const float maxLaddersHeight = (numSegments * segmentHeight) + ((numSegments - 1) * segmentSpacing); 
     float fadersY = bounds.getHeight() - maxLaddersHeight; // Ends exactly at y = 320.0f [2]
 
+    // Fetch, update, and persist step decay values in NamedValueSet properties to support Zero-Header footprint [1, 2]
+    float stepDecays[8];
+    double lastDecayTime = timeMs;
+    if (getProperties().contains ("lastDecayTime"))
+    {
+        lastDecayTime = static_cast<double> (getProperties()["lastDecayTime"]);
+    }
+    else
+    {
+        getProperties().set ("lastDecayTime", timeMs);
+    }
+    
+    float elapsedSec = static_cast<float> ((timeMs - lastDecayTime) / 1000.0);
+    elapsedSec = juce::jlimit (0.0f, 0.1f, elapsedSec); // Limit time step to protect stability
+    getProperties().set ("lastDecayTime", timeMs);
+
+    const float decayRate = 12.0f; // Controls decay speed (higher = faster fade)
+    for (int i = 0; i < 8; ++i)
+    {
+        juce::String propName = "vuDecay_" + juce::String (i);
+        float currentDecay = 0.0f;
+        if (getProperties().contains (propName))
+        {
+            currentDecay = static_cast<float> (getProperties()[propName]);
+        }
+
+        float targetDecay = (isPlaying && (i == activeStep)) ? 1.0f : 0.0f;
+        
+        if (targetDecay > currentDecay)
+        {
+            currentDecay = targetDecay; // Instant light up on active trigger
+        }
+        else
+        {
+            // Smooth analog decay
+            currentDecay = currentDecay + (targetDecay - currentDecay) * (1.0f - std::exp (-decayRate * elapsedSec));
+        }
+
+        getProperties().set (propName, currentDecay);
+        stepDecays[i] = currentDecay;
+    }
+
     // Continuous, fat, gapless columns completely filling the 680px width (8 columns * 85px = 680px) [2]
     const float colWidth = 85.0f;
     const float spacing = 0.0f;
@@ -599,7 +643,10 @@ void OledDisplay::paint (juce::Graphics& g)
         float faderVal = (processor.sceneA.faders[i] * (1.0f - morphVal)) + (processor.sceneB.faders[i] * morphVal);
         int activeSegments = static_cast<int> (std::round (faderVal * static_cast<float> (numSegments)));
 
-        const bool isActiveStep = isPlaying && (i == activeStep);
+        // Interpolate colors smoothly based on analog-style phosphor decay
+        juce::Colour inactiveCol = juce::Colour (0xFF441105).withAlpha (0.75f);
+        juce::Colour activeCol = juce::Colour (0xFFFF4500);
+        juce::Colour currentSegColor = inactiveCol.interpolatedWith (activeCol, stepDecays[i]);
 
         for (int seg = 0; seg < numSegments; ++seg)
         {
@@ -608,10 +655,7 @@ void OledDisplay::paint (juce::Graphics& g)
 
             if (seg < activeSegments)
             {
-                if (isActiveStep)
-                    g.setColour (juce::Colour (0xFFFF4500)); 
-                else
-                    g.setColour (juce::Colour (0xFF441105).withAlpha (0.75f)); 
+                g.setColour (currentSegColor); 
             }
             else
             {
