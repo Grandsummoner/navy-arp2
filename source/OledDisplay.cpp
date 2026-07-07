@@ -45,17 +45,16 @@ OledDisplay::~OledDisplay()
 {
 }
 
-// Updated showParameterOverlay signature to route modulated target LFO calculations [1.2.3]
-void OledDisplay::showParameterOverlay (const juce::String& paramName, float baseValue, float modulatedValue, const juce::String& lfoVibeText)
+// Restored back to the header-compliant 3-argument signature to ensure clean compilation [1.2.3]
+void OledDisplay::showParameterOverlay (const juce::String& paramName, float baseValue, const juce::String& lfoVibeText)
 {
     activeParamName = paramName;
     activeParamValue = baseValue;
-    activeModValue = modulatedValue; // Capture real-time dynamic LFO offset
     activeLfoVibe = lfoVibeText;
     isOverlayActive = true;
     
     repaint();
-    startTimer (1000); // Snappy 1.0 second display timeout [1.2.3]
+    startTimer (1000); // 1.0 second snappy display timeout [1.2.3]
 }
 
 void OledDisplay::setFreezeActive (bool shouldBeActive)
@@ -94,14 +93,45 @@ void OledDisplay::paint (juce::Graphics& g)
 
     if (isOverlayActive)
     {
-        // 1. Draw subtle diagnostic background grid [1.2.3]
+        // 1. Calculate dynamic absolute LFO modulated progress directly from processor parameters [1.2.3]
+        float lfoProgress = 0.0f;
+        int lfoIdx = -1;
+        if (activeParamName == "Rhythm Morph")  lfoIdx = 0;
+        else if (activeParamName == "Rest")      lfoIdx = 1;
+        else if (activeParamName == "Legato")    lfoIdx = 2;
+        else if (activeParamName == "Rate")      lfoIdx = 3;
+        else if (activeParamName == "Entropy")   lfoIdx = 4;
+        else if (activeParamName == "Harmony")   lfoIdx = 5;
+        else if (activeParamName == "Chaos")     lfoIdx = 6;
+        else if (activeParamName == "Octaves")   lfoIdx = 7;
+
+        if (lfoIdx != -1 && activeLfoVibe != "Off")
+        {
+            auto* ratePtr = processor.lfoRatePtrs[lfoIdx];
+            auto* depthPtr = processor.lfoDepthPtrs[lfoIdx];
+            if (ratePtr != nullptr && depthPtr != nullptr)
+            {
+                int rChoice = static_cast<int> (ratePtr->load());
+                float depth = depthPtr->load();
+                if (rChoice > 0 && depth > 0.0f)
+                {
+                    double currentPhase = processor.lfoPhases[lfoIdx];
+                    float sinVal = static_cast<float> (std::sin (currentPhase * juce::MathConstants<double>::twoPi));
+                    // Smooth normalized absolute target offset [1.2.3]
+                    lfoProgress = activeParamValue + (sinVal * depth * 0.5f);
+                    lfoProgress = juce::jlimit (0.0f, 1.0f, lfoProgress);
+                }
+            }
+        }
+
+        // 2. Draw subtle diagnostic background grid
         g.setColour (themeColor.withAlpha (0.04f));
         for (float gridX = displayArea.getX(); gridX < displayArea.getRight(); gridX += 16.0f)
             g.drawVerticalLine (static_cast<int> (gridX), displayArea.getY(), displayArea.getBottom());
         for (float gridY = displayArea.getY(); gridY < displayArea.getBottom(); gridY += 16.0f)
             g.drawHorizontalLine (static_cast<int> (gridY), displayArea.getX(), displayArea.getRight());
 
-        // 2. Draw partition lines and upper system metrics
+        // 3. Draw partition lines and upper system metrics
         float startY = displayArea.getY();
         g.setColour (themeColor.withAlpha (0.4f));
         g.drawHorizontalLine (static_cast<int> (startY + 18.0f), displayArea.getX(), displayArea.getRight());
@@ -111,7 +141,7 @@ void OledDisplay::paint (juce::Graphics& g)
         g.drawText ("PARAMETER OVERLAY", displayArea.getX(), startY, 150, 15, juce::Justification::left);
         g.drawText ("SYSTEM MONITOR // ACTIVE", displayArea.getX(), startY, displayArea.getWidth(), 15, juce::Justification::right);
 
-        // 3. Render Large Parameter Title and Oversized Readout
+        // 4. Render Large Parameter Title and Oversized Readout
         float contentY = startY + 28.0f;
         g.setColour (juce::Colours::white);
         g.setFont (juce::FontOptions (16.0f, juce::Font::bold));
@@ -119,13 +149,13 @@ void OledDisplay::paint (juce::Graphics& g)
 
         // Format and render oversized digital readout
         juce::String valStr = juce::String (static_cast<int> (std::round (activeParamValue * 100.0f)));
-        if (valStr.length() == 1) valStr = "0" + valStr; // pad single digits (e.g. 09%) [1.2.3]
+        if (valStr.length() == 1) valStr = "0" + valStr; // pad single digits (e.g. 09%)
         
         g.setColour (themeColor);
         g.setFont (juce::FontOptions ("Courier New", 26.0f, juce::Font::bold));
         g.drawText (valStr + "%", displayArea.getX(), contentY - 6.0f, displayArea.getWidth() - 10.0f, 30, juce::Justification::right);
 
-        // 4. Render Dual Horizontal Segmented LED Bars [1.2.3]
+        // 5. Render Dual Horizontal Segmented LED Bars
         float baseBarY = contentY + 28.0f;
         g.setColour (juce::Colours::white.withAlpha (0.45f));
         g.setFont (juce::FontOptions ("Courier New", 10.0f, juce::Font::bold));
@@ -156,21 +186,21 @@ void OledDisplay::paint (juce::Graphics& g)
         g.setColour (juce::Colours::white.withAlpha (0.45f));
         g.drawText ("[LFO ]", displayArea.getX() + 10, lfoBarY, 50, 12, juce::Justification::left);
 
-        // If LFO is "Off", bottom target bar reads completely empty as requested [1.2.3]
-        int litSegsLfo = (activeLfoVibe == "Off") ? 0 : static_cast<int> (std::round (activeModValue * numSegs));
+        // If LFO is disabled (activeLfoVibe == "Off"), litSegsLfo is 0 and bottom bar reads completely empty [1.2.3]
+        int litSegsLfo = (activeLfoVibe == "Off") ? 0 : static_cast<int> (std::round (lfoProgress * numSegs));
         for (int s = 0; s < numSegs; ++s)
         {
             float sx = barStartX + s * (segW + segG);
             auto segRect = juce::Rectangle<float> (sx, lfoBarY + 2.0f, segW, segH);
             if (s < litSegsLfo)
-                g.setColour (themeColor.interpolatedWith (juce::Colours::white, 0.25f)); // Pulsing LFO color
+                g.setColour (themeColor.interpolatedWith (juce::Colours::white, 0.25f)); // Pulsing core
             else
                 g.setColour (juce::Colour (0xFF11141C).withAlpha (0.6f)); // Faint unlit segment
             
             g.fillRect (segRect);
         }
 
-        // 5. Draw visual framing frames at the bottom [1.2.3]
+        // 6. Draw visual framing frames at the bottom
         float frameY = lfoBarY + 26.0f;
         float frameH = 48.0f;
         
@@ -198,7 +228,7 @@ void OledDisplay::paint (juce::Graphics& g)
         g.drawText (" LFO ROUTING : " + lfoStatusText, boxB.getX() + 5.0f, boxB.getY() + 8.0f, boxB.getWidth() - 10.0f, 12, juce::Justification::left);
         g.drawText (" TEMPO RATE  : " + activeLfoVibe, boxB.getX() + 5.0f, boxB.getY() + 24.0f, boxB.getWidth() - 10.0f, 12, juce::Justification::left);
 
-        // 6. Draw clean high-tech corner brackets around the viewport boundaries [1.2.3]
+        // 7. Draw clean high-tech corner brackets around the viewport boundaries
         g.setColour (themeColor.withAlpha (0.5f));
         float thick = 2.0f;
         float size = 8.0f;

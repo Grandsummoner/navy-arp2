@@ -737,7 +737,7 @@ void PluginEditor::timerCallback()
 
     getProperties().set ("isUpdatingProgrammatically", false);
 
-    // OLED Parameter HUD Overlay Triggering [1.2.0]
+    // OLED Parameter HUD Overlay Triggering with Standard 3-Argument Signature [1.2.3]
     juce::Slider* smallKnobs[] = { &rhythmMorphKnob, &restKnob, &legatoKnob, &rateKnob, &entropyKnob, &harmonyKnob, &chaosKnob, &octavesKnob };
     juce::String smallNames[] = { "Rhythm Morph", "Rest", "Legato", "Rate", "Entropy", "Harmony", "Chaos", "Octaves" };
     for (int i = 0; i < 8; ++i)
@@ -748,7 +748,6 @@ void PluginEditor::timerCallback()
             
             // Format LFO speeds/depths
             juce::String lfoText = "Off";
-            float lfoProgress = 0.0f; // Default empty if LFO is disabled [1.2.3]
 
             if (processor.lfoRatePtrs[i] != nullptr && processor.lfoDepthPtrs[i] != nullptr)
             {
@@ -758,18 +757,6 @@ void PluginEditor::timerCallback()
                 {
                     juce::StringArray speeds { "Off", "1/4", "1/8", "1/16", "1/32" };
                     lfoText = speeds[rChoice] + " (" + juce::String (static_cast<int> (depth * 100.0f)) + "%)";
-                    
-                    // Real-time absolute LFO modulated sweep value calculation [1.2.3]
-                    double currentPhase = processor.lfoPhases[i];
-                    float targetVal = val + (static_cast<float> (std::sin (currentPhase * juce::MathConstants<double>::twoPi)) * depth * 0.5f);
-                    targetVal = juce::jlimit (0.0f, 1.0f, targetVal);
-
-                    float progressNorm = targetVal;
-                    if (smallNames[i] == "Rate")         progressNorm = targetVal / 3.0f;
-                    else if (smallNames[i] == "Entropy")  progressNorm = (targetVal + 1.0f) * 0.5f;
-                    else if (smallNames[i] == "Octaves")  progressNorm = (targetVal + 3.0f) / 6.0f;
-
-                    lfoProgress = juce::jlimit (0.0f, 1.0f, progressNorm);
                 }
             }
 
@@ -779,8 +766,8 @@ void PluginEditor::timerCallback()
             else if (smallNames[i] == "Octaves")  progress = (val + 3.0f) / 6.0f;
             progress = juce::jlimit (0.0f, 1.0f, progress);
 
-            // Send parameters to multi-bar HUD overlay [1.2.3]
-            oledDisplay.showParameterOverlay (smallNames[i], progress, lfoProgress, lfoText);
+            // Reverted parameters back to standard header-compatible 3-argument signature [1.2.3]
+            oledDisplay.showParameterOverlay (smallNames[i], progress, lfoText);
         }
     }
 
@@ -788,12 +775,12 @@ void PluginEditor::timerCallback()
 
     if (masterVelocityKnob.getThumbBeingDragged() >= 0)
     {
-        oledDisplay.showParameterOverlay ("Note Density", static_cast<float> (masterVelocityKnob.getValue()), 0.0f, "Off");
+        oledDisplay.showParameterOverlay ("Note Density", static_cast<float> (masterVelocityKnob.getValue()), "Off");
     }
 
     if (masterSwingKnob.getThumbBeingDragged() >= 0)
     {
-        oledDisplay.showParameterOverlay ("Master Swing", static_cast<float> (masterSwingKnob.getValue()), 0.0f, "Off");
+        oledDisplay.showParameterOverlay ("Master Swing", static_cast<float> (masterSwingKnob.getValue()), "Off");
     }
 
     for (int i = 0; i < 8; ++i) {
