@@ -6,6 +6,33 @@
 #include "ChromaCapsLookAndFeel.h"
 #include "AppTheme.h"
 
+// =====================================================================
+// PERSISTENT DYNAMIC COMPONENT WRAPPER (ZERO HEADER FOOTPRINT) [1.2.3]
+// =====================================================================
+class SyncButtonWrapper : public juce::ReferenceCountedObject
+{
+public:
+    using Ptr = juce::ReferenceCountedObjectPtr<SyncButtonWrapper>;
+
+    SyncButtonWrapper (juce::AudioProcessorValueTreeState& apvts, juce::Component& parent, juce::LookAndFeel& lf)
+        : button ("Sync")
+    {
+        parent.addAndMakeVisible (button);
+        button.setClickingTogglesState (true);
+        button.setLookAndFeel (&lf);
+        button.setComponentID ("sync");
+        attachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (apvts, "sync", button);
+    }
+
+    ~SyncButtonWrapper() override
+    {
+        button.setLookAndFeel (nullptr);
+    }
+
+    juce::TextButton button;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> attachment;
+};
+
 PluginEditor::PluginEditor (PluginProcessor& p)
     : AudioProcessorEditor (&p), processor (p), oledDisplay (p), chromaLookAndFeel (p, this)
 {
@@ -77,13 +104,9 @@ PluginEditor::PluginEditor (PluginProcessor& p)
         deckBtns[i]->setLookAndFeel (&chromaLookAndFeel); 
     }
 
-    // Initialize circular Sync Button after Freeze [1.2.3]
-    addAndMakeVisible (syncButton);
-    syncButton.setButtonText ("Sync");
-    syncButton.setClickingTogglesState (true);
-    syncButton.setLookAndFeel (&chromaLookAndFeel);
-    syncButton.setComponentID ("sync");
-    syncAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (processor.apvts, "sync", syncButton);
+    // Instantiates Sync button wrapper dynamically without a header variable [1.2.3]
+    auto* syncWrapper = new SyncButtonWrapper (processor.apvts, *this, chromaLookAndFeel);
+    getProperties().set ("syncWrapper", syncWrapper);
 
     juce::TextButton* sceneBtns[] = { &sceneAButton, &sceneBButton }; 
     juce::String sceneTxt[] = { "A", "B" };
@@ -273,7 +296,7 @@ PluginEditor::PluginEditor (PluginProcessor& p)
     rhythmMorphKnob.setDoubleClickReturnValue (true, 0.0f);
     restKnob.setDoubleClickReturnValue (true, 0.1f);
     legatoKnob.setDoubleClickReturnValue (true, 0.5f);
-    rateKnob.setDoubleClickReturnValue (true, 0.5f); // Default center BPM (120)
+    rateKnob.setDoubleClickReturnValue (true, 0.5f); // Default center BPM
     entropyKnob.setDoubleClickReturnValue (true, 0.0f);
     harmonyKnob.setDoubleClickReturnValue (true, 0.0f);
     chaosKnob.setDoubleClickReturnValue (true, 0.0f);
@@ -331,11 +354,14 @@ PluginEditor::~PluginEditor()
     for (auto* s : sliders) s->setLookAndFeel (nullptr);
     
     // Explicitly sized array definition to bypass MSVC range-based template confusion [1.2.3]
-    juce::TextButton* btns[15] = { &diceMeloButton, &diceArtiButton, &diceTimeButton, &diceNavyButton, &latchButton, &arpSeqButton, &polyButton, &freezeButton, &syncButton, &sceneAButton, &sceneBButton, &saveButton, &recallButton, &copyButton, &initButton };
-    for (int i = 0; i < 15; ++i) { btns[i]->setLookAndFeel (nullptr); btns[i]->onClick = nullptr; }
+    juce::TextButton* btns[14] = { &diceMeloButton, &diceArtiButton, &diceTimeButton, &diceNavyButton, &latchButton, &arpSeqButton, &polyButton, &freezeButton, &sceneAButton, &sceneBButton, &saveButton, &recallButton, &copyButton, &initButton };
+    for (int i = 0; i < 14; ++i) { btns[i]->setLookAndFeel (nullptr); btns[i]->onClick = nullptr; }
     
     for (int i = 0; i < 8; ++i) { presetButtons[i].setLookAndFeel (nullptr); presetButtons[i].onClick = nullptr; presetButtons[i].onStateChange = nullptr; presetButtons[i].removeMouseListener(this); }
     sceneAButton.removeMouseListener (this); sceneBButton.removeMouseListener (this);
+
+    // Dynamic clean up of property-wrapped syncButton [1.2.3]
+    getProperties().remove ("syncWrapper");
 }
 
 void PluginEditor::parameterChanged (const juce::String& parameterID, float newValue)
@@ -561,7 +587,7 @@ void PluginEditor::paintOverChildren (juce::Graphics& g)
 
     // Custom Small HUD display boxes under the 8 small knobs [1.2.0]
     juce::Slider* smallKnobs[] = { &rhythmMorphKnob, &restKnob, &legatoKnob, &rateKnob, &entropyKnob, &harmonyKnob, &chaosKnob, &octavesKnob };
-    juce::String smallLabels[] = { "MORPH", "REST", "LEGATO", "BPM" /* Renamed to BPM [1.2.3] */, "ENTROPY", "HARMONY", "CHAOS", "OCTAVES" };
+    juce::String smallLabels[] = { "MORPH", "REST", "LEGATO", "BPM" /* Renamed [1.2.3] */, "ENTROPY", "HARMONY", "CHAOS", "OCTAVES" };
     int smallKnobsX[] = { 44, 44, 44, 44, 902, 902, 902, 902 };
     int smallKnobsY[] = { 121, 182, 244, 306, 121, 182, 244, 306 };
 
@@ -575,14 +601,12 @@ void PluginEditor::paintOverChildren (juce::Graphics& g)
         g.setColour (juce::Colour (0xFF05070A)); // Solid dark fill to clear background faceplate area
         g.fillRect (boxX, boxY, boxW, boxH);
 
-        // Safe JUCE getThumbBeingDragged check to strictly monitor active dragging
+        // Safe JUCE getThumbBeingDragged check to monitor active dragging
         if (smallKnobs[i]->getThumbBeingDragged() >= 0)
         {
             // Display a sleek horizontal progress bar instead of text [1.2.0]
             float val = static_cast<float> (smallKnobs[i]->getValue());
             float progress = val;
-            
-            // Map continuous range to layout progress inside the bar [1.2.3]
             if (smallLabels[i] == "ENTROPY")  progress = (val + 1.0f) * 0.5f;
             else if (smallLabels[i] == "OCTAVES")  progress = (val + 3.0f) / 6.0f;
             progress = juce::jlimit (0.0f, 1.0f, progress);
@@ -620,15 +644,20 @@ void PluginEditor::paintOverChildren (juce::Graphics& g)
     g.setColour (themeColor.withAlpha (0.4f));
     g.drawRoundedRectangle (swgBox.toFloat(), 2.0f, 1.0f);
 
-    g.setColour (themeColor); // RESET COLOR TO FULL THEME COLOR [1.2.0]
+    g.setColour (themeColor); // RESET COLOR TO FULL THEME COLOR [1.2.0] (Fixes greyed-out text bug)
     g.setFont (juce::FontOptions (9.5f, juce::Font::bold));
     juce::String swgText = "SWG: " + juce::String (static_cast<int> (std::round (masterSwingKnob.getValue() * 100.0f))) + "%";
     g.drawFittedText (swgText, swgBox, juce::Justification::centred, 1);
 
-    // 3. Draw static, high-contrast white "MEMORY SLOTS" label under the buttons [1.2.3] (Corrected text justification to compile safely)
+    // 3. Draw static, high-contrast white "MEMORY SLOTS" label under the buttons [1.2.3]
     g.setColour (juce::Colours::white);
     g.setFont (juce::FontOptions ("Courier New", 11.0f, juce::Font::bold));
     g.drawText ("MEMORY SLOTS", 0, 552, 1000, 16, juce::Justification::centred);
+
+    // 4. Draw static "NAVY-ARP MONITOR" stamped onto physical panel [1.2.3]
+    g.setColour (themeColor.withAlpha (0.5f));
+    g.setFont (juce::FontOptions (10.0f, juce::Font::bold));
+    g.drawText ("NAVY-ARP MONITOR", 157, 381, 680, 15, juce::Justification::centred, true);
 }
 
 void PluginEditor::mouseMove (const juce::MouseEvent& event)
@@ -684,7 +713,13 @@ void PluginEditor::resized()
     arpSeqButton.setBounds (602, 15, 58, 17); 
     polyButton.setBounds (669, 15, 58, 17); 
     freezeButton.setBounds (738, 15, 58, 17);
-    syncButton.setBounds (807, 15, 17, 17); // Circular Sync Toggle positioned exactly after Freeze [1.2.3]
+    
+    // Safety boundaries set dynamically using property fetches for wrapped syncButton [1.2.3]
+    auto syncWrapper = SyncButtonWrapper::Ptr (dynamic_cast<SyncButtonWrapper*> (getProperties()["syncWrapper"].getObject()));
+    if (syncWrapper != nullptr)
+    {
+        syncWrapper->button.setBounds (807, 15, 17, 17); // Sited nicely after freeze [1.2.3]
+    }
 
     // Crossfader Row
     sceneAButton.setBounds (214, 396, 67, 58);
