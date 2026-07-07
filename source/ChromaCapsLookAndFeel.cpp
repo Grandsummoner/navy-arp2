@@ -38,27 +38,22 @@ void ChromaCapsLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, i
     else if (cid == "chaos") lfoIndex = 6;
     else if (cid == "octaves") lfoIndex = 7;
 
-    float targetVal = sliderPos;
+    bool isLfoActive = false;
+    float depth = 0.0f;
     if (lfoIndex != -1)
     {
         auto* ratePtr = processor.lfoRatePtrs[lfoIndex];
         auto* depthPtr = processor.lfoDepthPtrs[lfoIndex];
-        
         if (ratePtr != nullptr && depthPtr != nullptr)
         {
             int rateChoice = static_cast<int> (ratePtr->load());
-            float depth = depthPtr->load();
-            if (rateChoice > 0 && depth > 0.02f)
+            depth = depthPtr->load();
+            if (rateChoice > 0 && depth > 0.0f)
             {
-                double currentPhase = processor.lfoPhases[lfoIndex];
-                targetVal = sliderPos + (static_cast<float> (std::sin (currentPhase * juce::MathConstants<double>::twoPi)) * depth * 0.5f);
-                targetVal = juce::jlimit (0.0f, 1.0f, targetVal);
+                isLfoActive = true;
             }
         }
     }
-    
-    // Discretized base LEDs representing static setting
-    int litCountBase = static_cast<int> (std::round (sliderPos * 15.0f));
 
     int themeIdx = static_cast<int> (processor.apvts.getRawParameterValue ("panelTheme")->load());
 
@@ -104,45 +99,72 @@ void ChromaCapsLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, i
     g.setColour (juce::Colours::white.withAlpha (0.95f));
     g.fillPath (path);
 
-    // 3. Draw the 15 outer LED indicator ring background/base dots
+    // 3. Draw the 15 outer LED indicator ring dots utilizing static Solution A [1.2.3]
+    float minSweep = juce::jlimit (0.0f, 1.0f, sliderPos - depth * 0.5f);
+    float maxSweep = juce::jlimit (0.0f, 1.0f, sliderPos + depth * 0.5f);
+
     for (int i = 0; i < 15; ++i)
     {
         float ledAngle = rotaryStartAngle + (static_cast<float> (i) / 14.0f) * (rotaryEndAngle - rotaryStartAngle);
         float ledX = centerX + ledRadius * std::sin (ledAngle) - ledDiameter * 0.5f;
         float ledY = centerY - ledRadius * std::cos (ledAngle) - ledDiameter * 0.5f;
 
-        // Draw base representation (Dim White Arc) up to litCountBase
-        if (i < litCountBase)
+        float ledProportion = static_cast<float> (i) / 14.0f;
+
+        if (isLfoActive)
         {
-            float innerRadius = isMasterKnob ? 1.5f : 1.0f;
-            g.setColour (juce::Colours::white.withAlpha (0.22f)); // Soft translucent white
-            g.fillEllipse (ledX - innerRadius, ledY - innerRadius, innerRadius * 2.0f, innerRadius * 2.0f);
+            // If LFO is active, render a static colored bracket showing modulation boundaries [1.2.3]
+            if (ledProportion >= minSweep && ledProportion <= maxSweep)
+            {
+                float outerRadius = isMasterKnob ? 5.0f : 3.0f;
+                juce::ColourGradient glow (activeColor.withAlpha (0.8f), ledX, ledY,
+                                           activeColor.withAlpha (0.0f), ledX + outerRadius, ledY + outerRadius,
+                                           true);
+                g.setGradientFill (glow);
+                g.fillEllipse (ledX - outerRadius, ledY - outerRadius, outerRadius * 2.0f, outerRadius * 2.0f);
+
+                float innerRadius = isMasterKnob ? 2.0f : 1.25f;
+                g.setColour (juce::Colours::white.interpolatedWith (activeColor, 0.1f));
+                g.fillEllipse (ledX - innerRadius, ledY - innerRadius, innerRadius * 2.0f, innerRadius * 2.0f);
+            }
+            // Draw baseline settings below the physical settings as a soft dim white arc
+            else if (ledProportion <= sliderPos)
+            {
+                float innerRadius = isMasterKnob ? 1.5f : 1.0f;
+                g.setColour (juce::Colours::white.withAlpha (0.22f));
+                g.fillEllipse (ledX - innerRadius, ledY - innerRadius, innerRadius * 2.0f, innerRadius * 2.0f);
+            }
+            else
+            {
+                float innerRadius = 0.6f;
+                g.setColour (juce::Colour (0xFF1F2229).withAlpha (0.25f));
+                g.fillEllipse (ledX - innerRadius, ledY - innerRadius, innerRadius * 2.0f, innerRadius * 2.0f);
+            }
         }
         else
         {
-            float innerRadius = 0.6f;
-            g.setColour (juce::Colour (0xFF1F2229).withAlpha (0.25f));
-            g.fillEllipse (ledX - innerRadius, ledY - innerRadius, innerRadius * 2.0f, innerRadius * 2.0f);
+            // Standard state (No LFO): High-contrast volume arc drawn up to knob needle setting [1.2.3]
+            if (ledProportion <= sliderPos)
+            {
+                float outerRadius = isMasterKnob ? 5.0f : 3.0f;
+                juce::ColourGradient glow (activeColor.withAlpha (0.7f), ledX, ledY,
+                                           activeColor.withAlpha (0.0f), ledX + outerRadius, ledY + outerRadius,
+                                           true);
+                g.setGradientFill (glow);
+                g.fillEllipse (ledX - outerRadius, ledY - outerRadius, outerRadius * 2.0f, outerRadius * 2.0f);
+
+                float innerRadius = isMasterKnob ? 2.0f : 1.25f;
+                g.setColour (juce::Colours::white.interpolatedWith (activeColor, 0.1f));
+                g.fillEllipse (ledX - innerRadius, ledY - innerRadius, innerRadius * 2.0f, innerRadius * 2.0f);
+            }
+            else
+            {
+                float innerRadius = 0.6f;
+                g.setColour (juce::Colour (0xFF1F2229).withAlpha (0.25f));
+                g.fillEllipse (ledX - innerRadius, ledY - innerRadius, innerRadius * 2.0f, innerRadius * 2.0f);
+            }
         }
     }
-
-    // 4. Draw active LFO target value at exact continuous angle (prevents mid-range offset)
-    float targetAngle = rotaryStartAngle + targetVal * (rotaryEndAngle - rotaryStartAngle);
-    float targetLedX = centerX + ledRadius * std::sin (targetAngle) - ledDiameter * 0.5f;
-    float targetLedY = centerY - ledRadius * std::cos (targetAngle) - ledDiameter * 0.5f;
-
-    // Draw continuous radial LFO glow matching the active theme highlight
-    float outerRadius = isMasterKnob ? 5.0f : 3.0f;
-    juce::ColourGradient glow (activeColor.withAlpha (0.8f), targetLedX, targetLedY,
-                               activeColor.withAlpha (0.0f), targetLedX + outerRadius, targetLedY + outerRadius,
-                               true);
-    g.setGradientFill (glow);
-    g.fillEllipse (targetLedX - outerRadius, targetLedY - outerRadius, outerRadius * 2.0f, outerRadius * 2.0f);
-
-    // Draw crisp continuous inner core
-    float innerRadius = isMasterKnob ? 2.0f : 1.25f;
-    g.setColour (juce::Colours::white.interpolatedWith (activeColor, 0.1f));
-    g.fillEllipse (targetLedX - innerRadius, targetLedY - innerRadius, innerRadius * 2.0f, innerRadius * 2.0f);
 }
 
 void ChromaCapsLookAndFeel::drawButtonText (juce::Graphics& g, juce::TextButton& button, bool shouldDrawButtonAsHighlighted, bool shouldDrawButtonAsDown)
@@ -444,7 +466,7 @@ void ChromaCapsLookAndFeel::drawLinearSlider (juce::Graphics& g, int x, int y, i
         float endX = static_cast<float>(x + width);
         float totalW = static_cast<float>(width);
 
-        // Visual travel shortened by exactly 5% on both ends to hide the orange strip at extremes [1.2.3]
+        // Visual travel compressed by exactly 5% on both ends to hide the orange strip at extremes [1.2.3]
         float margin = totalW * 0.05f;
         float activeStartX = startX + margin;
         float activeEndX = endX - margin;
@@ -464,9 +486,9 @@ void ChromaCapsLookAndFeel::drawLinearSlider (juce::Graphics& g, int x, int y, i
         g.setColour (t.crossfaderTrackB.withAlpha (alphaB * 0.6f + 0.15f));
         g.fillRoundedRectangle (visualThumbX, trackY, endX - visualThumbX, trackHeight, 2.0f);
 
-        // Crossfader cap drawn bigger and taller [1.2.2]
-        const float thumbWidth = 32.0f;  // Increased from 24.0f
-        const float thumbHeight = 32.0f; // Increased from 20.0f (extends nicely outside track bounds)
+        // Crossfader cap drawn bigger and taller
+        const float thumbWidth = 32.0f;  
+        const float thumbHeight = 32.0f; 
         const float thumbX = visualThumbX - (thumbWidth * 0.5f);
         const float thumbY = static_cast<float>(y) + (static_cast<float>(height) - thumbHeight) * 0.5f;
 

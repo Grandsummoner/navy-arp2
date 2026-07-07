@@ -82,7 +82,6 @@ PluginEditor::PluginEditor (PluginProcessor& p)
     for (int i = 0; i < 2; ++i) { 
         addAndMakeVisible (sceneBtns[i]); 
         sceneBtns[i]->setButtonText (sceneTxt[i]); 
-        sceneBtns[i]->addMouseListener (this, false); 
         sceneBtns[i]->setLookAndFeel (&chromaLookAndFeel); 
         sceneBtns[i]->setTriggeredOnMouseDown (true); // Instantly switches on mouse down
     }
@@ -351,6 +350,27 @@ void PluginEditor::mouseDown (const juce::MouseEvent& event)
     juce::Slider* knobs[] = { &rhythmMorphKnob, &restKnob, &legatoKnob, &rateKnob, &entropyKnob, &harmonyKnob, &chaosKnob, &octavesKnob };
     juce::ParameterID rates[] = { IDs::rhythmMorphLfoRate, IDs::restLfoRate, IDs::legatoLfoRate, IDs::rateLfoRate, IDs::entropyLfoRate, IDs::harmonyLfoRate, IDs::chaosLfoRate, IDs::octavesLfoRate };
     juce::ParameterID depths[] = { IDs::rhythmMorphLfoDepth, IDs::restLfoDepth, IDs::legatoLfoDepth, IDs::rateLfoDepth, IDs::entropyLfoDepth, IDs::harmonyLfoDepth, IDs::chaosLfoDepth, IDs::octavesLfoDepth };
+
+    // Intercept mouse click before dragging starts to clear LFO parameter states if Init is toggled [1.2.3]
+    if (initButton.getToggleState())
+    {
+        for (int i = 0; i < 8; ++i)
+        {
+            if (event.eventComponent == knobs[i])
+            {
+                auto* rateParam = processor.apvts.getParameter (rates[i].getParamID());
+                auto* depthParam = processor.apvts.getParameter (depths[i].getParamID());
+                if (rateParam != nullptr && depthParam != nullptr)
+                {
+                    rateParam->setValueNotifyingHost (0.0f);  // Reset LFO Speed to "Off" [1.2.3]
+                    depthParam->setValueNotifyingHost (0.0f); // Reset LFO Depth to "0%" [1.2.3]
+                }
+                initButton.setToggleState (false, juce::dontSendNotification);
+                initButton.repaint();
+                return; // Intercept entirely to prevent LFO menus popping up
+            }
+        }
+    }
 
     for (int i = 0; i < 8; ++i)
     {
