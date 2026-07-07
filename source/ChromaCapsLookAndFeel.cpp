@@ -68,10 +68,15 @@ void ChromaCapsLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, i
     float ledRadius = isMasterKnob ? (knobRadius + 5.0f) : (knobRadius + 3.5f);
     float ledDiameter = isMasterKnob ? 3.0f : 2.0f;
 
-    // Palette routing matching active chosen panel theme
+    // Colour One: Palette routing matching active chosen panel theme
     juce::Colour activeColor = juce::Colour (0xFF00E5FF); // Theme 0 (Navy): Teal
     if (themeIdx == 1)      activeColor = juce::Colour (0xFFECEFF1); // Theme 1 (Monochrome): White/Silver
     else if (themeIdx == 2) activeColor = juce::Colour (0xFF00FF66); // Theme 2 (Matrix): Neon Green
+
+    // Colour Two: Contrasting LFO Sweep bracket colors [1.2.3]
+    juce::Colour lfoHaloColor = juce::Colour (0xFFFF6D00); // Navy Contrast: Amber/Orange
+    if (themeIdx == 1)      lfoHaloColor = juce::Colour (0xFF00E5FF); // Monochrome Contrast: Tech Cyan
+    else if (themeIdx == 2) lfoHaloColor = juce::Colour (0xFFD500F9); // Matrix Contrast: Hot Purple/Magenta
 
     // 1. Draw custom rotating metallic knob cap over the background PNG to mask static highlights
     g.setColour (juce::Colour (0xFF1F2229)); // Bezel base
@@ -99,9 +104,12 @@ void ChromaCapsLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, i
     g.setColour (juce::Colours::white.withAlpha (0.95f));
     g.fillPath (path);
 
-    // 3. Draw the 15 outer LED indicator ring dots utilizing static Solution A [1.2.3]
+    // 3. Draw the 15 outer LED indicator ring background/base dots utilizing dynamic Solution A [1.2.3]
     float minSweep = juce::jlimit (0.0f, 1.0f, sliderPos - depth * 0.5f);
     float maxSweep = juce::jlimit (0.0f, 1.0f, sliderPos + depth * 0.5f);
+
+    // Identify if user is actively clicking or dragging the dial
+    bool isDragging = (slider.getThumbBeingDragged() >= 0);
 
     for (int i = 0; i < 15; ++i)
     {
@@ -111,23 +119,23 @@ void ChromaCapsLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, i
 
         float ledProportion = static_cast<float> (i) / 14.0f;
 
-        if (isLfoActive)
+        if (isLfoActive && !isDragging)
         {
-            // If LFO is active, render a static colored bracket showing modulation boundaries [1.2.3]
+            // IDLE MODULATED STATE: Draw contrasting Colour Two bracket within modulation range [1.2.3]
             if (ledProportion >= minSweep && ledProportion <= maxSweep)
             {
                 float outerRadius = isMasterKnob ? 5.0f : 3.0f;
-                juce::ColourGradient glow (activeColor.withAlpha (0.8f), ledX, ledY,
-                                           activeColor.withAlpha (0.0f), ledX + outerRadius, ledY + outerRadius,
+                juce::ColourGradient glow (lfoHaloColor.withAlpha (0.8f), ledX, ledY,
+                                           lfoHaloColor.withAlpha (0.0f), ledX + outerRadius, ledY + outerRadius,
                                            true);
                 g.setGradientFill (glow);
                 g.fillEllipse (ledX - outerRadius, ledY - outerRadius, outerRadius * 2.0f, outerRadius * 2.0f);
 
                 float innerRadius = isMasterKnob ? 2.0f : 1.25f;
-                g.setColour (juce::Colours::white.interpolatedWith (activeColor, 0.1f));
+                g.setColour (juce::Colours::white.interpolatedWith (lfoHaloColor, 0.1f));
                 g.fillEllipse (ledX - innerRadius, ledY - innerRadius, innerRadius * 2.0f, innerRadius * 2.0f);
             }
-            // Draw baseline settings below the physical settings as a soft dim white arc
+            // Draw baseline settings below the physical setting as a soft dim white arc
             else if (ledProportion <= sliderPos)
             {
                 float innerRadius = isMasterKnob ? 1.5f : 1.0f;
@@ -143,7 +151,7 @@ void ChromaCapsLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, i
         }
         else
         {
-            // Standard state (No LFO): High-contrast volume arc drawn up to knob needle setting [1.2.3]
+            // ACTIVE DRAGGING OR UNMODULATED STATE: Standard volume indicator drawn in high-contrast Colour One (Theme Accent) [1.2.3]
             if (ledProportion <= sliderPos)
             {
                 float outerRadius = isMasterKnob ? 5.0f : 3.0f;
@@ -178,6 +186,12 @@ void ChromaCapsLookAndFeel::drawButtonText (juce::Graphics& g, juce::TextButton&
     const bool isStaticTopButton = (text == "Latch" || text == "Poly" || text == "Freeze" || text == "Seq" || text == "SEQ" || text == "Arp" || text == "ARP");
 
     int themeIdx = static_cast<int> (processor.apvts.getRawParameterValue ("panelTheme")->load());
+
+    // Intercept Sync circular text drawing to keep it clean and unprinted [1.2.3]
+    if (text == "Sync")
+    {
+        return; 
+    }
 
     if (text == "A" || text == "B")
     {
@@ -285,6 +299,47 @@ void ChromaCapsLookAndFeel::drawButtonBackground (juce::Graphics& g, juce::Butto
 
     int themeIdx = static_cast<int> (processor.apvts.getRawParameterValue ("panelTheme")->load());
 
+    // Color routing matching active chosen panel theme
+    juce::Colour activeColor = juce::Colour (0xFF00E5FF); // Theme 0 (Navy): Teal
+    if (themeIdx == 1)      activeColor = juce::Colour (0xFFECEFF1); // Theme 1 (Monochrome): White/Silver
+    else if (themeIdx == 2) activeColor = juce::Colour (0xFF00FF66); // Theme 2 (Matrix): Neon Green
+
+    // Renders the Sync button as a sleek circular toggle [1.2.3]
+    if (text == "Sync")
+    {
+        float radius = juce::jmin (bounds.getWidth(), bounds.getHeight()) * 0.5f;
+        auto circleBounds = juce::Rectangle<float> (bounds.getCentreX() - radius, bounds.getCentreY() - radius, radius * 2.0f, radius * 2.0f);
+        
+        bool isLit = button.getToggleState() || shouldDrawButtonAsHighlighted || shouldDrawButtonAsDown;
+        if (isLit)
+        {
+            // Soft halo glow inside circular bezel [1.2.3]
+            g.setColour (activeColor.withAlpha (0.25f));
+            g.fillEllipse (circleBounds);
+            g.setColour (activeColor.withAlpha (0.8f));
+            g.drawEllipse (circleBounds.reduced (0.5f), 1.25f);
+
+            // Draw glowing centered micro-LED dot [1.2.3]
+            float dotRad = 2.5f;
+            g.setColour (juce::Colours::white);
+            g.fillEllipse (bounds.getCentreX() - dotRad, bounds.getCentreY() - dotRad, dotRad * 2.0f, dotRad * 2.0f);
+        }
+        else
+        {
+            // Faint unlit circular bezel
+            g.setColour (juce::Colour (0xFF181C20));
+            g.fillEllipse (circleBounds);
+            g.setColour (juce::Colour (0xFF37474F).withAlpha (0.4f));
+            g.drawEllipse (circleBounds.reduced (0.5f), 1.0f);
+
+            // Dim centered micro-LED dot [1.2.3]
+            float dotRadius = 2.5f;
+            g.setColour (juce::Colour (0xFF4F525D));
+            g.fillEllipse (bounds.getCentreX() - dotRadius, bounds.getCentreY() - dotRadius, dotRadius * 2.0f, dotRadius * 2.0f);
+        }
+        return;
+    }
+
     if (isUtilButton || isDiceButton)
     {
         float ledWidth = bounds.getWidth() * 0.5f;
@@ -332,10 +387,6 @@ void ChromaCapsLookAndFeel::drawButtonBackground (juce::Graphics& g, juce::Butto
 
     if (text == "Arp")
     {
-        juce::Colour activeColor = juce::Colour (0xFF00E5FF);
-        if (themeIdx == 1)      activeColor = juce::Colour (0xFFECEFF1);
-        else if (themeIdx == 2) activeColor = juce::Colour (0xFF00FF66);
-
         g.setColour (activeColor.withAlpha (0.25f));
         g.fillRoundedRectangle (bounds, cornerSize);
         g.setColour (activeColor.withAlpha (0.6f));
@@ -425,13 +476,9 @@ void ChromaCapsLookAndFeel::drawButtonBackground (juce::Graphics& g, juce::Butto
     {
         if (button.getClickingTogglesState() && button.getToggleState())
         {
-            juce::Colour ledColor = juce::Colour (0xFF00E5FF);
-            if (themeIdx == 1)      ledColor = juce::Colour (0xFFECEFF1);
-            else if (themeIdx == 2) ledColor = juce::Colour (0xFF00FF66);
-
-            g.setColour (ledColor.withAlpha (0.25f));
+            g.setColour (activeColor.withAlpha (0.25f));
             g.fillRoundedRectangle (bounds, cornerSize);
-            g.setColour (ledColor.withAlpha (0.6f));
+            g.setColour (activeColor.withAlpha (0.6f));
             g.drawRoundedRectangle (bounds.reduced(0.5f), cornerSize, 1.25f);
         }
         else if (shouldDrawButtonAsDown)

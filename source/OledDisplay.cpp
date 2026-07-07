@@ -93,13 +93,13 @@ void OledDisplay::paint (juce::Graphics& g)
 
     if (isOverlayActive)
     {
-        // 1. Calculate dynamic absolute LFO modulated progress directly from processor parameters [1.2.3]
+        // 1. Calculate dynamic absolute LFO modulated progress directly inside OledDisplay [1.2.3]
         float lfoProgress = 0.0f;
         int lfoIdx = -1;
         if (activeParamName == "Rhythm Morph")  lfoIdx = 0;
         else if (activeParamName == "Rest")      lfoIdx = 1;
         else if (activeParamName == "Legato")    lfoIdx = 2;
-        else if (activeParamName == "BPM")       lfoIdx = 3; // Mapped directly [1.2.3]
+        else if (activeParamName == "BPM")       lfoIdx = 3; 
         else if (activeParamName == "Entropy")   lfoIdx = 4;
         else if (activeParamName == "Harmony")   lfoIdx = 5;
         else if (activeParamName == "Chaos")     lfoIdx = 6;
@@ -117,7 +117,6 @@ void OledDisplay::paint (juce::Graphics& g)
                 {
                     double currentPhase = processor.lfoPhases[lfoIdx];
                     float sinVal = static_cast<float> (std::sin (currentPhase * juce::MathConstants<double>::twoPi));
-                    // Smooth normalized absolute target offset [1.2.3]
                     lfoProgress = activeParamValue + (sinVal * depth * 0.5f);
                     lfoProgress = juce::jlimit (0.0f, 1.0f, lfoProgress);
                 }
@@ -141,19 +140,43 @@ void OledDisplay::paint (juce::Graphics& g)
         g.drawText ("PARAMETER OVERLAY", displayArea.getX(), startY, 150, 15, juce::Justification::left);
         g.drawText ("SYSTEM MONITOR // ACTIVE", displayArea.getX(), startY, displayArea.getWidth(), 15, juce::Justification::right);
 
-        // 4. Render Large Parameter Title and Oversized Readout
+        // 4. Render Large Parameter Title and Oversized Readout with custom string formatting [1.2.3]
         float contentY = startY + 28.0f;
         g.setColour (juce::Colours::white);
         g.setFont (juce::FontOptions (16.0f, juce::Font::bold));
         g.drawText (activeParamName.toUpperCase(), displayArea.getX() + 10, contentY, 300, 20, juce::Justification::left);
 
-        // Format and render oversized digital readout
-        juce::String valStr = juce::String (static_cast<int> (std::round (activeParamValue * 100.0f)));
-        if (valStr.length() == 1) valStr = "0" + valStr; // pad single digits (e.g. 09%)
+        // Format continuous inputs based on parameter ranges
+        juce::String valStr = "";
+        if (activeParamName == "BPM")
+        {
+            auto* syncPtr = processor.apvts.getRawParameterValue ("sync");
+            bool syncActive = (syncPtr != nullptr && syncPtr->load() > 0.5f);
+            if (syncActive)
+            {
+                int rateIdx = juce::jlimit (0, 3, static_cast<int> (std::round (activeParamValue * 3.0f)));
+                juce::StringArray rates { "1/4", "1/8", "1/16", "1/32" };
+                valStr = rates[rateIdx]; // Synced fraction display [1.2.3]
+            }
+            else
+            {
+                int manualBpm = static_cast<int> (std::round (40.0f + activeParamValue * 200.0f));
+                valStr = juce::String (manualBpm) + " BPM"; // Free-running BPM numerical display [1.2.3]
+            }
+        }
+        else if (activeParamName == "Octaves")
+        {
+            int octVal = static_cast<int> (std::round (activeParamValue * 6.0f - 3.0f));
+            valStr = (octVal >= 0 ? "+" : "") + juce::String (octVal); // Signed integer display [1.2.3]
+        }
+        else
+        {
+            valStr = juce::String (static_cast<int> (std::round (activeParamValue * 100.0f))) + "%"; // Standard percentage
+        }
         
         g.setColour (themeColor);
         g.setFont (juce::FontOptions ("Courier New", 26.0f, juce::Font::bold));
-        g.drawText (valStr + "%", displayArea.getX(), contentY - 6.0f, displayArea.getWidth() - 10.0f, 30, juce::Justification::right);
+        g.drawText (valStr, displayArea.getX(), contentY - 6.0f, displayArea.getWidth() - 10.0f, 30, juce::Justification::right);
 
         // 5. Render Dual Horizontal Segmented LED Bars
         float baseBarY = contentY + 28.0f;
@@ -267,19 +290,21 @@ void OledDisplay::paint (juce::Graphics& g)
             else voiceStr = "MONO";
         }
 
-        int rateIdx = juce::jlimit (0, 3, static_cast<int> (*processor.apvts.getRawParameterValue (IDs::rate.getParamID())));
+        // Continuous Float Rate dial dynamically evaluated inside metadata bar [1.2.3]
+        float rawRateVal = *processor.apvts.getRawParameterValue (IDs::rate.getParamID());
+        int rateIdx = juce::jlimit (0, 3, static_cast<int> (std::round (rawRateVal * 3.0f)));
         juce::StringArray rates { "1/4", "1/8", "1/16", "1/32" };
         juce::String rateStr = rates[rateIdx];
 
         int rangeShift = static_cast<int> (*processor.apvts.getRawParameterValue (IDs::octaves.getParamID()));
         juce::String octStr = (rangeShift >= 0 ? "+" : "") + juce::String (rangeShift);
 
-        // Check if sync mode toggle is active
+        // Check active tempo source sync mode [1.2.3]
         auto* syncPtr = processor.apvts.getRawParameterValue ("sync");
         bool syncActive = (syncPtr != nullptr && syncPtr->load() > 0.5f);
-        juce::String tempoSourceText = syncActive ? "INTERNAL (" + rateStr + ")" : "FREE RUN";
+        juce::String tempoSourceText = syncActive ? "SYNC (" + rateStr + ")" : "FREE RUN";
 
-        juce::String metaText = "SYSTEM STATUS: ACTIVE | KEY: " + keyStr + " | SCALE: " + scaleStr.toUpperCase() + " | SYNC: " + tempoSourceText + " | VOICING: " + voiceStr;
+        juce::String metaText = "SYSTEM STATUS: ACTIVE | KEY: " + keyStr + " | SCALE: " + scaleStr.toUpperCase() + " | TEMPO: " + tempoSourceText + " | VOICING: " + voiceStr;
 
         struct Point3D { float x, y, z; };
         std::vector<Point3D> vertices;
@@ -427,9 +452,9 @@ void OledDisplay::paint (juce::Graphics& g)
                     auto* depthPtr = processor.lfoDepthPtrs[lfoIdx];
                     if (ratePtr != nullptr && depthPtr != nullptr)
                     {
-                        int rChoice = static_cast<int> (ratePtr->load());
+                        int rateChoice = static_cast<int> (ratePtr->load());
                         float depth = depthPtr->load();
-                        if (rChoice > 0 && depth > 0.02f)
+                        if (rateChoice > 0 && depth > 0.02f)
                         {
                             double currentPhase = processor.lfoPhases[lfoIdx];
                             float mod = static_cast<float> (std::sin (currentPhase * juce::MathConstants<double>::twoPi)) * depth * 0.5f + 0.5f;
@@ -568,7 +593,7 @@ void OledDisplay::paint (juce::Graphics& g)
 
         // REMOVED program-stamp drawn inside the OLED box (NAVY-ARP MONITOR title is now stamped on parent editor) [1.2.3]
 
-        // Shifted status bar parameters to absolute top of OLED inside box boundary [1.2.3]
+        // Shifted status bar parameters to absolute top of OLED inside box boundary
         g.setColour (juce::Colour (0xFF00FF66).withAlpha (0.85f)); 
         g.setFont (juce::FontOptions (10.0f, juce::Font::bold));
         g.drawText (metaText, displayArea.withY (displayArea.getY() + 8.0f).withHeight (15.0f), juce::Justification::centred, true);

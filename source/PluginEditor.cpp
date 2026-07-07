@@ -104,7 +104,7 @@ PluginEditor::PluginEditor (PluginProcessor& p)
         deckBtns[i]->setLookAndFeel (&chromaLookAndFeel); 
     }
 
-    // Instantiates Sync button wrapper dynamically without a header variable [1.2.3]
+    // Instantiates Sync button wrapper dynamically to keep header untouched [1.2.3]
     auto* syncWrapper = new SyncButtonWrapper (processor.apvts, *this, chromaLookAndFeel);
     getProperties().set ("syncWrapper", syncWrapper);
 
@@ -848,7 +848,7 @@ void PluginEditor::timerCallback()
 
     if (masterVelocityKnob.getThumbBeingDragged() >= 0)
     {
-        oledDisplay.showParameterOverlay ("Note Density", static_cast<float> (masterVelocityKnob.getValue()), "Off");
+        oledDisplay.showParameterOverlay ("BPM", static_cast<float> (masterVelocityKnob.getValue()), "Off");
     }
 
     if (masterSwingKnob.getThumbBeingDragged() >= 0)
