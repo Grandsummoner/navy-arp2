@@ -329,8 +329,11 @@ PluginEditor::~PluginEditor()
     stopTimer(); processor.apvts.removeParameterListener ("panelTheme", this);
     juce::Slider* sliders[] = { &rhythmMorphKnob, &restKnob, &legatoKnob, &rateKnob, &entropyKnob, &harmonyKnob, &chaosKnob, &octavesKnob, &masterVelocityKnob, &masterSwingKnob, &fader1, &fader2, &fader3, &fader4, &fader5, &fader6, &fader7, &fader8, &morphCrossfader };
     for (auto* s : sliders) s->setLookAndFeel (nullptr);
-    juce::TextButton* btns[] = { &diceMeloButton, &diceArtiButton, &diceTimeButton, &diceNavyButton, &latchButton, &arpSeqButton, &polyButton, &freezeButton, &syncButton, &sceneAButton, &sceneBButton, &saveButton, &recallButton, &copyButton, &initButton };
-    for (auto* b : btns) { b->setLookAndFeel (nullptr); b->onClick = nullptr; }
+    
+    // Explicitly sized array definition to bypass MSVC range-based template confusion [1.2.3]
+    juce::TextButton* btns[15] = { &diceMeloButton, &diceArtiButton, &diceTimeButton, &diceNavyButton, &latchButton, &arpSeqButton, &polyButton, &freezeButton, &syncButton, &sceneAButton, &sceneBButton, &saveButton, &recallButton, &copyButton, &initButton };
+    for (int i = 0; i < 15; ++i) { btns[i]->setLookAndFeel (nullptr); btns[i]->onClick = nullptr; }
+    
     for (int i = 0; i < 8; ++i) { presetButtons[i].setLookAndFeel (nullptr); presetButtons[i].onClick = nullptr; presetButtons[i].onStateChange = nullptr; presetButtons[i].removeMouseListener(this); }
     sceneAButton.removeMouseListener (this); sceneBButton.removeMouseListener (this);
 }
@@ -622,10 +625,10 @@ void PluginEditor::paintOverChildren (juce::Graphics& g)
     juce::String swgText = "SWG: " + juce::String (static_cast<int> (std::round (masterSwingKnob.getValue() * 100.0f))) + "%";
     g.drawFittedText (swgText, swgBox, juce::Justification::centred, 1);
 
-    // 3. Draw static, high-contrast white "MEMORY SLOTS" label under the buttons [1.2.3]
+    // 3. Draw static, high-contrast white "MEMORY SLOTS" label under the buttons [1.2.3] (Corrected text justification to compile safely)
     g.setColour (juce::Colours::white);
     g.setFont (juce::FontOptions ("Courier New", 11.0f, juce::Font::bold));
-    g.drawText ("MEMORY SLOTS", 0, 552, 1000, 16, juce::Justification::centredHorizontal);
+    g.drawText ("MEMORY SLOTS", 0, 552, 1000, 16, juce::Justification::centred);
 }
 
 void PluginEditor::mouseMove (const juce::MouseEvent& event)
