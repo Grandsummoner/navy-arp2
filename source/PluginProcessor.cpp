@@ -71,6 +71,7 @@ void PluginProcessor::scheduleNoteOff (juce::MidiBuffer& midi, int pitch, int de
 void PluginProcessor::setActiveAnchor (bool useSceneB)
 {
     if (isSceneBActiveAnchor.load() == useSceneB) return;
+    captureScene (isSceneBActiveAnchor.load() ? 1 : 0);
     isSceneBActiveAnchor.store (useSceneB); lastSceneBActiveState = useSceneB;
     
     SceneState& targetScene = useSceneB ? sceneB : sceneA;
@@ -80,7 +81,7 @@ void PluginProcessor::setActiveAnchor (bool useSceneB)
     apvts.getParameter (IDs::entropy.getParamID())->setValueNotifyingHost ((targetScene.entropy + 1.0f) * 0.5f);
     apvts.getParameter (IDs::harmony.getParamID())->setValueNotifyingHost (targetScene.harmony);
     apvts.getParameter (IDs::chaos.getParamID())->setValueNotifyingHost (targetScene.chaos);
-    apvts.getParameter (IDs::rate.getParamID())->setValueNotifyingHost (targetScene.rate / 3.0f);
+    apvts.getParameter (IDs::rate.getParamID())->setValueNotifyingHost (targetScene.rate);
     apvts.getParameter (IDs::octaves.getParamID())->setValueNotifyingHost ((targetScene.octaves + 3.0f) / 6.0f);
     for (int i = 0; i < 8; ++i)
         apvts.getParameter (juce::String ("fader" + juce::String (i + 1)))->setValueNotifyingHost (targetScene.faders[i]);
@@ -108,7 +109,7 @@ void PluginProcessor::updateLfoModulations (int numSamples, double bpm)
         apvts.getParameter (IDs::entropy.getParamID())->setValueNotifyingHost ((targetScene.entropy + 1.0f) * 0.5f);
         apvts.getParameter (IDs::harmony.getParamID())->setValueNotifyingHost (targetScene.harmony);
         apvts.getParameter (IDs::chaos.getParamID())->setValueNotifyingHost (targetScene.chaos);
-        apvts.getParameter (IDs::rate.getParamID())->setValueNotifyingHost (targetScene.rate / 3.0f);
+        apvts.getParameter (IDs::rate.getParamID())->setValueNotifyingHost (targetScene.rate);
         apvts.getParameter (IDs::octaves.getParamID())->setValueNotifyingHost ((targetScene.octaves + 3.0f) / 6.0f);
         for (int i = 0; i < 8; ++i)
             apvts.getParameter (juce::String ("fader" + juce::String (i + 1)))->setValueNotifyingHost (targetScene.faders[i]);
@@ -138,8 +139,17 @@ void PluginProcessor::updateLfoModulations (int numSamples, double bpm)
     activeLegato = applyLfo (2, baseLegato, lfoRatePtrs[2], lfoDepthPtrs[2], 0.1f, 1.0f);
     modLegato = activeLegato; modRest = (activeLegato >= 0.8f) ? (activeRest * juce::jlimit (0.0f, 1.0f, (1.0f - activeLegato) / 0.2f)) : activeRest;
 
-    float rawRate = applyLfo (3, baseRate, lfoRatePtrs[3], lfoDepthPtrs[3], 0.0f, 3.0f);
-    activeRateIdx = juce::jlimit (0, 3, static_cast<int> (std::round (rawRate)));
+    // Rate mapped continuously based on Sync Mode status
+    float rawRate = applyLfo (3, baseRate, lfoRatePtrs[3], lfoDepthPtrs[3], 0.0f, 1.0f);
+    
+    auto* syncPtr = apvts.getRawParameterValue ("sync");
+    bool syncActive = (syncPtr != nullptr && syncPtr->load() > 0.5f);
+    if (syncActive) {
+        activeRateIdx = juce::jlimit (0, 3, static_cast<int> (std::round (rawRate * 3.0f)));
+    } else {
+        activeRateIdx = 2; // Fixed to 1/16 trigger grid in free-run internal mode
+    }
+
     activeEntropy = applyLfo (4, baseEntropy, lfoRatePtrs[4], lfoDepthPtrs[4], -1.0f, 1.0f); modEntropy = activeEntropy;
     activeHarmony = applyLfo (5, baseHarmony, lfoRatePtrs[5], lfoDepthPtrs[5], 0.0f, 1.0f); modHarmony = activeHarmony;
     activeChaos = applyLfo (6, baseChaos, lfoRatePtrs[6], lfoDepthPtrs[6], 0.0f, 1.0f); modChaos = activeChaos;
@@ -159,13 +169,27 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
         hasSceneB = sceneBSlotsSaved[presetToLoad];
     }
 
-    buffer.clear(); bool isPlaying = false; double bpm = 120.0; mSongPositionPPQ = 0.0;
+    buffer.clear(); bool isPlaying = false; double hostBpm = 120.0; mSongPositionPPQ = 0.0;
 #if JUCE_MAJOR_VERSION >= 7
-    if (auto* playhead = getPlayHead()) { if (auto pos = playhead->getPosition()) { isPlaying = pos->getIsPlaying(); auto bpmOpt = pos->getBpm(); if (bpmOpt.hasValue()) bpm = *bpmOpt; auto ppqOpt = pos->getPpqPosition(); if (ppqOpt.hasValue()) mSongPositionPPQ = *ppqOpt; } }
+    if (auto* playhead = getPlayHead()) { if (auto pos = playhead->getPosition()) { isPlaying = pos->getIsPlaying(); auto bpmOpt = pos->getBpm(); if (bpmOpt.hasValue()) hostBpm = *bpmOpt; auto ppqOpt = pos->getPpqPosition(); if (ppqOpt.hasValue()) mSongPositionPPQ = *ppqOpt; } }
 #else
-    if (auto* playhead = getPlayHead()) { juce::AudioPlayHead::CurrentPositionInfo info; if (playhead->getCurrentPositionInfo (info)) { isPlaying = info.isPlaying; bpm = info.bpm; mSongPositionPPQ = info.ppqPosition; } }
+    if (auto* playhead = getPlayHead()) { juce::AudioPlayHead::CurrentPositionInfo info; if (playhead->getCurrentPositionInfo (info)) { isPlaying = info.isPlaying; hostBpm = info.bpm; mSongPositionPPQ = info.ppqPosition; } }
 #endif
-    int numSamples = buffer.getNumSamples(); updateLfoModulations (numSamples, bpm);
+    int numSamples = buffer.getNumSamples(); 
+
+    // Synchronize LFO and sequencer clock based on Sync Mode toggle [1.2.3]
+    auto* syncPtr = apvts.getRawParameterValue ("sync");
+    bool syncActive = (syncPtr != nullptr && syncPtr->load() > 0.5f);
+    
+    double activeBpm = 120.0;
+    if (syncActive) {
+        activeBpm = hostBpm;
+    } else {
+        // Map continuous Float rate parameter (0.0 to 1.0) to smooth free-run BPM: 40 to 240 [1.2.3]
+        activeBpm = 40.0 + (ratePtr->load() * 200.0); 
+    }
+
+    updateLfoModulations (numSamples, activeBpm);
 
     float slewFactor = static_cast<float>(1.0 - std::exp (-1.0 / (0.15 * mSampleRate)));
     for (int i = 0; i < 24; ++i) currentSlewValue[i] += (currentSlewTarget[i] - currentSlewValue[i]) * slewFactor;
@@ -237,15 +261,22 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
     isCurrentlyPlayingUI.store (!notesToPlay.empty() || isFreezeActive);
 
     if (!notesToPlay.empty() || isFreezeActive) {
-        bool stepTriggered = false; double samplesPerBeat = mSampleRate * (60.0 / (bpm > 0 ? bpm : 120.0));
+        bool stepTriggered = false; double samplesPerBeat = mSampleRate * (60.0 / (activeBpm > 0 ? activeBpm : 120.0));
+        
+        // Synced subdivision triggers vs Free-Run grid timing [1.2.3]
         int currentRate = isFreezeActive ? frozenRateIdx : activeRateIdx;
-        double stepLengthPPQ = (currentRate == 0) ? 1.0 : (currentRate == 1) ? 0.5 : (currentRate == 2) ? 0.25 : 0.125, stepSamples = samplesPerBeat * stepLengthPPQ;
+        double stepLengthPPQ = 0.25; // Default 1/16 notes for free-run mode
+        if (syncActive) {
+            stepLengthPPQ = (currentRate == 0) ? 1.0 : (currentRate == 1) ? 0.5 : (currentRate == 2) ? 0.25 : 0.125;
+        }
+        
+        double stepSamples = samplesPerBeat * stepLengthPPQ;
         
         // Decouple Swing calculation from Morph. Controlled globally by masterSwingPtr
         float currentSwing = masterSwingPtr->load(); 
         double swingFraction = 0.45 * currentSwing; // Support up to 45% delay offset for solid groove
 
-        if (isPlaying) {
+        if (isPlaying && syncActive) {
             double swingAmtPPQ = swingFraction * stepLengthPPQ;
             double periodLengthPPQ = 2.0 * stepLengthPPQ;
             double ppqNormalized = (mSongPositionPPQ < 0.0) ? 0.0 : mSongPositionPPQ;
@@ -301,7 +332,7 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
             } else if (playDirection == 4) { 
                 localStep = (juce::Random::getSystemRandom().nextFloat() < 0.2f) ? (localStep + 2) % 8 : (localStep + 1) % 8;
             } else { 
-                localStep = isPlaying ? (static_cast<int> (std::floor (mSongPositionPPQ / stepLengthPPQ)) % 8) : ((localStep + 1) % 8);
+                localStep = (isPlaying && syncActive) ? (static_cast<int> (std::floor (mSongPositionPPQ / stepLengthPPQ)) % 8) : ((localStep + 1) % 8);
             }
             currentStep.store (localStep);
             mLastStep = localStep;
@@ -450,7 +481,7 @@ void PluginProcessor::loadPreset (int slotIndex)
         apvts.getParameter (IDs::entropy.getParamID())->setValueNotifyingHost ((presets[slotIndex].entropy + 1.0f) * 0.5f); 
         apvts.getParameter (IDs::harmony.getParamID())->setValueNotifyingHost (presets[slotIndex].harmony); 
         apvts.getParameter (IDs::chaos.getParamID())->setValueNotifyingHost (presets[slotIndex].chaos); 
-        apvts.getParameter (IDs::rate.getParamID())->setValueNotifyingHost (presets[slotIndex].rate / 3.0f);
+        apvts.getParameter (IDs::rate.getParamID())->setValueNotifyingHost (presets[slotIndex].rate);
         apvts.getParameter (IDs::octaves.getParamID())->setValueNotifyingHost ((presets[slotIndex].octaves + 3.0f) / 6.0f); 
 
         juce::ParameterID rates[] = { IDs::rhythmMorphLfoRate, IDs::restLfoRate, IDs::legatoLfoRate, IDs::rateLfoRate, IDs::entropyLfoRate, IDs::harmonyLfoRate, IDs::chaosLfoRate, IDs::octavesLfoRate };
@@ -499,9 +530,9 @@ void PluginProcessor::diceTime()
 { 
     auto* r = &juce::Random::getSystemRandom(); 
     SceneState& activeScene = isSceneBActiveAnchor.load() ? sceneB : sceneA;
-    activeScene.rate = static_cast<float> (r->nextInt (4)); 
+    activeScene.rate = r->nextFloat(); // Continuous layout storage
     activeScene.octaves = static_cast<float> (r->nextInt (7) - 3); 
-    apvts.getParameter (IDs::cycleLength.getParamID())->setValueNotifyingHost (static_cast<float> (r->nextInt (4)) / 3.0f); 
+    apvts.getParameter (IDs::cycleLength.getParamID())->setValueNotifyingHost (static_cast<float>(r->nextInt(4)) / 3.0f); 
 }
 
 void PluginProcessor::diceNavy() 
@@ -519,7 +550,7 @@ void PluginProcessor::diceActiveSceneA()
     auto* random = &juce::Random::getSystemRandom(); for (int i = 0; i < 8; ++i) sceneA.faders[i] = random->nextFloat();
     sceneA.rhythmMorph = random->nextFloat(); sceneA.rest = random->nextFloat() * 0.5f; sceneA.legato = 0.1f + random->nextFloat() * 0.9f;
     sceneA.entropy = -1.0f + random->nextFloat() * 2.0f; sceneA.harmony = random->nextFloat(); sceneA.chaos = random->nextFloat();
-    sceneA.rate = static_cast<float> (random->nextInt (4)); sceneA.octaves = static_cast<float> (random->nextInt (7) - 3); hasSceneA = true;
+    sceneA.rate = random->nextFloat(); sceneA.octaves = static_cast<float> (random->nextInt (7) - 3); hasSceneA = true;
 }
 
 void PluginProcessor::diceActiveSceneB()
@@ -527,7 +558,7 @@ void PluginProcessor::diceActiveSceneB()
     auto* random = &juce::Random::getSystemRandom(); for (int i = 0; i < 8; ++i) sceneB.faders[i] = random->nextFloat();
     sceneB.rhythmMorph = random->nextFloat(); sceneB.rest = random->nextFloat() * 0.5f; sceneB.legato = 0.1f + random->nextFloat() * 0.9f;
     sceneB.entropy = -1.0f + random->nextFloat() * 2.0f; sceneB.harmony = random->nextFloat(); sceneB.chaos = random->nextFloat();
-    sceneB.rate = static_cast<float> (random->nextInt (4)); sceneB.octaves = static_cast<float> (random->nextInt (7) - 3); hasSceneB = true;
+    sceneB.rate = random->nextFloat(); sceneB.octaves = static_cast<float> (random->nextInt (7) - 3); hasSceneB = true;
 }
 
 void PluginProcessor::getStateInformation (juce::MemoryBlock& destData)
@@ -658,7 +689,9 @@ juce::AudioProcessorValueTreeState::ParameterLayout PluginProcessor::createParam
     params.push_back (std::make_unique<juce::AudioParameterChoice> (IDs::rootKey, "Root Key", juce::StringArray { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "Bb", "B" }, 0));
     params.push_back (std::make_unique<juce::AudioParameterChoice> (IDs::scaleType, "Scale", juce::StringArray { "Major", "Natural Minor", "Pentatonic Minor", "Pentatonic Major", "Dorian", "Phrygian", "Lydian", "Mixolydian", "Harmonic Minor", "Melodic Minor" }, 1));
     params.push_back (std::make_unique<juce::AudioParameterChoice> (IDs::cycleLength, "Cycle Length", juce::StringArray { "1 Bar", "2 Bars", "4 Bars", "8 Bars" }, 2)); 
-    params.push_back (std::make_unique<juce::AudioParameterChoice> (IDs::rate, "Rate", juce::StringArray { "1/4", "1/8", "1/16", "1/32" }, 2)); 
+    
+    // Updated continuous Float rate dial to map BPM or Synced Subdivision rate dynamically [1.2.3]
+    params.push_back (std::make_unique<juce::AudioParameterFloat> (IDs::rate, "BPM or Rate", 0.0f, 1.0f, 0.5f)); 
     params.push_back (std::make_unique<juce::AudioParameterInt> (IDs::octaves, "Octaves", -3, 3, 0)); 
     
     // Pruned and renamed to three choices: Navy (index 0), Monochrome (index 1), Matrix (index 2)
@@ -667,6 +700,9 @@ juce::AudioProcessorValueTreeState::ParameterLayout PluginProcessor::createParam
     // Register Master Parameters - Renamed Display Name of IDs::masterVelocity to "Note Density" [1.2.0]
     params.push_back (std::make_unique<juce::AudioParameterFloat> (IDs::masterVelocity, "Note Density", 0.0f, 1.0f, 0.5f)); // Default 50% (Neutral)
     params.push_back (std::make_unique<juce::AudioParameterFloat> (IDs::masterSwing, "Master Swing", 0.0f, 1.0f, 0.0f));       // Default 0% (Straight)
+
+    // Register Sync Toggle Parameter [1.2.3]
+    params.push_back (std::make_unique<juce::AudioParameterBool> (juce::ParameterID ("sync", 1), "Sync Mode", true)); // Default Host Synced (ON)
 
     auto regLfo = [&](juce::ParameterID rId, juce::ParameterID dId, juce::String nm) {
         params.push_back (std::make_unique<juce::AudioParameterChoice> (rId, nm + " LFO Speed", juce::StringArray { "Off", "1/4", "1/8", "1/16", "1/32" }, 0));

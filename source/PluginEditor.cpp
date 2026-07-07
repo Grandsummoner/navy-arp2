@@ -77,11 +77,20 @@ PluginEditor::PluginEditor (PluginProcessor& p)
         deckBtns[i]->setLookAndFeel (&chromaLookAndFeel); 
     }
 
+    // Initialize circular Sync Button after Freeze [1.2.3]
+    addAndMakeVisible (syncButton);
+    syncButton.setButtonText ("Sync");
+    syncButton.setClickingTogglesState (true);
+    syncButton.setLookAndFeel (&chromaLookAndFeel);
+    syncButton.setComponentID ("sync");
+    syncAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (processor.apvts, "sync", syncButton);
+
     juce::TextButton* sceneBtns[] = { &sceneAButton, &sceneBButton }; 
     juce::String sceneTxt[] = { "A", "B" };
     for (int i = 0; i < 2; ++i) { 
         addAndMakeVisible (sceneBtns[i]); 
         sceneBtns[i]->setButtonText (sceneTxt[i]); 
+        sceneBtns[i]->addMouseListener (this, false); 
         sceneBtns[i]->setLookAndFeel (&chromaLookAndFeel); 
         sceneBtns[i]->setTriggeredOnMouseDown (true); // Instantly switches on mouse down
     }
@@ -139,7 +148,7 @@ PluginEditor::PluginEditor (PluginProcessor& p)
         if (initButton.getToggleState()) { 
             bool isSceneB = processor.isSceneBActiveAnchor.load();
             SceneState& activeScene = isSceneB ? processor.sceneB : processor.sceneA;
-            activeScene.rate = 2.0f;     // Default 1/16
+            activeScene.rate = 0.5f;     // Default rate center
             activeScene.octaves = 0.0f;  // Default 0 octaves
             processor.apvts.getParameter (IDs::cycleLength.getParamID())->setValueNotifyingHost (2.0f / 3.0f); 
             initFlashTimer = 24; 
@@ -264,7 +273,7 @@ PluginEditor::PluginEditor (PluginProcessor& p)
     rhythmMorphKnob.setDoubleClickReturnValue (true, 0.0f);
     restKnob.setDoubleClickReturnValue (true, 0.1f);
     legatoKnob.setDoubleClickReturnValue (true, 0.5f);
-    rateKnob.setDoubleClickReturnValue (true, 2.0f); // Default 1/16
+    rateKnob.setDoubleClickReturnValue (true, 0.5f); // Default center BPM (120)
     entropyKnob.setDoubleClickReturnValue (true, 0.0f);
     harmonyKnob.setDoubleClickReturnValue (true, 0.0f);
     chaosKnob.setDoubleClickReturnValue (true, 0.0f);
@@ -320,7 +329,7 @@ PluginEditor::~PluginEditor()
     stopTimer(); processor.apvts.removeParameterListener ("panelTheme", this);
     juce::Slider* sliders[] = { &rhythmMorphKnob, &restKnob, &legatoKnob, &rateKnob, &entropyKnob, &harmonyKnob, &chaosKnob, &octavesKnob, &masterVelocityKnob, &masterSwingKnob, &fader1, &fader2, &fader3, &fader4, &fader5, &fader6, &fader7, &fader8, &morphCrossfader };
     for (auto* s : sliders) s->setLookAndFeel (nullptr);
-    juce::TextButton* btns[] = { &diceMeloButton, &diceArtiButton, &diceTimeButton, &diceNavyButton, &latchButton, &arpSeqButton, &polyButton, &freezeButton, &sceneAButton, &sceneBButton, &saveButton, &recallButton, &copyButton, &initButton };
+    juce::TextButton* btns[] = { &diceMeloButton, &diceArtiButton, &diceTimeButton, &diceNavyButton, &latchButton, &arpSeqButton, &polyButton, &freezeButton, &syncButton, &sceneAButton, &sceneBButton, &saveButton, &recallButton, &copyButton, &initButton };
     for (auto* b : btns) { b->setLookAndFeel (nullptr); b->onClick = nullptr; }
     for (int i = 0; i < 8; ++i) { presetButtons[i].setLookAndFeel (nullptr); presetButtons[i].onClick = nullptr; presetButtons[i].onStateChange = nullptr; presetButtons[i].removeMouseListener(this); }
     sceneAButton.removeMouseListener (this); sceneBButton.removeMouseListener (this);
@@ -549,7 +558,7 @@ void PluginEditor::paintOverChildren (juce::Graphics& g)
 
     // Custom Small HUD display boxes under the 8 small knobs [1.2.0]
     juce::Slider* smallKnobs[] = { &rhythmMorphKnob, &restKnob, &legatoKnob, &rateKnob, &entropyKnob, &harmonyKnob, &chaosKnob, &octavesKnob };
-    juce::String smallLabels[] = { "MORPH", "REST", "LEGATO", "RATE", "ENTROPY", "HARMONY", "CHAOS", "OCTAVES" };
+    juce::String smallLabels[] = { "MORPH", "REST", "LEGATO", "BPM" /* Renamed to BPM [1.2.3] */, "ENTROPY", "HARMONY", "CHAOS", "OCTAVES" };
     int smallKnobsX[] = { 44, 44, 44, 44, 902, 902, 902, 902 };
     int smallKnobsY[] = { 121, 182, 244, 306, 121, 182, 244, 306 };
 
@@ -569,8 +578,9 @@ void PluginEditor::paintOverChildren (juce::Graphics& g)
             // Display a sleek horizontal progress bar instead of text [1.2.0]
             float val = static_cast<float> (smallKnobs[i]->getValue());
             float progress = val;
-            if (smallLabels[i] == "RATE")         progress = val / 3.0f;
-            else if (smallLabels[i] == "ENTROPY")  progress = (val + 1.0f) * 0.5f;
+            
+            // Map continuous range to layout progress inside the bar [1.2.3]
+            if (smallLabels[i] == "ENTROPY")  progress = (val + 1.0f) * 0.5f;
             else if (smallLabels[i] == "OCTAVES")  progress = (val + 3.0f) / 6.0f;
             progress = juce::jlimit (0.0f, 1.0f, progress);
 
@@ -607,10 +617,15 @@ void PluginEditor::paintOverChildren (juce::Graphics& g)
     g.setColour (themeColor.withAlpha (0.4f));
     g.drawRoundedRectangle (swgBox.toFloat(), 2.0f, 1.0f);
 
-    g.setColour (themeColor); // RESET COLOR TO FULL THEME COLOR [1.2.0] (Fixes greyed-out text bug)
+    g.setColour (themeColor); // RESET COLOR TO FULL THEME COLOR [1.2.0]
     g.setFont (juce::FontOptions (9.5f, juce::Font::bold));
     juce::String swgText = "SWG: " + juce::String (static_cast<int> (std::round (masterSwingKnob.getValue() * 100.0f))) + "%";
     g.drawFittedText (swgText, swgBox, juce::Justification::centred, 1);
+
+    // 3. Draw static, high-contrast white "MEMORY SLOTS" label under the buttons [1.2.3]
+    g.setColour (juce::Colours::white);
+    g.setFont (juce::FontOptions ("Courier New", 11.0f, juce::Font::bold));
+    g.drawText ("MEMORY SLOTS", 0, 552, 1000, 16, juce::Justification::centredHorizontal);
 }
 
 void PluginEditor::mouseMove (const juce::MouseEvent& event)
@@ -661,11 +676,12 @@ void PluginEditor::resized()
     cycleLengthBox.setBounds (304, 17, 58, 17);
     panelThemeBox.setBounds (374, 17, 58, 17); 
     
-    // Top Row Performance Buttons (Right)
+    // Top Row Performance Buttons (Right) [1.2.3]
     latchButton.setBounds (533, 15, 58, 17); 
     arpSeqButton.setBounds (602, 15, 58, 17); 
     polyButton.setBounds (669, 15, 58, 17); 
     freezeButton.setBounds (738, 15, 58, 17);
+    syncButton.setBounds (807, 15, 17, 17); // Circular Sync Toggle positioned exactly after Freeze [1.2.3]
 
     // Crossfader Row
     sceneAButton.setBounds (214, 396, 67, 58);
@@ -759,16 +775,15 @@ void PluginEditor::timerCallback()
 
     // OLED Parameter HUD Overlay Triggering with Standard 3-Argument Signature [1.2.3]
     juce::Slider* smallKnobs[] = { &rhythmMorphKnob, &restKnob, &legatoKnob, &rateKnob, &entropyKnob, &harmonyKnob, &chaosKnob, &octavesKnob };
-    juce::String smallNames[] = { "Rhythm Morph", "Rest", "Legato", "Rate", "Entropy", "Harmony", "Chaos", "Octaves" };
+    juce::String smallNames[] = { "Rhythm Morph", "Rest", "Legato", "BPM" /* Renamed to BPM overlay [1.2.3] */, "Entropy", "Harmony", "Chaos", "Octaves" };
     for (int i = 0; i < 8; ++i)
     {
         if (smallKnobs[i]->getThumbBeingDragged() >= 0)
         {
             float val = static_cast<float> (smallKnobs[i]->getValue());
             
-            // Format LFO speeds/depths
+            // Format LFO speed label details
             juce::String lfoText = "Off";
-
             if (processor.lfoRatePtrs[i] != nullptr && processor.lfoDepthPtrs[i] != nullptr)
             {
                 int rChoice = static_cast<int> (processor.lfoRatePtrs[i]->load());
@@ -780,13 +795,13 @@ void PluginEditor::timerCallback()
                 }
             }
 
+            // Normalizes knob range proportionally for display bar [1.2.3]
             float progress = val;
-            if (smallNames[i] == "Rate")         progress = val / 3.0f;
-            else if (smallNames[i] == "Entropy")  progress = (val + 1.0f) * 0.5f;
+            if (smallNames[i] == "Entropy")  progress = (val + 1.0f) * 0.5f;
             else if (smallNames[i] == "Octaves")  progress = (val + 3.0f) / 6.0f;
             progress = juce::jlimit (0.0f, 1.0f, progress);
 
-            // Reverted parameters back to standard header-compatible 3-argument signature [1.2.3]
+            // Trigger multi-bar HUD overlay using the original 3-arg signature [1.2.3]
             oledDisplay.showParameterOverlay (smallNames[i], progress, lfoText);
         }
     }

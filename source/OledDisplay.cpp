@@ -45,7 +45,7 @@ OledDisplay::~OledDisplay()
 {
 }
 
-// Restored back to the header-compliant 3-argument signature to ensure clean compilation [1.2.3]
+// 3-Argument Signature preserved for compile-safety [1.2.3]
 void OledDisplay::showParameterOverlay (const juce::String& paramName, float baseValue, const juce::String& lfoVibeText)
 {
     activeParamName = paramName;
@@ -99,7 +99,7 @@ void OledDisplay::paint (juce::Graphics& g)
         if (activeParamName == "Rhythm Morph")  lfoIdx = 0;
         else if (activeParamName == "Rest")      lfoIdx = 1;
         else if (activeParamName == "Legato")    lfoIdx = 2;
-        else if (activeParamName == "Rate")      lfoIdx = 3;
+        else if (activeParamName == "BPM")       lfoIdx = 3; // Mapped directly [1.2.3]
         else if (activeParamName == "Entropy")   lfoIdx = 4;
         else if (activeParamName == "Harmony")   lfoIdx = 5;
         else if (activeParamName == "Chaos")     lfoIdx = 6;
@@ -186,7 +186,7 @@ void OledDisplay::paint (juce::Graphics& g)
         g.setColour (juce::Colours::white.withAlpha (0.45f));
         g.drawText ("[LFO ]", displayArea.getX() + 10, lfoBarY, 50, 12, juce::Justification::left);
 
-        // If LFO is disabled (activeLfoVibe == "Off"), litSegsLfo is 0 and bottom bar reads completely empty [1.2.3]
+        // If LFO is disabled (activeLfoVibe == "Off"), litSegsLfo is 0 and bottom bar reads completely empty
         int litSegsLfo = (activeLfoVibe == "Off") ? 0 : static_cast<int> (std::round (lfoProgress * numSegs));
         for (int s = 0; s < numSegs; ++s)
         {
@@ -274,7 +274,12 @@ void OledDisplay::paint (juce::Graphics& g)
         int rangeShift = static_cast<int> (*processor.apvts.getRawParameterValue (IDs::octaves.getParamID()));
         juce::String octStr = (rangeShift >= 0 ? "+" : "") + juce::String (rangeShift);
 
-        juce::String metaText = "SYSTEM STATUS: ACTIVE | KEY: " + keyStr + " | SCALE: " + scaleStr.toUpperCase() + " | SYNC: INTERNAL | RATE: " + rateStr + " | VOICING: " + voiceStr;
+        // Check if sync mode toggle is active
+        auto* syncPtr = processor.apvts.getRawParameterValue ("sync");
+        bool syncActive = (syncPtr != nullptr && syncPtr->load() > 0.5f);
+        juce::String tempoSourceText = syncActive ? "INTERNAL (" + rateStr + ")" : "FREE RUN";
+
+        juce::String metaText = "SYSTEM STATUS: ACTIVE | KEY: " + keyStr + " | SCALE: " + scaleStr.toUpperCase() + " | SYNC: " + tempoSourceText + " | VOICING: " + voiceStr;
 
         struct Point3D { float x, y, z; };
         std::vector<Point3D> vertices;
@@ -422,9 +427,9 @@ void OledDisplay::paint (juce::Graphics& g)
                     auto* depthPtr = processor.lfoDepthPtrs[lfoIdx];
                     if (ratePtr != nullptr && depthPtr != nullptr)
                     {
-                        int rateChoice = static_cast<int> (ratePtr->load());
+                        int rChoice = static_cast<int> (ratePtr->load());
                         float depth = depthPtr->load();
-                        if (rateChoice > 0 && depth > 0.02f)
+                        if (rChoice > 0 && depth > 0.02f)
                         {
                             double currentPhase = processor.lfoPhases[lfoIdx];
                             float mod = static_cast<float> (std::sin (currentPhase * juce::MathConstants<double>::twoPi)) * depth * 0.5f + 0.5f;
@@ -561,15 +566,12 @@ void OledDisplay::paint (juce::Graphics& g)
             }
         }
 
-        g.setColour (juce::Colour (0xFF00D2FF)); 
-        g.setFont (juce::FontOptions (12.0f, juce::Font::bold));
-        g.drawText ("NAVY-ARP MONITOR", displayArea.removeFromTop (20.0f), juce::Justification::centred, true);
+        // REMOVED program-stamp drawn inside the OLED box (NAVY-ARP MONITOR title is now stamped on parent editor) [1.2.3]
 
-        displayArea.removeFromTop (4.0f);
-
-        g.setColour (juce::Colour (0xFF00FF66).withAlpha(0.85f)); 
+        // Shifted status bar parameters to absolute top of OLED inside box boundary [1.2.3]
+        g.setColour (juce::Colour (0xFF00FF66).withAlpha (0.85f)); 
         g.setFont (juce::FontOptions (10.0f, juce::Font::bold));
-        g.drawText (metaText, displayArea.removeFromTop (15.0f), juce::Justification::centred, true);
+        g.drawText (metaText, displayArea.withY (displayArea.getY() + 8.0f).withHeight (15.0f), juce::Justification::centred, true);
 
         const int numSegments = 16;
         const float segmentHeight = 5.0f;      // Halved segment height (was 10.0f)
