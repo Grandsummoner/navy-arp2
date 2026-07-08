@@ -121,6 +121,7 @@ PluginEditor::PluginEditor (PluginProcessor& p)
         sceneBtns[i]->setTriggeredOnMouseDown (true); // Instantly switches on mouse down
     }
 
+    // Left 2x2 Utility Grid
     juce::TextButton* utilBtns[] = { &saveButton, &recallButton, &copyButton, &initButton }; 
     juce::String utilTxt[] = { "Save", "Recall", "Copy", "Init" };
     for (int i = 0; i < 4; ++i) { 
@@ -801,18 +802,38 @@ void PluginEditor::timerCallback()
     // Direct programmatic updates are flagged to avoid value-change listener triggers [1.2.2] using self-contained getProperties flags [1.2.3]
     getProperties().set ("isUpdatingProgrammatically", true);
 
-    rhythmMorphKnob.setValue (interpolate (processor.sceneA.rhythmMorph, processor.sceneB.rhythmMorph), juce::dontSendNotification);
-    restKnob.setValue (interpolate (processor.sceneA.rest, processor.sceneB.rest), juce::dontSendNotification);
-    legatoKnob.setValue (interpolate (processor.sceneA.legato, processor.sceneB.legato), juce::dontSendNotification);
-    rateKnob.setValue (interpolate (processor.sceneA.rate, processor.sceneB.rate), juce::dontSendNotification);
-    entropyKnob.setValue (interpolate (processor.sceneA.entropy, processor.sceneB.entropy), juce::dontSendNotification);
-    harmonyKnob.setValue (interpolate (processor.sceneA.harmony, processor.sceneB.harmony), juce::dontSendNotification);
-    chaosKnob.setValue (interpolate (processor.sceneA.chaos, processor.sceneB.chaos), juce::dontSendNotification);
-    octavesKnob.setValue (interpolate (processor.sceneA.octaves, processor.sceneB.octaves), juce::dontSendNotification);
+    // Motorized Console Visual Fader Physics: Update knobs only if not actively grabbed by mouse pointer [1.2.0]
+    if (rhythmMorphKnob.getThumbBeingDragged() < 0)
+        rhythmMorphKnob.setValue (interpolate (processor.sceneA.rhythmMorph, processor.sceneB.rhythmMorph), juce::dontSendNotification);
+        
+    if (restKnob.getThumbBeingDragged() < 0)
+        restKnob.setValue (interpolate (processor.sceneA.rest, processor.sceneB.rest), juce::dontSendNotification);
+        
+    if (legatoKnob.getThumbBeingDragged() < 0)
+        legatoKnob.setValue (interpolate (processor.sceneA.legato, processor.sceneB.legato), juce::dontSendNotification);
+        
+    if (rateKnob.getThumbBeingDragged() < 0)
+        rateKnob.setValue (interpolate (processor.sceneA.rate, processor.sceneB.rate), juce::dontSendNotification);
+        
+    if (entropyKnob.getThumbBeingDragged() < 0)
+        entropyKnob.setValue (interpolate (processor.sceneA.entropy, processor.sceneB.entropy), juce::dontSendNotification);
+        
+    if (harmonyKnob.getThumbBeingDragged() < 0)
+        harmonyKnob.setValue (interpolate (processor.sceneA.harmony, processor.sceneB.harmony), juce::dontSendNotification);
+        
+    if (chaosKnob.getThumbBeingDragged() < 0)
+        chaosKnob.setValue (interpolate (processor.sceneA.chaos, processor.sceneB.chaos), juce::dontSendNotification);
+        
+    if (octavesKnob.getThumbBeingDragged() < 0)
+        octavesKnob.setValue (interpolate (processor.sceneA.octaves, processor.sceneB.octaves), juce::dontSendNotification);
 
+    // Motorized Console Visual Fader Physics: Update upfaders only if not actively grabbed by mouse pointer [1.2.0]
     juce::Slider* faders[] = { &fader1, &fader2, &fader3, &fader4, &fader5, &fader6, &fader7, &fader8 };
     for (int i = 0; i < 8; ++i) {
-        faders[i]->setValue (interpolate (processor.sceneA.faders[i], processor.sceneB.faders[i]), juce::dontSendNotification);
+        if (faders[i]->getThumbBeingDragged() < 0)
+        {
+            faders[i]->setValue (interpolate (processor.sceneA.faders[i], processor.sceneB.faders[i]), juce::dontSendNotification);
+        }
     }
 
     getProperties().set ("isUpdatingProgrammatically", false);
