@@ -105,7 +105,7 @@ void ChromaCapsLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, i
         g.fillEllipse (centerX - glowOuterRadius, centerY - glowOuterRadius, glowOuterRadius * 2.0f, glowOuterRadius * 2.0f);
     }
 
-    // 2. Draw custom rotating metallic knob cap (Drawn over the gradient to mask its center)
+    // 2. Draw custom metallic knob cap
     g.setColour (juce::Colour (0xFF1F2229)); // Bezel base
     g.fillEllipse (centerX - knobRadius, centerY - knobRadius, knobRadius * 2.0f, knobRadius * 2.0f);
 
@@ -115,14 +115,7 @@ void ChromaCapsLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, i
     g.setGradientFill (steelGrad);
     g.fillEllipse (centerX - (knobRadius - 1.0f), centerY - (knobRadius - 1.0f), (knobRadius - 1.0f) * 2.0f, (knobRadius - 1.0f) * 2.0f);
 
-    // Draw active rotating anisotropic light-reflection wedge
-    float angle = rotaryStartAngle + sliderPos * (rotaryEndAngle - rotaryStartAngle);
-    juce::Path reflectPath;
-    reflectPath.addPieSegment (centerX - knobRadius, centerY - knobRadius, knobRadius * 2.0f, knobRadius * 2.0f, angle - 0.25f, angle + 0.25f, 0.0f);
-    g.setColour (juce::Colours::white.withAlpha (0.15f));
-    g.fillPath (reflectPath);
-
-    // [Needle Pointer Deleted] - No pointers drawn over the clean metallic surface.
+    // [Wedges and Pointers Removed] - Faint white rotating reflection wedges are entirely removed to keep the steel cap solid and pristine.
 
     // 3. Draw the Concentric LED Ring (Strictly displays exactly ONE lit indicator LED in active theme color) [2]
     int closestLedIndex = static_cast<int> (std::round (sliderPos * 14.0f));
