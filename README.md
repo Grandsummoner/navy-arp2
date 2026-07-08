@@ -4,6 +4,8 @@
 
 Combining the fluid workflow of classic hardware sequencers with deep digital precision, Navy Arp 2 provides a visual and highly interactive playground for generating intricate melodies, rhythmic modulations, and unexpected grooves inside your DAW.
 
+![Module Graphic](./res/Navy-Arp2.png)
+
 ---
 
 ## What Makes Navy Arp 2 Unique?
