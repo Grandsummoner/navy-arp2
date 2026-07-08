@@ -770,8 +770,8 @@ void PluginEditor::timerCallback()
         int activeThemeIdx = static_cast<int> (processor.apvts.getRawParameterValue ("panelTheme")->load());
         auto t = AppTheme::get (activeThemeIdx);
         
-        juce::Colour borderCol = currentFreeze ? juce::Colour (0xFF80D8FF) : t.slotOutline;
-        juce::Colour textCol = currentFreeze ? juce::Colour (0xFF80D8FF) : t.textDim;
+        juce::Colour borderCol = currentFreeze ? juce::Colour (0xFF00E5FF) : t.slotOutline;
+        juce::Colour textCol = currentFreeze ? juce::Colour (0xFF00E5FF) : t.textDim;
         
         juce::Slider* knobs[] = { &rhythmMorphKnob, &restKnob, &legatoKnob, &rateKnob, &entropyKnob, &harmonyKnob, &chaosKnob, &octavesKnob, &masterVelocityKnob, &masterSwingKnob };
         for (auto* k : knobs) {
@@ -849,8 +849,6 @@ void PluginEditor::timerCallback()
             oledDisplay.showParameterOverlay (smallNames[i], progress, lfoText);
         }
     }
-
-    // REMOVED upfader showParameterOverlay calls to satisfy Point 1 [1.2.3]
 
     if (masterVelocityKnob.getThumbBeingDragged() >= 0)
     {
