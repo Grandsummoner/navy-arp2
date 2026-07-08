@@ -1,3 +1,4 @@
+/* STREAMING_CHUNK: Importing dependencies and look-and-feel variables... */
 #include "ChromaCapsLookAndFeel.h"
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
@@ -16,13 +17,14 @@ juce::Slider::SliderLayout ChromaCapsLookAndFeel::getSliderLayout (juce::Slider&
 {
     juce::Slider::SliderLayout layout;
     
-    // Completely hide standard textboxes to prevent any text overlaps on the vector faceplate
+    // Decouple textbox to prevent collision with custom drawing
     layout.sliderBounds = slider.getLocalBounds();
     layout.textBoxBounds = juce::Rectangle<int> (0, 0, 0, 0);
     
     return layout;
 }
 
+/* STREAMING_CHUNK: Drawing the rotary slider and center jewel LED... */
 void ChromaCapsLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, int width, int height,
                                               float sliderPos, float rotaryStartAngle, float rotaryEndAngle,
                                               juce::Slider& slider)
@@ -40,6 +42,7 @@ void ChromaCapsLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, i
 
     bool isLfoActive = false;
     float depth = 0.0f;
+    double currentPhase = 0.0;
     if (lfoIndex != -1)
     {
         auto* ratePtr = processor.lfoRatePtrs[lfoIndex];
@@ -51,6 +54,7 @@ void ChromaCapsLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, i
             if (rateChoice > 0 && depth > 0.0f)
             {
                 isLfoActive = true;
+                currentPhase = processor.lfoPhases[lfoIndex];
             }
         }
     }
@@ -62,24 +66,21 @@ void ChromaCapsLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, i
     float centerY = localBounds.getCentreY();
     
     const bool isMasterKnob = (cid == "masterVelocity" || cid == "masterSwing");
-    
-    // Scale radii carefully to fit the 1000 x 681 resolution coordinates
     float knobRadius = isMasterKnob ? 34.0f : 12.0f;
     float ledRadius = isMasterKnob ? (knobRadius + 5.0f) : (knobRadius + 3.5f);
-    float ledDiameter = isMasterKnob ? 3.0f : 2.0f;
+    float ledDiameter = isMasterKnob ? 5.0f : 2.0f;
 
-    // Colour One: Palette routing matching active chosen panel theme
+    // Base active themes configuration
     juce::Colour activeColor = juce::Colour (0xFF00E5FF); // Theme 0 (Navy): Teal
-    if (themeIdx == 1)      activeColor = juce::Colour (0xFFECEFF1); // Theme 1 (Monochrome): White/Silver
+    if (themeIdx == 1)      activeColor = juce::Colour (0xFFECEFF1); // Theme 1 (Monochrome): White
     else if (themeIdx == 2) activeColor = juce::Colour (0xFF00FF66); // Theme 2 (Matrix): Neon Green
 
-    // Colour Two: Contrasting LFO Sweep bracket colors [1.2.3]
-    juce::Colour lfoHaloColor = juce::Colour (0xFFFF6D00); // Navy Contrast: Amber/Orange
-    if (themeIdx == 1)      lfoHaloColor = juce::Colour (0xFF00E5FF); // Monochrome Contrast: Tech Cyan
-    else if (themeIdx == 2) lfoHaloColor = juce::Colour (0xFFD500F9); // Matrix Contrast: Hot Purple/Magenta
+    juce::Colour lfoHaloColor = juce::Colour (0xFFFF6D00); // Theme 0 (Navy): Orange
+    if (themeIdx == 1)      lfoHaloColor = juce::Colour (0xFF00E5FF); // Theme 1 (Monochrome): Tech Cyan
+    else if (themeIdx == 2) lfoHaloColor = juce::Colour (0xFFD500F9); // Theme 2 (Matrix): Hot Magenta
 
-    // 1. Draw custom rotating metallic knob cap over the background PNG to mask static highlights
-    g.setColour (juce::Colour (0xFF1F2229)); // Bezel base
+    // 1. Draw custom rotating metallic knob cap over the background PNG
+    g.setColour (juce::Colour (0xFF1F2229)); 
     g.fillEllipse (centerX - knobRadius, centerY - knobRadius, knobRadius * 2.0f, knobRadius * 2.0f);
 
     juce::ColourGradient steelGrad (juce::Colour (0xFFECEFF1), centerX, centerY - knobRadius,
@@ -88,28 +89,50 @@ void ChromaCapsLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, i
     g.setGradientFill (steelGrad);
     g.fillEllipse (centerX - (knobRadius - 1.0f), centerY - (knobRadius - 1.0f), (knobRadius - 1.0f) * 2.0f, (knobRadius - 1.0f) * 2.0f);
 
-    // Draw active rotating anisotropic light-reflection wedge matching parameter value
+    // Draw active rotating anisotropic light-reflection wedge
     float angle = rotaryStartAngle + sliderPos * (rotaryEndAngle - rotaryStartAngle);
     juce::Path reflectPath;
     reflectPath.addPieSegment (centerX - knobRadius, centerY - knobRadius, knobRadius * 2.0f, knobRadius * 2.0f, angle - 0.25f, angle + 0.25f, 0.0f);
     g.setColour (juce::Colours::white.withAlpha (0.15f));
     g.fillPath (reflectPath);
 
-    // 2. Draw pointer needle
-    juce::Path path;
-    float pointerThickness = isMasterKnob ? 2.5f : 1.5f;
-    float pointerLength = knobRadius * 0.65f;
-    path.addRectangle (-pointerThickness * 0.5f, -knobRadius + 2.0f, pointerThickness, pointerLength);
-    path.applyTransform (juce::AffineTransform::rotation (angle).translated (centerX, centerY));
-    g.setColour (juce::Colours::white.withAlpha (0.95f));
-    g.fillPath (path);
+    /* STREAMING_CHUNK: Designing physical hardware Center Jewel indicator lens... */
+    float jewelRadius = isMasterKnob ? 4.5f : 2.2f;
 
-    // 3. Draw the 15 outer LED indicator ring background/base dots utilizing dynamic Solution A [1.2.3]
+    // Draw glossy unlit core structure
+    g.setColour (juce::Colour (0xFF0C0E14));
+    g.fillEllipse (centerX - jewelRadius, centerY - jewelRadius, jewelRadius * 2.0f, jewelRadius * 2.0f);
+
+    if (isLfoActive && lfoIndex != -1)
+    {
+        // 2-Color symmetric split: Left column knobs use activeColor, Right column knobs use lfoHaloColor
+        juce::Colour jewelGlowColor = (lfoIndex < 4) ? activeColor : lfoHaloColor;
+
+        // Pulse intensity matches real-time LFO speed and scales in maximum glow ceiling with LFO Depth
+        float pulseFactor = 0.25f + 0.75f * static_cast<float> (0.5 + 0.5 * std::sin (currentPhase * juce::MathConstants<double>::twoPi));
+        float glowAlpha = depth * pulseFactor;
+
+        // Draw active dynamic emissive glowing core
+        g.setColour (jewelGlowColor.withAlpha (juce::jlimit (0.1f, 0.95f, glowAlpha)));
+        g.fillEllipse (centerX - jewelRadius, centerY - jewelRadius, jewelRadius * 2.0f, jewelRadius * 2.0f);
+
+        // Render specular lens reflections on active jewel
+        g.setColour (juce::Colours::white.withAlpha (0.4f + 0.4f * glowAlpha));
+        g.fillEllipse (centerX - jewelRadius * 0.4f, centerY - jewelRadius * 0.4f, jewelRadius * 0.6f, jewelRadius * 0.6f);
+    }
+    else
+    {
+        // Standard unlit glass specular reflections (Default metals / master knobs)
+        g.setColour (juce::Colours::white.withAlpha (0.12f));
+        g.fillEllipse (centerX - jewelRadius * 0.4f, centerY - jewelRadius * 0.4f, jewelRadius * 0.6f, jewelRadius * 0.6f);
+    }
+
+    /* STREAMING_CHUNK: Customizing discrete 15-dot ring pointer index logic... */
     float minSweep = juce::jlimit (0.0f, 1.0f, sliderPos - depth * 0.5f);
     float maxSweep = juce::jlimit (0.0f, 1.0f, sliderPos + depth * 0.5f);
 
-    // Identify if user is actively clicking or dragging the dial
     bool isDragging = (slider.getThumbBeingDragged() >= 0);
+    int closestLedIndex = static_cast<int> (std::round (sliderPos * 14.0f));
 
     for (int i = 0; i < 15; ++i)
     {
@@ -121,7 +144,7 @@ void ChromaCapsLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, i
 
         if (isLfoActive && !isDragging)
         {
-            // IDLE MODULATED STATE: Draw contrasting Colour Two bracket within modulation range [1.2.3]
+            // IDLE MODULATED STATE: Keep sweep bracket in high-contrast LFO color representing modulation range
             if (ledProportion >= minSweep && ledProportion <= maxSweep)
             {
                 float outerRadius = isMasterKnob ? 5.0f : 3.0f;
@@ -135,11 +158,11 @@ void ChromaCapsLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, i
                 g.setColour (juce::Colours::white.interpolatedWith (lfoHaloColor, 0.1f));
                 g.fillEllipse (ledX - innerRadius, ledY - innerRadius, innerRadius * 2.0f, innerRadius * 2.0f);
             }
-            // Draw baseline settings below the physical setting as a soft dim white arc
-            else if (ledProportion <= sliderPos)
+            // Draw baseline original center setting as a discrete single soft dim white indicator LED
+            else if (i == closestLedIndex)
             {
                 float innerRadius = isMasterKnob ? 1.5f : 1.0f;
-                g.setColour (juce::Colours::white.withAlpha (0.22f));
+                g.setColour (juce::Colours::white.withAlpha (0.85f));
                 g.fillEllipse (ledX - innerRadius, ledY - innerRadius, innerRadius * 2.0f, innerRadius * 2.0f);
             }
             else
@@ -151,18 +174,18 @@ void ChromaCapsLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, i
         }
         else
         {
-            // ACTIVE DRAGGING OR UNMODULATED STATE: Standard volume indicator drawn in high-contrast Colour One (Theme Accent) [1.2.3]
-            if (ledProportion <= sliderPos)
+            // DRAGGING OR UNMODULATED STATE: Only ONE single discrete LED is active corresponding to the value [2]
+            if (i == closestLedIndex)
             {
                 float outerRadius = isMasterKnob ? 5.0f : 3.0f;
-                juce::ColourGradient glow (activeColor.withAlpha (0.7f), ledX, ledY,
+                juce::ColourGradient glow (activeColor.withAlpha (0.85f), ledX, ledY,
                                            activeColor.withAlpha (0.0f), ledX + outerRadius, ledY + outerRadius,
                                            true);
                 g.setGradientFill (glow);
                 g.fillEllipse (ledX - outerRadius, ledY - outerRadius, outerRadius * 2.0f, outerRadius * 2.0f);
 
                 float innerRadius = isMasterKnob ? 2.0f : 1.25f;
-                g.setColour (juce::Colours::white.interpolatedWith (activeColor, 0.1f));
+                g.setColour (juce::Colours::white.interpolatedWith (activeColor, 0.15f));
                 g.fillEllipse (ledX - innerRadius, ledY - innerRadius, innerRadius * 2.0f, innerRadius * 2.0f);
             }
             else
@@ -294,8 +317,8 @@ void ChromaCapsLookAndFeel::drawButtonBackground (juce::Graphics& g, juce::Butto
     const juce::String text = button.getButtonText();
     const bool isUtilButton = (text == "Save" || text == "Recall" || text == "Copy" || text == "Init");
     const bool isDiceButton = (text == "Melo" || text == "Arti" || text == "Time" || text == "Navy");
-    const bool isStaticTopButton = (text == "Latch" || text == "Poly" || text == "Freeze" || text == "Seq" || text == "SEQ" || text == "Arp" || text == "ARP");
     const bool isPresetButton = (text == "1" || text == "2" || text == "3" || text == "4" || text == "5" || text == "6" || text == "7" || text == "8");
+    const bool isStaticTopButton = (text == "Latch" || text == "Poly" || text == "Freeze" || text == "Seq" || text == "SEQ" || text == "Arp" || text == "ARP");
 
     int themeIdx = static_cast<int> (processor.apvts.getRawParameterValue ("panelTheme")->load());
 

@@ -121,7 +121,6 @@ PluginEditor::PluginEditor (PluginProcessor& p)
         sceneBtns[i]->setTriggeredOnMouseDown (true); // Instantly switches on mouse down
     }
 
-    // Left 2x2 Utility Grid
     juce::TextButton* utilBtns[] = { &saveButton, &recallButton, &copyButton, &initButton }; 
     juce::String utilTxt[] = { "Save", "Recall", "Copy", "Init" };
     for (int i = 0; i < 4; ++i) { 
@@ -594,7 +593,7 @@ void PluginEditor::paintOverChildren (juce::Graphics& g)
 
     // Custom Small HUD display boxes under the 8 small knobs [1.2.0]
     juce::Slider* smallKnobs[] = { &rhythmMorphKnob, &restKnob, &legatoKnob, &rateKnob, &entropyKnob, &harmonyKnob, &chaosKnob, &octavesKnob };
-    juce::String smallLabels[] = { "MORPH", "REST", "LEGATO", "BPM" /* Renamed [1.2.3] */, "ENTROPY", "HARMONY", "CHAOS", "OCTAVES" };
+    juce::String smallLabels[] = { "MORPH", "REST", "LEGATO", "BPM", "ENTROPY", "HARMONY", "CHAOS", "OCTAVES" };
     int smallKnobsX[] = { 44, 44, 44, 44, 902, 902, 902, 902 };
     int smallKnobsY[] = { 121, 182, 244, 306, 121, 182, 244, 306 };
 
@@ -608,27 +607,11 @@ void PluginEditor::paintOverChildren (juce::Graphics& g)
         g.setColour (juce::Colour (0xFF05070A)); // Solid dark fill to clear background faceplate area
         g.fillRect (boxX, boxY, boxW, boxH);
 
-        // Safe JUCE getThumbBeingDragged check to monitor active dragging
-        if (smallKnobs[i]->getThumbBeingDragged() >= 0)
-        {
-            // Display a sleek horizontal progress bar instead of text [1.2.0]
-            float val = static_cast<float> (smallKnobs[i]->getValue());
-            float progress = val;
-            if (smallLabels[i] == "ENTROPY")  progress = (val + 1.0f) * 0.5f;
-            else if (smallLabels[i] == "OCTAVES")  progress = (val + 3.0f) / 6.0f;
-            progress = juce::jlimit (0.0f, 1.0f, progress);
-
-            int fillW = static_cast<int> (std::round (progress * static_cast<float> (boxW - 4)));
-            g.setColour (themeColor);
-            g.fillRect (boxX + 2, boxY + 4, fillW, boxH - 8);
-        }
-        else
-        {
-            // Center the neat uppercase label text
-            g.setColour (themeColor.withAlpha (0.75f));
-            g.setFont (juce::FontOptions (8.5f, juce::Font::bold));
-            g.drawFittedText (smallLabels[i], boxX, boxY, boxW, boxH, juce::Justification::centred, 1);
-        }
+        // FREEZE TEXT LABELS AS STATIC [2]
+        // Swapping to a progress bar during drag is disabled to preserve analog knob pointer aesthetics.
+        g.setColour (themeColor.withAlpha (0.75f));
+        g.setFont (juce::FontOptions (8.5f, juce::Font::bold));
+        g.drawFittedText (smallLabels[i], boxX, boxY, boxW, boxH, juce::Justification::centred, 1);
     }
 
     // Custom Master HUD display boxes centered directly under the big knobs [1.2.0]
@@ -639,7 +622,7 @@ void PluginEditor::paintOverChildren (juce::Graphics& g)
     g.setColour (themeColor.withAlpha (0.4f));
     g.drawRoundedRectangle (denBox.toFloat(), 2.0f, 1.0f);
 
-    g.setColour (themeColor); // RESET COLOR TO FULL THEME COLOR [1.2.0]
+    g.setColour (themeColor); 
     g.setFont (juce::FontOptions (9.5f, juce::Font::bold));
     juce::String denText = "DEN: " + juce::String (static_cast<int> (std::round (masterVelocityKnob.getValue() * 100.0f))) + "%";
     g.drawFittedText (denText, denBox, juce::Justification::centred, 1);
@@ -651,7 +634,7 @@ void PluginEditor::paintOverChildren (juce::Graphics& g)
     g.setColour (themeColor.withAlpha (0.4f));
     g.drawRoundedRectangle (swgBox.toFloat(), 2.0f, 1.0f);
 
-    g.setColour (themeColor); // RESET COLOR TO FULL THEME COLOR [1.2.0] (Fixes greyed-out text bug)
+    g.setColour (themeColor); 
     g.setFont (juce::FontOptions (9.5f, juce::Font::bold));
     juce::String swgText = "SWG: " + juce::String (static_cast<int> (std::round (masterSwingKnob.getValue() * 100.0f))) + "%";
     g.drawFittedText (swgText, swgBox, juce::Justification::centred, 1);
