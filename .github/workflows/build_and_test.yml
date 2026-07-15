@@ -17,7 +17,6 @@ env:
   BUILD_TYPE: Release
   BUILD_DIR: Builds
   SCCACHE_GHA_ENABLED: true
-  IPP_DIR: C:\Program Files (x86)\Intel\oneAPI\ipp\latest\lib\cmake\ipp
   PLUGINVAL_BINARY: ./pluginval.exe
   EXTRA_FLAGS: -G Ninja -DCMAKE_C_COMPILER=clang-cl -DCMAKE_CXX_COMPILER=clang-cl
 
@@ -35,10 +34,10 @@ jobs:
       # Setup MSVC toolchain and developer command prompt
       - uses: ilammy/msvc-dev-cmd@v1
 
-      # Install IPP
+      # Install IPP explicitly to the NuGet global cache path
       - name: Install IPP
         run: |
-          nuget install intelipp.static.win-x64 -Version 2026.0.0.712
+          nuget install intelipp.static.win-x64 -Version 2026.0.0.712 -OutputDirectory "$USERPROFILE/.nuget/packages"
 
       # Install Ninja
       - name: Install Ninja
@@ -82,17 +81,17 @@ jobs:
           echo "STANDALONE_EXE_PATH=$ARTIFACTS_PATH/Standalone/${{ env.PRODUCT_NAME }}.exe" >> $GITHUB_ENV
           echo "ARTIFACT_NAME=${{ env.PRODUCT_NAME }}-${{ env.VERSION }}-Windows" >> $GITHUB_ENV
 
-      # Test the VST3 using pluginval
+      # Test the VST3 using pluginval (v1.0.5 recommended for JUCE 8+)
       - name: Pluginval
         run: |
-          curl -LO "https://github.com/Tracktion/pluginval/releases/download/v1.0.3/pluginval_Windows.zip"
+          curl -LO "https://github.com/Tracktion/pluginval/releases/download/v1.0.5/pluginval_Windows.zip"
           7z x pluginval_Windows.zip
-          ${{ env.PLUGINVAL_BINARY }} --strictness-level 10 --verbose --validate "${{ env.VST3_PATH }}"
+          "${{ env.PLUGINVAL_BINARY }}" --strictness-level 10 --verbose --validate "${{ env.VST3_PATH }}"
 
       # Package Windows Inno Setup Installer
       - name: Generate Installer
         run: |
-          iscc "packaging\installer.iss"
+          iscc "packaging/installer.iss"
           mv "packaging/Output/${{ env.ARTIFACT_NAME }}.exe" "${{ env.ARTIFACTS_PATH }}/"
 
       # Upload Packaged Artifacts (Windows Exe Installer)
