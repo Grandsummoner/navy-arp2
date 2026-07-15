@@ -1,23 +1,21 @@
-name: Pamplejuce
+name: Build Standalone
 
 on:
-  workflow_dispatch: # Lets you run a build manually from the GitHub UI
-  workflow_call:     # Lets other workflows (like release.yml) call this one
   push:
     branches:
       - main
       - develop
   pull_request:
+  workflow_dispatch:
 
 concurrency:
-  group: ${{ github.ref }}
+  group: ${{ github.ref }}-standalone
   cancel-in-progress: true
 
 env:
   BUILD_TYPE: Release
   BUILD_DIR: Builds
   SCCACHE_GHA_ENABLED: true
-  PLUGINVAL_BINARY: ./pluginval.exe
   EXTRA_FLAGS: -G Ninja -DCMAKE_C_COMPILER=clang-cl -DCMAKE_CXX_COMPILER=clang-cl
 
 defaults:
@@ -25,9 +23,9 @@ defaults:
     shell: bash
 
 jobs:
-  build_and_test:
+  build_standalone:
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.event.pull_request.base.repo.full_name
-    name: Windows Build
+    name: Windows Standalone Build
     runs-on: windows-latest
 
     steps:
@@ -57,9 +55,9 @@ jobs:
       - name: Configure
         run: cmake -B ${{ env.BUILD_DIR }} -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache ${{ env.EXTRA_FLAGS }} .
 
-      # Build Targets
-      - name: Build
-        run: cmake --build ${{ env.BUILD_DIR }} --config ${{ env.BUILD_TYPE }} --parallel
+      # Build ONLY the Standalone target to optimize compile speed
+      - name: Build Standalone
+        run: cmake --build ${{ env.BUILD_DIR }} --config ${{ env.BUILD_TYPE }} --target NavyArp_Standalone --parallel
 
       # Test & Benchmarks via CTest
       - name: Test & Benchmarks
@@ -73,7 +71,6 @@ jobs:
           
           if [ -n "$FOUND_ENV" ]; then
             echo "Found .env at $FOUND_ENV"
-            cat "$FOUND_ENV"
             cat "$FOUND_ENV" >> $GITHUB_ENV
           else
             echo "Warning: .env file not found anywhere in workspace. Falling back to parsing CMakeLists.txt."
@@ -103,55 +100,17 @@ jobs:
             echo "Parsed VERSION: $VERSION"
           fi
 
-      # Set paths for target packaging (Including Standalone, VST3, and CLAP)
+      # Set paths for target packaging (Including Standalone)
       - name: Set additional env vars for next steps
         run: |
           ARTIFACTS_PATH=${{ env.BUILD_DIR }}/${{ env.PROJECT_NAME }}_artefacts/${{ env.BUILD_TYPE }}
           echo "ARTIFACTS_PATH=$ARTIFACTS_PATH" >> $GITHUB_ENV
-          echo "VST3_PATH=$ARTIFACTS_PATH/VST3/${{ env.PRODUCT_NAME }}.vst3" >> $GITHUB_ENV
           echo "STANDALONE_EXE_PATH=$ARTIFACTS_PATH/Standalone/${{ env.PRODUCT_NAME }}.exe" >> $GITHUB_ENV
-          echo "CLAP_PATH=$ARTIFACTS_PATH/CLAP/${{ env.PRODUCT_NAME }}.clap" >> $GITHUB_ENV
-          echo "ARTIFACT_NAME=${{ env.PRODUCT_NAME }}-${{ env.VERSION }}-Windows" >> $GITHUB_ENV
+          echo "ARTIFACT_NAME=${{ env.PRODUCT_NAME }}-${{ env.VERSION }}-Standalone-Windows" >> $GITHUB_ENV
 
-      # Test the VST3 using pluginval v1.0.4 (latest stable)
-      - name: Pluginval
-        run: |
-          curl -LO "https://github.com/Tracktion/pluginval/releases/download/v1.0.4/pluginval_Windows.zip"
-          7z x pluginval_Windows.zip
-          "${{ env.PLUGINVAL_BINARY }}" --strictness-level 10 --verbose --validate "${{ env.VST3_PATH }}"
-
-      # Copy built files to workspace Artifacts directory expected by the Inno Setup script
-      - name: Prepare Artifacts for Installer
-        run: |
-          mkdir -p Artifacts/Standalone
-          mkdir -p Artifacts/VST3
-          mkdir -p Artifacts/CLAP
-          
-          # Copy VST3 & Standalone
-          cp -r "${{ env.VST3_PATH }}" Artifacts/VST3/
-          cp -r "${{ env.STANDALONE_EXE_PATH }}" Artifacts/Standalone/
-          
-          # Copy CLAP if it was successfully built, otherwise create a placeholder to avoid iscc failure
-          if [ -d "${{ env.CLAP_PATH }}" ] || [ -f "${{ env.CLAP_PATH }}" ]; then
-            cp -r "${{ env.CLAP_PATH }}" Artifacts/CLAP/
-            echo "Successfully prepared CLAP binary."
-          else
-            echo "Warning: CLAP target not found at ${{ env.CLAP_PATH }}. Generating a fallback placeholder."
-            touch "Artifacts/CLAP/${{ env.PRODUCT_NAME }}.clap"
-          fi
-          
-          echo "Workspace Artifacts folder structure:"
-          find Artifacts -maxdepth 3
-
-      # Package Windows Inno Setup Installer
-      - name: Generate Installer
-        run: |
-          iscc "packaging/installer.iss"
-          mv "Artifacts/Navy_Arp_Installer.exe" "${{ env.ARTIFACTS_PATH }}/${{ env.ARTIFACT_NAME }}.exe"
-
-      # Upload Packaged Artifacts (Windows Exe Installer)
-      - name: Upload Exe
+      # Upload Standalone EXE
+      - name: Upload Standalone
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.ARTIFACT_NAME }}.exe
-          path: "${{ env.ARTIFACTS_PATH }}/${{ env.ARTIFACT_NAME }}.exe"
+          name: ${{ env.ARTIFACT_NAME }}
+          path: "${{ env.STANDALONE_EXE_PATH }}"
