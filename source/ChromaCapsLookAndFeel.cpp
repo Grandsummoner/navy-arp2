@@ -80,7 +80,7 @@ void ChromaCapsLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, i
     if (themeIdx == 1)      lfoHaloColor = juce::Colour (0xFF00E5FF); // Monochrome Contrast: Tech Cyan
     else if (themeIdx == 2) lfoHaloColor = juce::Colour (0xFFD500F9); // Matrix Contrast: Hot Purple/Magenta
 
-    // 1. Draw Custom LFO "Corona / Halo" Underglow Ring (Only for Small Knobs with an active LFO)
+    // 1. Draw Custom LFO "Corona / Halo" Underglow Ring (Only for Small Knobs with an active LFO) [3]
     if (isSmallKnob && isLfoActive)
     {
         float glowOuterRadius = 17.0f; // Extends past the 12.0f knob radius to bleed onto the faceplate
@@ -105,7 +105,7 @@ void ChromaCapsLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, i
         g.fillEllipse (centerX - glowOuterRadius, centerY - glowOuterRadius, glowOuterRadius * 2.0f, glowOuterRadius * 2.0f);
     }
 
-    // 2. Draw custom metallic knob cap
+    // 2. Draw custom rotating metallic knob cap (Drawn over the gradient to mask its center)
     g.setColour (juce::Colour (0xFF1F2229)); // Bezel base
     g.fillEllipse (centerX - knobRadius, centerY - knobRadius, knobRadius * 2.0f, knobRadius * 2.0f);
 
@@ -115,7 +115,14 @@ void ChromaCapsLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, i
     g.setGradientFill (steelGrad);
     g.fillEllipse (centerX - (knobRadius - 1.0f), centerY - (knobRadius - 1.0f), (knobRadius - 1.0f) * 2.0f, (knobRadius - 1.0f) * 2.0f);
 
-    // [Wedges and Pointers Removed] - Faint white rotating reflection wedges are entirely removed to keep the steel cap solid and pristine.
+    // Draw active rotating anisotropic light-reflection wedge matching parameter value
+    float angle = rotaryStartAngle + sliderPos * (rotaryEndAngle - rotaryStartAngle);
+    juce::Path reflectPath;
+    reflectPath.addPieSegment (centerX - knobRadius, centerY - knobRadius, knobRadius * 2.0f, knobRadius * 2.0f, angle - 0.25f, angle + 0.25f, 0.0f);
+    g.setColour (juce::Colours::white.withAlpha (0.15f));
+    g.fillPath (reflectPath);
+
+    // [Needle Pointer Deleted] - No pointers drawn over the clean metallic surface.
 
     // 3. Draw the Concentric LED Ring (Strictly displays exactly ONE lit indicator LED in active theme color) [2]
     int closestLedIndex = static_cast<int> (std::round (sliderPos * 14.0f));

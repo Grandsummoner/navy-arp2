@@ -33,6 +33,40 @@ public:
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> attachment;
 };
 
+// Symmetrical Standalone MIDI Learn bounds helper [3]
+static juce::Rectangle<int> getCcPillBounds (int index, int xOffset)
+{
+    int cx = 0, cy = 0;
+    if (index < 4) // Left sidebar knobs (0-3)
+    {
+        cx = 44 + 48; // Positioned immediately to the right of the knob
+        cy = 121 + (index * 61) + 16;
+    }
+    else if (index >= 4 && index < 8) // Right sidebar knobs (4-7)
+    {
+        cx = 902 - 38; // Positioned immediately to the left of the knob
+        cy = 121 + ((index - 4) * 61) + 16;
+    }
+    else if (index >= 8 && index < 16) // Step faders (8-15)
+    {
+        float faderX[8] = { 66.0f, 192.0f, 314.0f, 436.0f, 556.0f, 678.0f, 802.0f, 923.0f };
+        cx = static_cast<int> (faderX[index - 8]) - 11;
+        cy = 583 - 18; // Hovering right above the fader track
+    }
+    else if (index == 16) // Master Note Density (DEN)
+    {
+        cx = 26 + 84; 
+        cy = 396 + 32;
+    }
+    else if (index == 17) // Master Swing (SWG)
+    {
+        cx = 884 - 38;
+        cy = 396 + 32;
+    }
+
+    return { cx + xOffset, cy, 34, 15 };
+}
+
 PluginEditor::PluginEditor (PluginProcessor& p)
     : AudioProcessorEditor (&p), processor (p), oledDisplay (p), chromaLookAndFeel (p, this)
 {
@@ -293,6 +327,56 @@ PluginEditor::PluginEditor (PluginProcessor& p)
     scaleTypeAttachment   = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment> (processor.apvts, IDs::scaleType.getParamID(), scaleTypeBox);
     cycleLengthAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment> (processor.apvts, IDs::cycleLength.getParamID(), cycleLengthBox);
 
+    // =====================================================================
+    // SYMMETRICAL LEFT WING CONTROL INSTANTIATIONS [3]
+    // =====================================================================
+    addAndMakeVisible (soundButton);
+    soundButton.setButtonText ("SND"); // Fixed: Replaced unrendered Unicode glyph with high-contrast text "SND" [3]
+    soundButton.setClickingTogglesState (true);
+    soundButton.onClick = [this] { toggleLeftPanel(); };
+    soundButton.setColour (juce::TextButton::buttonColourId, juce::Colour (0xFF181C20));
+    soundButton.setColour (juce::TextButton::textColourOffId, juce::Colour (0xFFA0A5B0));
+    soundButton.setColour (juce::TextButton::textColourOnId, juce::Colours::white);
+
+    // ComboBox Setup
+    juce::ComboBox* boxes[] = { &midiInBox, &midiOutBox, &voice1SynthBox, &voice2SynthBox, &audioRoutingBox };
+    for (auto* b : boxes)
+    {
+        addAndMakeVisible (b);
+        b->setLookAndFeel (&chromaLookAndFeel);
+    }
+    midiInBox.addItemList (juce::StringArray { "Omni", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16" }, 1);
+    midiOutBox.addItemList (juce::StringArray { "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16" }, 1);
+    voice1SynthBox.addItemList (juce::StringArray { "Virtual Analog", "FM Synthesizer", "Resonator" }, 1);
+    voice2SynthBox.addItemList (juce::StringArray { "Virtual Analog", "FM Synthesizer", "Resonator" }, 1);
+    audioRoutingBox.addItemList (juce::StringArray { "Split A->1 / B->2", "Layered (Voice 1)", "External Out Only" }, 1);
+
+    // Slider Setup
+    juce::Slider* sls[] = { &v1DecaySlider, &v1TimbreSlider, &v1ReverbSlider, &v2DecaySlider, &v2TimbreSlider, &v2ReverbSlider };
+    for (auto* s : sls)
+    {
+        addAndMakeVisible (s);
+        s->setSliderStyle (juce::Slider::LinearHorizontal);
+        s->setTextBoxStyle (juce::Slider::NoTextBox, false, 0, 0);
+        s->setLookAndFeel (&chromaLookAndFeel);
+    }
+    v1DecaySlider.setRange (0.05f, 2.0f);
+    v2DecaySlider.setRange (0.05f, 2.0f);
+
+    // Attachments Setup
+    midiInAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment> (processor.apvts, IDs::midiInChannel.getParamID(), midiInBox);
+    midiOutAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment> (processor.apvts, IDs::midiOutChannel.getParamID(), midiOutBox);
+    voice1SynthAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment> (processor.apvts, IDs::voice1Synth.getParamID(), voice1SynthBox);
+    voice2SynthAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment> (processor.apvts, IDs::voice2Synth.getParamID(), voice2SynthBox);
+    audioRoutingAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment> (processor.apvts, IDs::audioRouting.getParamID(), audioRoutingBox);
+
+    v1DecayAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (processor.apvts, IDs::voice1Decay.getParamID(), v1DecaySlider);
+    v1TimbreAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (processor.apvts, IDs::voice1Timbre.getParamID(), v1TimbreSlider);
+    v1ReverbAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (processor.apvts, IDs::voice1Reverb.getParamID(), v1ReverbSlider);
+    v2DecayAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (processor.apvts, IDs::voice2Decay.getParamID(), v2DecaySlider);
+    v2TimbreAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (processor.apvts, IDs::voice2Timbre.getParamID(), v2TimbreSlider);
+    v2ReverbAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (processor.apvts, IDs::voice2Reverb.getParamID(), v2ReverbSlider);
+
     updateSliderTextBoxThemeColors();
 
     // Setup collapsible Help Sidebar toggle button [3]
@@ -308,16 +392,16 @@ PluginEditor::PluginEditor (PluginProcessor& p)
     rhythmMorphKnob.setDoubleClickReturnValue (true, 0.0f);
     restKnob.setDoubleClickReturnValue (true, 0.1f);
     legatoKnob.setDoubleClickReturnValue (true, 0.5f);
-    rateKnob.setDoubleClickReturnValue (true, 0.5f); // Default center BPM
+    rateKnob.setDoubleClickReturnValue (true, 0.5f); 
     entropyKnob.setDoubleClickReturnValue (true, 0.0f);
     harmonyKnob.setDoubleClickReturnValue (true, 0.0f);
     chaosKnob.setDoubleClickReturnValue (true, 0.0f);
     octavesKnob.setDoubleClickReturnValue (true, 0.0f);
-    masterVelocityKnob.setDoubleClickReturnValue (true, 0.5f); // Note Density default (50%)
-    masterSwingKnob.setDoubleClickReturnValue (true, 0.0f); // Master Swing default (0%)
+    masterVelocityKnob.setDoubleClickReturnValue (true, 0.5f); 
+    masterSwingKnob.setDoubleClickReturnValue (true, 0.0f); 
 
     for (int i = 0; i < 8; ++i) {
-        faders[i]->setDoubleClickReturnValue (true, 0.5f); // Default 50% probability
+        faders[i]->setDoubleClickReturnValue (true, 0.5f); 
     }
 
     // Connect slider callbacks to automatically update active scene state [1.2.2] using self-contained getProperties flags [1.2.3]
@@ -340,7 +424,7 @@ PluginEditor::PluginEditor (PluginProcessor& p)
     fader8.onValueChange = [this] { if (! getProperties().getWithDefault ("isUpdatingProgrammatically", false)) { if (processor.isSceneBActiveAnchor.load()) processor.sceneB.faders[7] = static_cast<float>(fader8.getValue()); else processor.sceneA.faders[7] = static_cast<float>(fader8.getValue()); } };
 
     setResizable (false, false); 
-    setSize (1000, 681); // Matches physical artwork dimension 
+    setSize (1000, 681); 
 
     if (DRAW_DIAGNOSTIC_GRID)
         setMouseClickGrabsKeyboardFocus (true);
@@ -375,8 +459,34 @@ PluginEditor::~PluginEditor()
     for (int i = 0; i < 8; ++i) { presetButtons[i].setLookAndFeel (nullptr); presetButtons[i].onClick = nullptr; presetButtons[i].onStateChange = nullptr; presetButtons[i].removeMouseListener(this); }
     sceneAButton.removeMouseListener (this); sceneBButton.removeMouseListener (this);
 
+    // Left Panel component de-registrations [3]
+    juce::ComboBox* boxes[] = { &midiInBox, &midiOutBox, &voice1SynthBox, &voice2SynthBox, &audioRoutingBox };
+    for (auto* b : boxes) b->setLookAndFeel (nullptr);
+    juce::Slider* sls[] = { &v1DecaySlider, &v1TimbreSlider, &v1ReverbSlider, &v2DecaySlider, &v2TimbreSlider, &v2ReverbSlider };
+    for (auto* s : sls) s->setLookAndFeel (nullptr);
+
     // Dynamic clean up of property-wrapped syncButton [1.2.3]
     getProperties().remove ("syncWrapper");
+}
+
+void PluginEditor::toggleLeftPanel()
+{
+    isLeftPanelOpen = !isLeftPanelOpen;
+    soundButton.setToggleState (isLeftPanelOpen, juce::dontSendNotification);
+    
+    // Set appropriate color theme highlights when active
+    int themeIdx = static_cast<int> (processor.apvts.getRawParameterValue ("panelTheme")->load());
+    juce::Colour activeColor = juce::Colour (0xFF00E5FF); 
+    if (themeIdx == 1)      activeColor = juce::Colour (0xFFECEFF1); 
+    else if (themeIdx == 2) activeColor = juce::Colour (0xFF00FF66); 
+    
+    soundButton.setColour (juce::TextButton::buttonColourId, isLeftPanelOpen ? activeColor : juce::Colour (0xFF181C20));
+    soundButton.setColour (juce::TextButton::textColourOffId, isLeftPanelOpen ? juce::Colours::black : juce::Colour (0xFFA0A5B0));
+    soundButton.setColour (juce::TextButton::textColourOnId, isLeftPanelOpen ? juce::Colours::black : juce::Colours::white);
+
+    // Dynamic symmetrical window width sizing [3]
+    int targetW = 1000 + (isLeftPanelOpen ? 300 : 0) + (isHelpPanelOpen ? 300 : 0);
+    setSize (targetW, 681);
 }
 
 void PluginEditor::toggleHelpPanel()
@@ -384,7 +494,6 @@ void PluginEditor::toggleHelpPanel()
     isHelpPanelOpen = !isHelpPanelOpen;
     helpButton.setToggleState (isHelpPanelOpen, juce::dontSendNotification);
     
-    // Set appropriate color theme highlights when help is active
     int themeIdx = static_cast<int> (processor.apvts.getRawParameterValue ("panelTheme")->load());
     juce::Colour activeColor = juce::Colour (0xFF00E5FF); 
     if (themeIdx == 1)      activeColor = juce::Colour (0xFFECEFF1); 
@@ -392,8 +501,11 @@ void PluginEditor::toggleHelpPanel()
     
     helpButton.setColour (juce::TextButton::buttonColourId, isHelpPanelOpen ? activeColor : juce::Colour (0xFF181C20));
     helpButton.setColour (juce::TextButton::textColourOffId, isHelpPanelOpen ? juce::Colours::black : juce::Colour (0xFFA0A5B0));
+    helpButton.setColour (juce::TextButton::textColourOnId, isHelpPanelOpen ? juce::Colours::black : juce::Colours::white);
 
-    setSize (isHelpPanelOpen ? 1300 : 1000, 681);
+    // Dynamic symmetrical window width sizing [3]
+    int targetW = 1000 + (isLeftPanelOpen ? 300 : 0) + (isHelpPanelOpen ? 300 : 0);
+    setSize (targetW, 681);
 }
 
 void PluginEditor::parameterChanged (const juce::String& parameterID, float newValue)
@@ -417,6 +529,27 @@ void PluginEditor::parameterChanged (const juce::String& parameterID, float newV
 
 void PluginEditor::mouseDown (const juce::MouseEvent& event)
 {
+    // Standalone MIDI CC Mapping & Learn Pill Clicks Interception [3]
+    if (isHelpPanelOpen)
+    {
+        int xOffset = isLeftPanelOpen ? 300 : 0;
+        auto mousePos = getMouseXYRelative();
+        for (int i = 0; i < 18; ++i)
+        {
+            auto pillBounds = getCcPillBounds (i, xOffset);
+            if (pillBounds.contains (mousePos))
+            {
+                if (processor.activeMidiLearnIndex.load() == i)
+                    processor.activeMidiLearnIndex.store (-1);
+                else
+                    processor.activeMidiLearnIndex.store (i);
+                
+                repaint();
+                return; // Intercept click entirely to bypass knob adjustments
+            }
+        }
+    }
+
     juce::Slider* knobs[] = { &rhythmMorphKnob, &restKnob, &legatoKnob, &rateKnob, &entropyKnob, &harmonyKnob, &chaosKnob, &octavesKnob };
     juce::ParameterID rates[] = { IDs::rhythmMorphLfoRate, IDs::restLfoRate, IDs::legatoLfoRate, IDs::rateLfoRate, IDs::entropyLfoRate, IDs::harmonyLfoRate, IDs::chaosLfoRate, IDs::octavesLfoRate };
     juce::ParameterID depths[] = { IDs::rhythmMorphLfoDepth, IDs::restLfoDepth, IDs::legatoLfoDepth, IDs::rateLfoDepth, IDs::entropyLfoDepth, IDs::harmonyLfoDepth, IDs::chaosLfoDepth, IDs::octavesLfoDepth };
@@ -526,7 +659,6 @@ void PluginEditor::mouseDown (const juce::MouseEvent& event)
             }
             else if (recallButton.getToggleState()) {
                 processor.loadPreset (i); presetFlashTimer[i] = 24; presetFlashType[i] = 2;
-                // REMOVED untoggling recallButton to allow instant preset slot surfing [1.2.0]
             }
             else if (event.mods.isRightButtonDown()) { 
                 processor.savePreset (i); presetFlashTimer[i] = 24; presetFlashType[i] = 1; 
@@ -555,42 +687,117 @@ void PluginEditor::mouseUp (const juce::MouseEvent& event)
 
 void PluginEditor::paint (juce::Graphics& g)
 {
+    int xOffset = isLeftPanelOpen ? 300 : 0;
+
     if (backgroundImage.isValid())
     {
-        // Paint main background panel inside the left 1000px boundary
-        g.drawImage (backgroundImage, 0, 0, 1000, 681, 
-                     0, 0, backgroundImage.getWidth(), backgroundImage.getHeight());
+        // Paint main background panel inside the left 1000px boundary offset [3]
+        g.drawImage (backgroundImage, static_cast<float> (xOffset), 0.0f, 1000.0f, 681.0f, 
+                     0.0f, 0.0f, static_cast<float> (backgroundImage.getWidth()), static_cast<float> (backgroundImage.getHeight()));
     }
     else
     {
         g.fillAll (juce::Colour (0xFF0D1E36));
     }
 
-    // Render Sidecar Manual Component dynamically inside the exposed right 300px column
-    if (getWidth() > 1000)
+    // Select color routing matching active panel theme
+    int themeIdx = static_cast<int> (processor.apvts.getRawParameterValue ("panelTheme")->load());
+    juce::Colour themeColor = juce::Colour (0xFF00E5FF); 
+    if (themeIdx == 1)      themeColor = juce::Colour (0xFFECEFF1); 
+    else if (themeIdx == 2) themeColor = juce::Colour (0xFF00FF66); 
+
+    // =====================================================================
+    // SYMMETRICAL LEFT SIDEBAR DRAWING (SOUND CONTROL PANEL) [3]
+    // =====================================================================
+    if (isLeftPanelOpen)
     {
-        int sidebarX = 1000;
-        int sidebarW = getWidth() - sidebarX;
+        int sidebarW = 300;
+        g.setColour (juce::Colour (0xFF05070A)); // Match OLED black
+        g.fillRect (0, 0, sidebarW, getHeight());
+
+        g.setColour (themeColor.withAlpha (0.4f));
+        g.drawVerticalLine (sidebarW, 0.0f, static_cast<float> (getHeight()));
+
+        // Document Title
+        g.setColour (juce::Colours::white);
+        g.setFont (juce::FontOptions ("Courier New", 14.0f, juce::Font::bold));
+        g.drawText ("[ AUDIO & MIDI ROUTING ]", 15, 25, sidebarW - 30, 20, juce::Justification::centredLeft);
+
+        // Define structural section details for the 4 island pills
+        struct HelpSection {
+            juce::String title;
+            juce::Colour pillColor;
+            int yPos;
+        };
+
+        std::vector<HelpSection> sections = {
+            { "01 // SYSTEM MIDI ROUTING", juce::Colour (0xFF00E5FF), 65 },  
+            { "02 // VOICE 1 (SCENE A TARGET)", juce::Colour (0xFFFF3366), 185 },  
+            { "03 // VOICE 2 (SCENE B TARGET)", juce::Colour (0xFFD500F9), 385 },  
+            { "04 // SYNTH AUDIO ROUTING", juce::Colour (0xFFFFB300), 585 }   
+        };
+
+        for (const auto& sec : sections)
+        {
+            int rx = 15;
+            int ry = sec.yPos;
+            int rw = sidebarW - 30; // 270px
+            int rh = 22;
+
+            // Render Rounded "Island Pill" Header container
+            g.setColour (sec.pillColor.withAlpha (0.12f));
+            g.fillRoundedRectangle (static_cast<float> (rx), static_cast<float> (ry), static_cast<float> (rw), static_cast<float> (rh), 4.0f);
+            
+            g.setColour (sec.pillColor.withAlpha (0.80f));
+            g.drawRoundedRectangle (static_cast<float> (rx), static_cast<float> (ry), static_cast<float> (rw), static_cast<float> (rh), 4.0f, 1.0f);
+
+            // Print monospace text inside pill (High contrast white)
+            g.setColour (juce::Colours::white);
+            g.setFont (juce::FontOptions ("Courier New", 11.0f, juce::Font::bold));
+            g.drawText (sec.title, rx + 10, ry, rw - 20, rh, juce::Justification::centredLeft);
+        }
+
+        // Render micro sliders parameter text tags
+        g.setColour (juce::Colour (0xFFA0A5B0));
+        g.setFont (juce::FontOptions ("Courier New", 11.0f, juce::Font::bold));
+        
+        g.drawText ("MIDI IN:", 15, 95, 80, 16, juce::Justification::centredLeft);
+        g.drawText ("MIDI OUT:", 15, 145, 80, 16, juce::Justification::centredLeft);
+
+        g.drawText ("SYNTH ENGINE:", 15, 215, 150, 16, juce::Justification::centredLeft);
+        g.drawText ("DECAY", 15, 275, 80, 16, juce::Justification::centredLeft);
+        g.drawText ("TIMBRE", 15, 305, 80, 16, juce::Justification::centredLeft);
+        g.drawText ("REVERB", 15, 335, 80, 16, juce::Justification::centredLeft);
+
+        g.drawText ("SYNTH ENGINE:", 15, 415, 150, 16, juce::Justification::centredLeft);
+        g.drawText ("DECAY", 15, 475, 80, 16, juce::Justification::centredLeft);
+        g.drawText ("TIMBRE", 15, 505, 80, 16, juce::Justification::centredLeft);
+        g.drawText ("REVERB", 15, 535, 80, 16, juce::Justification::centredLeft);
+
+        g.drawText ("SIGNAL FLOW:", 15, 615, 150, 16, juce::Justification::centredLeft);
+    }
+
+    // =====================================================================
+    // SYMMETRICAL RIGHT SIDEBAR DRAWING (QUICK MANUAL GUIDE) [3]
+    // =====================================================================
+    if (isHelpPanelOpen)
+    {
+        int sidebarX = xOffset + 1000;
+        int sidebarW = 300;
 
         // Fill background matching high-tech OLED theme
         g.setColour (juce::Colour (0xFF05070A));
         g.fillRect (sidebarX, 0, sidebarW, getHeight());
 
-        // Select color routing matching active panel theme
-        int themeIdx = static_cast<int> (processor.apvts.getRawParameterValue ("panelTheme")->load());
-        juce::Colour activeColor = juce::Colour (0xFF00E5FF); // Theme 0 (Navy): Teal
-        if (themeIdx == 1)      activeColor = juce::Colour (0xFFECEFF1); // Theme 1 (Monochrome): White
-        else if (themeIdx == 2) activeColor = juce::Colour (0xFF00FF66); // Theme 2 (Matrix): Neon Green
-
-        g.setColour (activeColor.withAlpha (0.4f));
+        g.setColour (themeColor.withAlpha (0.4f));
         g.drawVerticalLine (sidebarX, 0.0f, static_cast<float> (getHeight()));
 
         // Document Title
         g.setColour (juce::Colours::white);
         g.setFont (juce::FontOptions ("Courier New", 14.0f, juce::Font::bold));
-        g.drawText ("[ QUICK-START CHEAT SHEET ]", sidebarX + 15, 20, sidebarW - 30, 20, juce::Justification::centredLeft);
+        g.drawText ("[ QUICK-START CHEAT SHEET ]", sidebarX + 15, 25, sidebarW - 30, 20, juce::Justification::centredLeft);
 
-        // Section descriptors for the 4 island pills [3]
+        // Section descriptors for the 4 island pills
         struct HelpSection {
             juce::String title;
             juce::String body;
@@ -602,25 +809,25 @@ void PluginEditor::paint (juce::Graphics& g)
             { 
                 "01 // SNAPSHOT MORPHING", 
                 "- Select snap [A] or [B] deck focus.\n- Tweaks/dice write only to active deck.\n- Drag CROSSFADER to morph the DSP.", 
-                juce::Colour (0xFFFF3366), // Coral Pink
+                juce::Colour (0xFFFF3366), 
                 60 
             },
             { 
                 "02 // SATELLITE LFO ROUTING", 
                 "- Right-click small dials for LFO setup.\n- Rate & depth show on backlit Corona.\n- Pulse = Speed; Brightness = LFO Depth.", 
-                juce::Colour (0xFFD500F9), // Electric Violet
+                juce::Colour (0xFFD500F9), 
                 205 
             },
             { 
                 "03 // NOTE DENSITY (DEN)", 
                 "- Global modifier on bottom-left.\n- Below 50%: reduces note probabilities.\n- Above 50%: fills empty steps.", 
-                juce::Colour (0xFF00E5FF), // Teal
+                juce::Colour (0xFF00E5FF), 
                 350 
             },
             { 
                 "04 // PERFORMANCE PRESETS", 
                 "- Click SAVE + slots 1-8 to record.\n- Click RECALL to latch preset surf.\n- Double-click dials to reset to center.", 
-                juce::Colour (0xFFFFB300), // Warm Gold
+                juce::Colour (0xFFFFB300), 
                 495 
             }
         };
@@ -654,6 +861,7 @@ void PluginEditor::paint (juce::Graphics& g)
 
 void PluginEditor::paintOverChildren (juce::Graphics& g)
 {
+    int xOffset = isLeftPanelOpen ? 300 : 0;
     int themeIdx = static_cast<int> (processor.apvts.getRawParameterValue ("panelTheme")->load());
     juce::Colour themeColor = juce::Colour (0xFF00E5FF); // Theme 0 (Navy): Teal
     if (themeIdx == 1)      themeColor = juce::Colour (0xFFECEFF1); // Theme 1 (Monochrome): White/Silver
@@ -703,6 +911,33 @@ void PluginEditor::paintOverChildren (juce::Graphics& g)
         }
     }
 
+    // =====================================================================
+    // STANDALONE REALTIME FLOATING CC MAPPING LABELS OVERLAY [3]
+    // =====================================================================
+    if (isHelpPanelOpen)
+    {
+        for (int i = 0; i < 18; ++i)
+        {
+            auto pillBounds = getCcPillBounds (i, xOffset);
+            int mappedCc = processor.midiCcMappings[i].load();
+            bool isLearning = (processor.activeMidiLearnIndex.load() == i);
+
+            // Black glossy backdrop capsule
+            g.setColour (juce::Colour (0xFF05070A));
+            g.fillRoundedRectangle (pillBounds.toFloat(), 3.0f);
+
+            // Soft glow outline (Red on active MIDI Learn, Theme Accent on mapped)
+            juce::Colour pillOutline = isLearning ? juce::Colours::red : themeColor.withAlpha (0.75f);
+            g.setColour (pillOutline);
+            g.drawRoundedRectangle (pillBounds.toFloat().reduced (0.5f), 3.0f, 1.0f);
+
+            juce::String text = isLearning ? "LRN" : ((mappedCc >= 0) ? "C" + juce::String (mappedCc) : "MAP");
+            g.setColour (isLearning ? juce::Colours::red : juce::Colours::white);
+            g.setFont (juce::FontOptions ("Courier New", 9.0f, juce::Font::bold));
+            g.drawText (text, pillBounds, juce::Justification::centred, false);
+        }
+    }
+
     // Custom Small HUD display boxes under the 8 small knobs [1.2.0]
     juce::Slider* smallKnobs[] = { &rhythmMorphKnob, &restKnob, &legatoKnob, &rateKnob, &entropyKnob, &harmonyKnob, &chaosKnob, &octavesKnob };
     juce::String smallLabels[] = { "MORPH", "REST", "LEGATO", "BPM", "ENTROPY", "HARMONY", "CHAOS", "OCTAVES" };
@@ -711,16 +946,14 @@ void PluginEditor::paintOverChildren (juce::Graphics& g)
 
     for (int i = 0; i < 8; ++i)
     {
-        int boxX = smallKnobsX[i];
-        int boxY = smallKnobsY[i] + 48; // Located exactly 48px below knob origins
+        int boxX = smallKnobsX[i] + xOffset;
+        int boxY = smallKnobsY[i] + 48; 
         int boxW = 48;
         int boxH = 12;
 
-        g.setColour (juce::Colour (0xFF05070A)); // Solid dark fill to clear background faceplate area
+        g.setColour (juce::Colour (0xFF05070A)); 
         g.fillRect (boxX, boxY, boxW, boxH);
 
-        // FREEZE TEXT LABELS AS STATIC [2]
-        // Swapping to a progress bar during drag is disabled to preserve analog knob pointer aesthetics.
         g.setColour (themeColor.withAlpha (0.75f));
         g.setFont (juce::FontOptions (8.5f, juce::Font::bold));
         g.drawFittedText (smallLabels[i], boxX, boxY, boxW, boxH, juce::Justification::centred, 1);
@@ -728,7 +961,7 @@ void PluginEditor::paintOverChildren (juce::Graphics& g)
 
     // Custom Master HUD display boxes centered directly under the big knobs [1.2.0]
     // 1. Bottom-Left: Master Note Density (VEL) HUD Box
-    juce::Rectangle<int> denBox (33, 484, 70, 15);
+    juce::Rectangle<int> denBox (xOffset + 33, 484, 70, 15);
     g.setColour (juce::Colour (0xFF05070A));
     g.fillRoundedRectangle (denBox.toFloat(), 2.0f);
     g.setColour (themeColor.withAlpha (0.4f));
@@ -740,7 +973,7 @@ void PluginEditor::paintOverChildren (juce::Graphics& g)
     g.drawFittedText (denText, denBox, juce::Justification::centred, 1);
 
     // 2. Bottom-Right: Master Swing (SWG) HUD Box
-    juce::Rectangle<int> swgBox (891, 484, 70, 15);
+    juce::Rectangle<int> swgBox (xOffset + 891, 484, 70, 15);
     g.setColour (juce::Colour (0xFF05070A));
     g.fillRoundedRectangle (swgBox.toFloat(), 2.0f);
     g.setColour (themeColor.withAlpha (0.4f));
@@ -754,12 +987,12 @@ void PluginEditor::paintOverChildren (juce::Graphics& g)
     // 3. Draw static, high-contrast white "MEMORY SLOTS" label spaced out under buttons 3 to 6 [1.2.3]
     g.setColour (juce::Colours::white);
     g.setFont (juce::FontOptions ("Courier New", 11.0f, juce::Font::bold));
-    g.drawText ("M  E  M  O  R  Y     S  L  O  T  S", 326, 552, 344, 16, juce::Justification::centred);
+    g.drawText ("M  E  M  O  R  Y     S  L  O  T  S", xOffset + 326, 552, 344, 16, juce::Justification::centred);
 
     // 4. Draw static "NAVY-ARP MONITOR" stamped onto physical panel with enhanced presence [1.2.3]
     g.setColour (themeColor.withAlpha (0.85f));
     g.setFont (juce::FontOptions (12.0f, juce::Font::bold));
-    g.drawText ("NAVY-ARP MONITOR", 157, 381, 680, 15, juce::Justification::centred, true);
+    g.drawText ("NAVY-ARP MONITOR", xOffset + 157, 381, 680, 15, juce::Justification::centred, true);
 }
 
 void PluginEditor::mouseMove (const juce::MouseEvent& event)
@@ -771,71 +1004,74 @@ void PluginEditor::mouseMove (const juce::MouseEvent& event)
 
 void PluginEditor::resized()
 {
+    int xOffset = isLeftPanelOpen ? 300 : 0;
+
     // Screen bounds (OLED)
-    oledDisplay.setBounds (157, 57, 680, 320);
+    oledDisplay.setBounds (xOffset + 157, 57, 680, 320);
 
     // Left 2x2 Utility Grid (Save, Recall, Copy, Init)
-    saveButton.setBounds (31, 49, 33, 28); 
-    recallButton.setBounds (73, 49, 33, 28); 
-    copyButton.setBounds (31, 83, 33, 28); 
-    initButton.setBounds (73, 83, 33, 28);
+    saveButton.setBounds (xOffset + 31, 49, 33, 28); 
+    recallButton.setBounds (xOffset + 73, 49, 33, 28); 
+    copyButton.setBounds (xOffset + 31, 83, 33, 28); 
+    initButton.setBounds (xOffset + 73, 83, 33, 28);
 
     // Left Column small Knobs
-    rhythmMorphKnob.setBounds (44, 121, 48, 48);
-    restKnob.setBounds (44, 182, 48, 48);
-    legatoKnob.setBounds (44, 244, 48, 48);
-    rateKnob.setBounds (44, 306, 48, 48);
+    rhythmMorphKnob.setBounds (xOffset + 44, 121, 48, 48);
+    restKnob.setBounds (xOffset + 44, 182, 48, 48);
+    legatoKnob.setBounds (xOffset + 44, 244, 48, 48);
+    rateKnob.setBounds (xOffset + 44, 306, 48, 48);
     
     // Left Master Velocity Knob
-    masterVelocityKnob.setBounds (26, 396, 84, 86);
+    masterVelocityKnob.setBounds (xOffset + 26, 396, 84, 86);
 
     // Right 2x2 Utility Grid (Melo, Arti, Time, Navy)
-    diceMeloButton.setBounds (888, 48, 33, 28); 
-    diceArtiButton.setBounds (930, 48, 33, 28); 
-    diceTimeButton.setBounds (888, 84, 33, 28); 
-    diceNavyButton.setBounds (930, 84, 33, 28);
+    diceMeloButton.setBounds (xOffset + 888, 48, 33, 28); 
+    diceArtiButton.setBounds (xOffset + 930, 48, 33, 28); 
+    diceTimeButton.setBounds (xOffset + 888, 84, 33, 28); 
+    diceNavyButton.setBounds (xOffset + 930, 84, 33, 28);
 
     // Right Column small Knobs
-    entropyKnob.setBounds (902, 121, 48, 48);
-    harmonyKnob.setBounds (902, 182, 48, 48);
-    chaosKnob.setBounds (902, 244, 48, 48);
-    octavesKnob.setBounds (902, 306, 48, 48);
+    entropyKnob.setBounds (xOffset + 902, 121, 48, 48);
+    harmonyKnob.setBounds (xOffset + 902, 182, 48, 48);
+    chaosKnob.setBounds (xOffset + 902, 244, 48, 48);
+    octavesKnob.setBounds (xOffset + 902, 306, 48, 48);
     
     // Right Master Swing Knob
-    masterSwingKnob.setBounds (884, 396, 84, 86);
+    masterSwingKnob.setBounds (xOffset + 884, 396, 84, 86);
 
     // Top Dropdowns (Left)
-    rootKeyBox.setBounds (163, 17, 58, 17); 
-    scaleTypeBox.setBounds (233, 17, 58, 17); 
-    cycleLengthBox.setBounds (304, 17, 58, 17);
-    panelThemeBox.setBounds (374, 17, 58, 17); 
+    rootKeyBox.setBounds (xOffset + 163, 17, 58, 17); 
+    scaleTypeBox.setBounds (xOffset + 233, 17, 58, 17); 
+    cycleLengthBox.setBounds (xOffset + 304, 17, 58, 17);
+    panelThemeBox.setBounds (xOffset + 374, 17, 58, 17); 
     
     // Top Row Performance Buttons (Right) [1.2.3]
-    latchButton.setBounds (533, 15, 58, 17); 
-    arpSeqButton.setBounds (602, 15, 58, 17); 
-    polyButton.setBounds (669, 15, 58, 17); 
-    freezeButton.setBounds (738, 15, 58, 17);
+    latchButton.setBounds (xOffset + 533, 15, 58, 17); 
+    arpSeqButton.setBounds (xOffset + 602, 15, 58, 17); 
+    polyButton.setBounds (xOffset + 669, 15, 58, 17); 
+    freezeButton.setBounds (xOffset + 738, 15, 58, 17);
     
-    // Position "?" Help toggler at top far-right of panel dropdowns row
-    helpButton.setBounds (965, 15, 18, 18);
+    // Symmetrical "?" and "♫" toggler icons at absolute boundaries of Main dropdown bar row
+    helpButton.setBounds (xOffset + 965, 15, 18, 18);
+    soundButton.setBounds (15, 15, 30, 18); // Symmetric note anchor expanded to 30px to prevent clipping [3]
 
     // Safety boundaries set dynamically using property fetches for wrapped syncButton [1.2.3]
     auto syncWrapper = SyncButtonWrapper::Ptr (dynamic_cast<SyncButtonWrapper*> (getProperties()["syncWrapper"].getObject()));
     if (syncWrapper != nullptr)
     {
-        syncWrapper->button.setBounds (807, 15, 17, 17); // Sited nicely after freeze [1.2.3]
+        syncWrapper->button.setBounds (xOffset + 807, 15, 17, 17); // Sited nicely after freeze [1.2.3]
     }
 
     // Crossfader Row
-    sceneAButton.setBounds (214, 396, 67, 58);
-    morphCrossfader.setBounds (336, 415, 321, 28);
-    sceneBButton.setBounds (714, 396, 67, 58);
+    sceneAButton.setBounds (xOffset + 214, 396, 67, 58);
+    morphCrossfader.setBounds (xOffset + 336, 415, 321, 28);
+    sceneBButton.setBounds (xOffset + 714, 396, 67, 58);
 
     // Invisible Preset Memory Slots (1-8)
     const float presetX[8] = { 145.0f, 236.0f, 326.0f, 415.0f, 504.0f, 594.0f, 682.0f, 772.0f };
     for (int i = 0; i < 8; ++i) 
     {
-        presetButtons[i].setBounds (static_cast<int>(presetX[i]), 477, 76, 65);
+        presetButtons[i].setBounds (static_cast<int>(presetX[i] + xOffset), 477, 76, 65);
     }
 
     // Vertical Upfaders (1-8)
@@ -843,7 +1079,28 @@ void PluginEditor::resized()
     juce::Slider* faderPtrs[] = { &fader1, &fader2, &fader3, &fader4, &fader5, &fader6, &fader7, &fader8 };
     for (int i = 0; i < 8; ++i) 
     {
-        faderPtrs[i]->setBounds (static_cast<int>(faderX[i]) - 6, 583, 24, 60);
+        faderPtrs[i]->setBounds (static_cast<int>(faderX[i] + xOffset) - 6, 583, 24, 60);
+    }
+
+    // =====================================================================
+    // SYMMETRICAL LEFT WING CONTROL BOUNDS POSITIONING [3]
+    // =====================================================================
+    if (isLeftPanelOpen)
+    {
+        midiInBox.setBounds (15, 95, 270, 20);
+        midiOutBox.setBounds (15, 145, 270, 20);
+
+        voice1SynthBox.setBounds (15, 240, 270, 20);
+        v1DecaySlider.setBounds (15, 280, 270, 16);
+        v1TimbreSlider.setBounds (15, 310, 270, 16);
+        v1ReverbSlider.setBounds (15, 340, 270, 16);
+
+        voice2SynthBox.setBounds (15, 440, 270, 20);
+        v2DecaySlider.setBounds (15, 480, 270, 16);
+        v2TimbreSlider.setBounds (15, 510, 270, 16);
+        v2ReverbSlider.setBounds (15, 540, 270, 16);
+
+        audioRoutingBox.setBounds (15, 620, 270, 20);
     }
 }
 
@@ -971,7 +1228,6 @@ void PluginEditor::timerCallback()
 
     if (masterVelocityKnob.getThumbBeingDragged() >= 0)
     {
-        // Parameter overlay corrected to read "Note Density" instead of "BPM"
         oledDisplay.showParameterOverlay ("Note Density", static_cast<float> (masterVelocityKnob.getValue()), "Off");
     }
 
@@ -1008,7 +1264,7 @@ void PluginEditor::timerCallback()
         }
     }
 
-    // Force parent repaint to redraw all black HUD display boxes and active LFO knob rings smoothly at 30 fps [1.2.0]
+    // Force parent repaint of visual layers
     repaint();
     oledDisplay.repaint();
 }

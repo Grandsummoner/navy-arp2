@@ -17,7 +17,7 @@ public:
     //==============================================================================
     void paint (juce::Graphics&) override;
     
-    // Renders the coordinate grid on top of all child components (OLED, sliders, buttons)
+    // Renders the coordinate grid and the floating CC indicators in MIDI Map mode
     void paintOverChildren (juce::Graphics& g) override;
     
     // Tracks real-time cursor coordinates
@@ -65,10 +65,28 @@ public:
     // Top Control bar Dropdowns
     juce::ComboBox rootKeyBox, scaleTypeBox, cycleLengthBox, panelThemeBox;
 
-    // Help Sidebar UI Toggle Members [3]
+    // Symmetrical Help Sidebar UI Toggle Members [3]
     juce::TextButton helpButton;
     bool isHelpPanelOpen = false;
     void toggleHelpPanel();
+
+    // Symmetrical Sound Engine Sidebar UI Toggle Members [3]
+    juce::TextButton soundButton; // Displays the music note "♫" glyph
+    bool isLeftPanelOpen = false;
+    void toggleLeftPanel();
+
+    // Symmetrical Left Panel Sound Engine UI Controls [3]
+    juce::ComboBox midiInBox, midiOutBox;
+    juce::ComboBox voice1SynthBox, voice2SynthBox;
+    juce::ComboBox audioRoutingBox;
+
+    juce::Slider v1DecaySlider, v1TimbreSlider, v1ReverbSlider;
+    juce::Slider v2DecaySlider, v2TimbreSlider, v2ReverbSlider;
+
+    juce::Label midiInLabel, midiOutLabel;
+    juce::Label voice1SynthLabel, voice1DecayLabel, voice1TimbreLabel, voice1ReverbLabel;
+    juce::Label voice2SynthLabel, voice2DecayLabel, voice2TimbreLabel, voice2ReverbLabel;
+    juce::Label audioRoutingLabel;
 
     // Public Flash Timers for LookAndFeel Animation Access
     int sceneAFlashTimer = 0;
@@ -105,6 +123,14 @@ private:
 
     // Dropdown Attachments
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> rootKeyAttachment, scaleTypeAttachment, cycleLengthAttachment, panelThemeAttachment;
+
+    // Symmetrical Left Panel Parameter Attachments [3]
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> midiInAttachment, midiOutAttachment;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> voice1SynthAttachment, voice2SynthAttachment;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> audioRoutingAttachment;
+
+    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> v1DecayAttachment, v1TimbreAttachment, v1ReverbAttachment;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> v2DecayAttachment, v2TimbreAttachment, v2ReverbAttachment;
 
     // Timing States
     std::uint32_t presetPressStartTime[8] { 0 };
