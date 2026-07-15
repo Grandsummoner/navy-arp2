@@ -16,11 +16,10 @@ concurrency:
 env:
   BUILD_TYPE: Release
   BUILD_DIR: Builds
-  DISPLAY: :0 # Linux pluginval needs this
-  HOMEBREW_NO_INSTALL_CLEANUP: 1
   SCCACHE_GHA_ENABLED: true
-  SCCACHE_CACHE_MULTIARCH: 1
   IPP_DIR: C:\Program Files (x86)\Intel\oneAPI\ipp\latest\lib\cmake\ipp
+  PLUGINVAL_BINARY: ./pluginval.exe
+  EXTRA_FLAGS: -G Ninja -DCMAKE_C_COMPILER=clang-cl -DCMAKE_CXX_COMPILER=clang-cl
 
 defaults:
   run:
@@ -29,60 +28,21 @@ defaults:
 jobs:
   build_and_test:
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.event.pull_request.base.repo.full_name
-    name: ${{ matrix.name }}
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false # Show all errors for each platform rather than cancelling on the first error
-      matrix:
-        include:
-          - name: Linux
-            os: ubuntu-22.04
-            pluginval-binary: ./pluginval
-            extra-flags: -G Ninja -DCMAKE_EXE_LINKER_FLAGS=-fuse-ld=lld -DCMAKE_SHARED_LINKER_FLAGS=-fuse-ld=lld -DCMAKE_MODULE_LINKER_FLAGS=-fuse-ld=lld
-          - name: macOS
-            os: macos-14
-            pluginval-binary: pluginval.app/Contents/MacOS/pluginval
-            extra-flags: -G Ninja -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"
-          - name: Windows
-            os: windows-latest
-            pluginval-binary: ./pluginval.exe
-            extra-flags: -G Ninja -DCMAKE_C_COMPILER=clang-cl -DCMAKE_CXX_COMPILER=clang-cl
+    name: Windows Build
+    runs-on: windows-latest
 
     steps:
-      # Setup MSVC toolchain and developer command prompt (Windows)
+      # Setup MSVC toolchain and developer command prompt
       - uses: ilammy/msvc-dev-cmd@v1
 
-      # Use Clang on Linux
-      - name: Set up Clang
-        if: runner.os == 'Linux'
-        uses: egor-tensin/setup-clang@v2
-
-      # Installs Linux Dependencies & starts fake display for pluginval
-      - name: Install JUCE's Linux Deps
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libasound2-dev libjack-jackd2-dev \
-            ladspa-sdk-dev xorg-dev libglu1-mesa-dev freeglut3-dev \
-            webkit2gtk-4.0 juce-tools xvfb
-          sudo apt-get install -y ninja-build
-          Xvfb :0 -screen 0 1024x768x24 &
-
-      # Install IPP (Windows)
-      - name: Install IPP (Windows)
-        if: runner.os == 'Windows'
+      # Install IPP
+      - name: Install IPP
         run: |
           nuget install intelipp.static.win-x64 -Version 2026.0.0.712
 
-      # Install Ninja (Windows)
-      - name: Install Ninja (Windows)
-        if: runner.os == 'Windows'
+      # Install Ninja
+      - name: Install Ninja
         run: choco install ninja
-
-      # Install macOS Deps
-      - name: Install macOS Deps
-        if: ${{ runner.os == 'macOS' }}
-        run: brew install ninja osxutils
 
       # Checkout recursive submodules (JUCE)
       - name: Checkout code
@@ -94,9 +54,9 @@ jobs:
       - name: Cache the build
         uses: mozilla-actions/sccache-action@v0.0.10
 
-      # Configure CMake
+      # Configure CMake with Windows-specific compiler flags
       - name: Configure
-        run: cmake -B ${{ env.BUILD_DIR }} -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache ${{ matrix.extra-flags }} .
+        run: cmake -B ${{ env.BUILD_DIR }} -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache ${{ env.EXTRA_FLAGS }} .
 
       # Build Targets
       - name: Build
@@ -119,68 +79,25 @@ jobs:
           ARTIFACTS_PATH=${{ env.BUILD_DIR }}/${{ env.PROJECT_NAME }}_artefacts/${{ env.BUILD_TYPE }}
           echo "ARTIFACTS_PATH=$ARTIFACTS_PATH" >> $GITHUB_ENV
           echo "VST3_PATH=$ARTIFACTS_PATH/VST3/${{ env.PRODUCT_NAME }}.vst3" >> $GITHUB_ENV
-          echo "STANDALONE_PATH=$ARTIFACTS_PATH/Standalone/${{ env.PRODUCT_NAME }}.app" >> $GITHUB_ENV
           echo "STANDALONE_EXE_PATH=$ARTIFACTS_PATH/Standalone/${{ env.PRODUCT_NAME }}.exe" >> $GITHUB_ENV
-          echo "ARTIFACT_NAME=${{ env.PRODUCT_NAME }}-${{ env.VERSION }}-${{ runner.os }}" >> $GITHUB_ENV
+          echo "ARTIFACT_NAME=${{ env.PRODUCT_NAME }}-${{ env.VERSION }}-Windows" >> $GITHUB_ENV
 
       # Test the VST3 using pluginval
       - name: Pluginval
         run: |
-          curl -LO "https://github.com/Tracktion/pluginval/releases/download/v1.0.3/pluginval_${{ runner.os }}.zip"
-          7z x pluginval_${{ runner.os }}.zip
-          ${{ matrix.pluginval-binary }} --strictness-level 10 --verbose --validate "${{ env.VST3_PATH }}"
-
-      # Package macOS Installer Bundle
-      - name: Package macOS (Installer pkg)
-        if: ${{ runner.os == 'macOS' }}
-        run: |
-          # Create VST3 component installer package
-          pkgbuild --identifier "${{ env.BUNDLE_ID }}.vst3.pkg" --version ${{ env.VERSION }} --component "${{ env.VST3_PATH }}" --install-location "/Library/Audio/Plug-Ins/VST3" "packaging/${{ env.PRODUCT_NAME }}.vst3.pkg"
-          
-          # Create Standalone App installer package
-          pkgbuild --analyze --root "$(dirname "${{ env.STANDALONE_PATH }}")" standalone.plist
-          plutil -replace BundleIsRelocatable -bool NO standalone.plist
-          pkgbuild --identifier "${{ env.BUNDLE_ID }}.app.pkg" --version ${{ env.VERSION }} --root "$(dirname "${{ env.STANDALONE_PATH }}")" --component-plist standalone.plist --install-location "/Applications" "packaging/${{ env.PRODUCT_NAME }}.app.pkg"
-          
-          # Build final multi-component bundle
-          cd packaging
-          envsubst < distribution.xml.template > distribution.xml
-          productbuild --resources ./resources --distribution distribution.xml "${{ env.ARTIFACT_NAME }}.pkg"
-          mv "${{ env.ARTIFACT_NAME }}.pkg" "../${{ env.ARTIFACTS_PATH }}/"
-
-      # Zip Linux builds
-      - name: Zip (Linux)
-        if: ${{ runner.os == 'Linux' }}
-        working-directory: ${{ env.ARTIFACTS_PATH }}
-        run: 7z a -tzip "${{ env.ARTIFACT_NAME }}.zip" "-xr!lib${{ env.PRODUCT_NAME }}_SharedCode.a" .
+          curl -LO "https://github.com/Tracktion/pluginval/releases/download/v1.0.3/pluginval_Windows.zip"
+          7z x pluginval_Windows.zip
+          ${{ env.PLUGINVAL_BINARY }} --strictness-level 10 --verbose --validate "${{ env.VST3_PATH }}"
 
       # Package Windows Inno Setup Installer
-      - name: Generate Installer (Windows)
-        if: ${{ runner.os == 'Windows' }}
+      - name: Generate Installer
         run: |
           iscc "packaging\installer.iss"
           mv "packaging/Output/${{ env.ARTIFACT_NAME }}.exe" "${{ env.ARTIFACTS_PATH }}/"
 
       # Upload Packaged Artifacts (Windows Exe Installer)
-      - name: Upload Exe (Windows)
-        if: ${{ runner.os == 'Windows' }}
+      - name: Upload Exe
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.ARTIFACT_NAME }}.exe
           path: "${{ env.ARTIFACTS_PATH }}/${{ env.ARTIFACT_NAME }}.exe"
-
-      # Upload Packaged Artifacts (Linux Zip)
-      - name: Upload Zip (Linux)
-        if: ${{ runner.os == 'Linux' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ env.ARTIFACT_NAME }}.zip
-          path: "${{ env.ARTIFACTS_PATH }}/${{ env.ARTIFACT_NAME }}.zip"
-
-      # Upload Packaged Artifacts (macOS pkg Installer)
-      - name: Upload pkg (macOS)
-        if: ${{ runner.os == 'macOS' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ env.ARTIFACT_NAME }}.pkg
-          path: "${{ env.ARTIFACTS_PATH }}/${{ env.ARTIFACT_NAME }}.pkg"
