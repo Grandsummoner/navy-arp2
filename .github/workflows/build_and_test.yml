@@ -79,7 +79,7 @@ jobs:
             echo "Warning: .env file not found anywhere in workspace. Falling back to parsing CMakeLists.txt."
             
             # Extract PROJECT_NAME (e.g. project(NavyArp ...))
-            PROJECT_NAME=$(grep -E -i "project\([A-Za-z0-9_]+" CMakeLists.txt | head -n 1 | sed -E 's/[Pp]roject\(([A-Za-z0-9_]+).*/\1/')
+            PROJECT_NAME=$(grep -E -i "project\([A-Za-z0-9_]+" CMakeLists.txt | head -n 1 | sed -E 's/[Pp]roject\(([A-Za-z0-9_]+).*/\1/' || true)
             if [ -z "$PROJECT_NAME" ]; then
               PROJECT_NAME="NavyArp"
             fi
@@ -87,7 +87,7 @@ jobs:
             echo "Parsed PROJECT_NAME: $PROJECT_NAME"
 
             # Extract PRODUCT_NAME (e.g. PRODUCT_NAME "Navy Arp")
-            PRODUCT_NAME=$(grep -i "PRODUCT_NAME" CMakeLists.txt | head -n 1 | sed -E 's/.*PRODUCT_NAME[[:space:]]+"?([^"\)]+)"?.*/\1/')
+            PRODUCT_NAME=$(grep -i "PRODUCT_NAME" CMakeLists.txt | head -n 1 | sed -E 's/.*PRODUCT_NAME[[:space:]]+"?([^"\)]+)"?.*/\1/' || true)
             if [ -z "$PRODUCT_NAME" ]; then
               PRODUCT_NAME="Navy Arp"
             fi
@@ -95,7 +95,7 @@ jobs:
             echo "Parsed PRODUCT_NAME: $PRODUCT_NAME"
 
             # Extract VERSION (e.g. VERSION "1.0.0")
-            VERSION=$(grep -E -i "VERSION[[:space:]]+\"[0-9]+\.[0-9]+\.[0-9]+\"" CMakeLists.txt | head -n 1 | sed -E 's/.*VERSION[[:space:]]+\"([0-9]+\.[0-9]+\.[0-9]+)\".*/\1/')
+            VERSION=$(grep -E -i "VERSION[[:space:]]+\"[0-9]+\.[0-9]+\.[0-9]+\"" CMakeLists.txt | head -n 1 | sed -E 's/.*VERSION[[:space:]]+\"([0-9]+\.[0-9]+\.[0-9]+)\".*/\1/' || true)
             if [ -z "$VERSION" ]; then
               VERSION="1.0.0"
             fi
