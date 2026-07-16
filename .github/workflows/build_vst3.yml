@@ -15,7 +15,6 @@ concurrency:
 env:
   BUILD_TYPE: Release
   BUILD_DIR: Builds
-  SCCACHE_GHA_ENABLED: true
   PLUGINVAL_BINARY: ./pluginval.exe
   EXTRA_FLAGS: -G Ninja -DCMAKE_C_COMPILER=clang-cl -DCMAKE_CXX_COMPILER=clang-cl
 
@@ -48,13 +47,9 @@ jobs:
         with:
           submodules: recursive
 
-      # Cache the build artifact outputs
-      - name: Cache the build
-        uses: mozilla-actions/sccache-action@v0.0.10
-
-      # Configure CMake with Windows-specific compiler flags
+      # Configure CMake with Windows-specific compiler flags (decommissioned sccache wrappers)
       - name: Configure
-        run: cmake -B ${{ env.BUILD_DIR }} -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache ${{ env.EXTRA_FLAGS }} .
+        run: cmake -B ${{ env.BUILD_DIR }} -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} ${{ env.EXTRA_FLAGS }} .
 
       # Build ONLY the VST3 target to optimize compile speed
       - name: Build VST3
