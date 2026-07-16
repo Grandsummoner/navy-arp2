@@ -25,13 +25,15 @@ juce_add_plugin(NavyArp
 juce_generate_juce_header(NavyArp)
 
 # 4. Custom post-build step to copy ONLY the single flat VST3 file to your custom folder
-# Safely creates the directory path first to prevent GitHub Action runner failures [43]
-add_custom_command(TARGET NavyArp_VST3 POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E make_directory "D:/Music - Software/VST"
-    COMMAND ${CMAKE_COMMAND} -E copy
-    "$<TARGET_FILE:NavyArp_VST3>"
-    "D:/Music - Software/VST/Navy Arp.vst3"
-)
+# Safely bypassed on GitHub Actions to prevent runner permission / root-drive failures [43]
+if(NOT DEFINED ENV{GITHUB_ACTIONS})
+    add_custom_command(TARGET NavyArp_VST3 POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory "D:/Music - Software/VST"
+        COMMAND ${CMAKE_COMMAND} -E copy
+        "$<TARGET_FILE:NavyArp_VST3>"
+        "D:/Music - Software/VST/Navy Arp.vst3"
+    )
+endif()
 
 # 5. Source Files mapping
 target_sources(NavyArp PRIVATE
