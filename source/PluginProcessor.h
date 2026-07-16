@@ -585,6 +585,7 @@ private:
     float modLegato = 0.5f;
     float modRest = 0.1f;
     float modEntropy = 0.0f;
+    float modHarmony = 0.0f;
     float modChaos = 0.0f;
 
     // Freeze Snapshot States
