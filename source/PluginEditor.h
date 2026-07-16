@@ -77,8 +77,19 @@ public:
 
     // Symmetrical Left Panel Sound Engine UI Controls [3]
     juce::ComboBox midiInBox, midiOutBox;
-    juce::ComboBox voice1SynthBox, voice2SynthBox;
     juce::ComboBox audioRoutingBox;
+
+    // Symmetrical Button Picks for Synthesis Models (No more dropdowns) [3]
+    juce::TextButton v1AnalogBtn, v1FmBtn, v1StringBtn, v1PulseBtn;
+    juce::TextButton v2AnalogBtn, v2FmBtn, v2StringBtn, v2PulseBtn;
+
+    // Mini ADSR Envelope selectors and Volume control faders [3]
+    juce::TextButton v1EnvA, v1EnvD, v1EnvS, v1EnvR;
+    juce::TextButton v2EnvA, v2EnvD, v2EnvS, v2EnvR;
+    juce::Slider v1GainSlider, v2GainSlider;
+
+    int v1ActiveEnvStage = 1; // 0=Attack, 1=Decay, 2=Sustain, 3=Release
+    int v2ActiveEnvStage = 1;
 
     juce::Slider v1DecaySlider, v1TimbreSlider, v1ReverbSlider;
     juce::Slider v2DecaySlider, v2TimbreSlider, v2ReverbSlider;
@@ -124,13 +135,13 @@ private:
     // Dropdown Attachments
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> rootKeyAttachment, scaleTypeAttachment, cycleLengthAttachment, panelThemeAttachment;
 
-    // Symmetrical Left Panel Parameter Attachments [3]
+    // Symmetrical Left Panel Parameter Attachments
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> midiInAttachment, midiOutAttachment;
-    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> voice1SynthAttachment, voice2SynthAttachment;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> audioRoutingAttachment;
 
-    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> v1DecayAttachment, v1TimbreAttachment, v1ReverbAttachment;
-    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> v2DecayAttachment, v2TimbreAttachment, v2ReverbAttachment;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> v1TimbreAttachment, v1ReverbAttachment;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> v2TimbreAttachment, v2ReverbAttachment;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> v1GainAttachment, v2GainAttachment;
 
     // Timing States
     std::uint32_t presetPressStartTime[8] { 0 };

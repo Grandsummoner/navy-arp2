@@ -38,7 +38,7 @@ namespace IDs
     inline const juce::ParameterID masterVelocity     { "masterVelocity", 1 };
     inline const juce::ParameterID masterSwing        { "masterSwing", 1 };
 
-    // Left Panel Sound Engine Parameter IDs [3]
+    // Left Panel Sound Engine Parameter IDs
     inline const juce::ParameterID midiInChannel      { "midiInChannel", 1 };
     inline const juce::ParameterID midiOutChannel     { "midiOutChannel", 1 };
     inline const juce::ParameterID voice1Synth        { "voice1Synth", 1 };
@@ -50,6 +50,8 @@ namespace IDs
     inline const juce::ParameterID voice2Timbre       { "voice2Timbre", 1 };
     inline const juce::ParameterID voice2Reverb       { "voice2Reverb", 1 };
     inline const juce::ParameterID audioRouting       { "audioRouting", 1 };
+    inline const juce::ParameterID voice1Gain         { "voice1Gain", 1 };
+    inline const juce::ParameterID voice2Gain         { "voice2Gain", 1 };
 
     // LFO Parameter IDs
     inline const juce::ParameterID rhythmMorphLfoRate  { "rhythmMorphLfoRate", 1 };
@@ -87,15 +89,13 @@ struct SceneState
 };
 
 // =====================================================================
-// LOW-LEVEL EMBEDDED DSP SYNTH VOICE (ZERO ALLOCATION, STANDALONE-SAFE) [3]
+// LOW-LEVEL EMBEDDED DSP SYNTH VOICE (ZERO ALLOCATION, STANDALONE-SAFE)
 // =====================================================================
 struct SynthVoice
 {
     double sampleRate = 44100.0;
     float phase = 0.0f;
     float phaseIncrement = 0.0f;
-    float env = 0.0f;
-    float envDecay = 0.5f;
     
     // FM synthesis modulator phase and frequency states
     float fmModPhase = 0.0f;
@@ -110,24 +110,83 @@ struct SynthVoice
     // Subtractive resonant feedback lowpass filter states
     float s1 = 0.0f, s2 = 0.0f;
 
-    void triggerNote (int pitch, float decay)
+    // ADSR State parameters
+    float attack = 0.01f;
+    float decay = 0.35f;
+    float sustain = 0.70f;
+    float release = 0.25f;
+
+    enum class EnvState { Idle, Attack, Decay, Sustain, Release };
+    EnvState envState = EnvState::Idle;
+    float envVal = 0.0f;
+    float releaseLevel = 0.0f;
+    double stateTime = 0.0;
+
+    void triggerNote (int pitch)
     {
         float freq = 440.0f * std::pow (2.0f, (pitch - 69.0f) / 12.0f);
         phaseIncrement = freq / static_cast<float> (sampleRate);
-        env = 1.0f;
-        envDecay = decay;
+        
+        // Symmetrical ADSR trigger initialization
+        envState = EnvState::Attack;
+        stateTime = 0.0;
+        envVal = 0.0f;
         
         // Feed the physical model noise generator impulse
         noiseImpulse = 1.0f;
         lastFilterOut = 0.0f; // Reset feedback state
     }
 
+    void releaseNote()
+    {
+        if (envState != EnvState::Idle && envState != EnvState::Release)
+        {
+            envState = EnvState::Release;
+            releaseLevel = envVal;
+            stateTime = 0.0;
+        }
+    }
+
     float process (int synthType, float timbre)
     {
-        if (env <= 0.001f) { env = 0.0f; return 0.0f; }
-        
-        // Exponential envelope decay rate
-        env *= std::exp (-1.0f / (envDecay * 1.5f * static_cast<float> (sampleRate)));
+        // ADSR State Machine Processing
+        double dt = 1.0 / sampleRate;
+        stateTime += dt;
+
+        switch (envState)
+        {
+            case EnvState::Idle:
+                envVal = 0.0f;
+                break;
+            case EnvState::Attack:
+            {
+                float dur = std::max (0.001f, attack);
+                envVal = static_cast<float> (stateTime / dur);
+                if (envVal >= 1.0f) { envVal = 1.0f; envState = EnvState::Decay; stateTime = 0.0; }
+                break;
+            }
+            case EnvState::Decay:
+            {
+                float dur = std::max (0.001f, decay);
+                float progress = static_cast<float> (stateTime / dur);
+                if (progress >= 1.0f) { envVal = sustain; envState = EnvState::Sustain; stateTime = 0.0; }
+                else { envVal = 1.0f - (1.0f - sustain) * progress; }
+                break;
+            }
+            case EnvState::Sustain:
+                envVal = sustain;
+                break;
+            case EnvState::Release:
+            {
+                float dur = std::max (0.001f, release);
+                float progress = static_cast<float> (stateTime / dur);
+                if (progress >= 1.0f) { envVal = 0.0f; envState = EnvState::Idle; }
+                else { envVal = releaseLevel * (1.0f - progress); }
+                break;
+            }
+        }
+
+        if (envVal <= 0.0001f) { envVal = 0.0f; return 0.0f; }
 
         float output = 0.0f;
 
@@ -148,26 +207,26 @@ struct SynthVoice
             float filterOut = (wave - s1 * resonance) * h + s1;
             s1 = filterOut;
             
-            output = filterOut * env;
+            output = filterOut * envVal;
         }
         else if (synthType == 1) // 2-Operator FM Synthesizer (Metallic Bell/Pluck)
         {
-            float modMultiplier = 3.5f; // Yields beautiful, clean bells and digital keys
+            float modMultiplier = 3.5f; 
             float fmModPhaseIncrement = phaseIncrement * modMultiplier;
             
             fmModPhase += fmModPhaseIncrement;
             if (fmModPhase >= 1.0f) fmModPhase -= 1.0f;
             
             float modOut = std::sin (fmModPhase * juce::MathConstants<double>::twoPi);
-            float modIndex = timbre * 8.0f * env;
+            float modIndex = timbre * 8.0f * envVal;
             
             float carrierPhase = phase + modOut * modIndex * phaseIncrement;
-            output = std::sin (carrierPhase * juce::MathConstants<double>::twoPi) * env;
+            output = std::sin (carrierPhase * juce::MathConstants<double>::twoPi) * envVal;
             
             phase += phaseIncrement;
             if (phase >= 1.0f) phase -= 1.0f;
         }
-        else if (synthType == 2) // Physical Modeling Resonator (Karplus-Strong waveguide)
+        else if (synthType == 2) // Physical Modeling Resonator (Toned-down stable Karplus-String string)
         {
             int delayLength = static_cast<int> (1.0f / phaseIncrement);
             if (delayLength >= 2048) delayLength = 2047;
@@ -188,14 +247,36 @@ struct SynthVoice
             // Symmetrical 1-pole feedback lowpass filtering
             float filteredVal = 0.5f * (delayedVal + lastFilterOut);
             lastFilterOut = delayedVal;
+
+            // DC offset and low frequency drift blocker
+            filteredVal -= lastFilterOut * 0.005f; 
             
-            float feedback = 0.95f + timbre * 0.048f; // Resonance tension scaling up to 0.998f
+            float feedback = 0.85f + timbre * 0.11f; // Cap max feedback at 0.96f to prevent overloading
             float currentVal = excitation + filteredVal * feedback;
             
             resBuffer[resWriteIdx] = currentVal;
             resWriteIdx = (resWriteIdx + 1) % 2048;
             
-            output = currentVal * env * 0.8f;
+            output = currentVal * envVal * 0.20f; // Sized down to match normal VA/FM levels
+        }
+        else if (synthType == 3) // Pulse Wave (Square with Resonant LPF and PWM)
+        {
+            float width = 0.15f + timbre * 0.7f; // PWM sweep from 15% to 85%
+            float wave = (phase < width) ? 0.4f : -0.4f;
+            
+            phase += phaseIncrement;
+            if (phase >= 1.0f) phase -= 1.0f;
+            
+            float cutoff = 80.0f + timbre * 3500.0f;
+            float wd = juce::MathConstants<float>::twoPi * cutoff / static_cast<float> (sampleRate);
+            float g = std::tan (wd * 0.5f);
+            float h = g / (1.0f + g);
+            
+            float resonance = 0.45f;
+            float filterOut = (wave - s1 * resonance) * h + s1;
+            s1 = filterOut;
+            
+            output = filterOut * envVal * 0.6f;
         }
         
         return output;
@@ -372,7 +453,7 @@ public:
     std::atomic<float>* masterVelocityPtr { nullptr };
     std::atomic<float>* masterSwingPtr { nullptr };
 
-    // Left Panel Sound Engine cached atomic pointers [3]
+    // Left Panel Sound Engine cached atomic pointers
     std::atomic<float>* midiInChannelPtr { nullptr };
     std::atomic<float>* midiOutChannelPtr { nullptr };
     std::atomic<float>* voice1SynthPtr { nullptr };
@@ -384,15 +465,21 @@ public:
     std::atomic<float>* voice2TimbrePtr { nullptr };
     std::atomic<float>* voice2ReverbPtr { nullptr };
     std::atomic<float>* audioRoutingPtr { nullptr };
+    std::atomic<float>* voice1GainPtr { nullptr };
+    std::atomic<float>* voice2GainPtr { nullptr };
 
     std::atomic<float>* lfoRatePtrs[8] { nullptr };
     std::atomic<float>* lfoDepthPtrs[8] { nullptr };
 
     double lfoPhases[8] { 0.0 };
 
-    // Thread-Safe Standalone MIDI CC Mapping & Learn Registers [3]
+    // Thread-Safe Standalone MIDI CC Mapping & Learn Registers
     std::atomic<int> midiCcMappings[18];        // Unmapped = -1. CC number = 0-127.
     std::atomic<int> activeMidiLearnIndex { -1 }; // Listening index (0-17) or -1.
+
+    // Internal Symmetrical Polyphonic/Monophonic Audio Synths
+    SynthVoice voice1;
+    SynthVoice voice2;
 
 private:
     juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
@@ -444,10 +531,6 @@ private:
     bool lastFreezeState = false;
 
     float accumulatedPitchOffset = 0.0f;
-
-    // Internal Symmetrical Polyphonic/Monophonic Audio Synths [3]
-    SynthVoice voice1;
-    SynthVoice voice2;
 
     // Basic internal Delay & Reverb effect buffers
     float delayBufferL[44100] { 0.0f };

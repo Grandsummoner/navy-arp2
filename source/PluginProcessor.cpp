@@ -56,6 +56,8 @@ PluginProcessor::PluginProcessor()
     voice2TimbrePtr   = apvts.getRawParameterValue (IDs::voice2Timbre.getParamID());
     voice2ReverbPtr   = apvts.getRawParameterValue (IDs::voice2Reverb.getParamID());
     audioRoutingPtr   = apvts.getRawParameterValue (IDs::audioRouting.getParamID());
+    voice1GainPtr     = apvts.getRawParameterValue (IDs::voice1Gain.getParamID());
+    voice2GainPtr     = apvts.getRawParameterValue (IDs::voice2Gain.getParamID());
 
     juce::ParameterID rates[] = { IDs::rhythmMorphLfoRate, IDs::restLfoRate, IDs::legatoLfoRate, IDs::rateLfoRate, IDs::entropyLfoRate, IDs::harmonyLfoRate, IDs::chaosLfoRate, IDs::octavesLfoRate };
     juce::ParameterID depths[] = { IDs::rhythmMorphLfoDepth, IDs::restLfoDepth, IDs::legatoLfoDepth, IDs::rateLfoDepth, IDs::entropyLfoDepth, IDs::harmonyLfoDepth, IDs::chaosLfoDepth, IDs::octavesLfoDepth };
@@ -348,6 +350,11 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
             int activeCh = (mVal >= 0.5f) ? outChB : outChA;
 
             processedMidi.addEvent (juce::MidiMessage::noteOff (activeCh, it->first), juce::jlimit (0, numSamples - 1, it->second + numSamples)); 
+            
+            // Release the ADSR envelope phase [3]
+            voice1.releaseNote();
+            voice2.releaseNote();
+
             it = scheduledNoteOffs.erase(it); 
         }
         else ++it;
@@ -363,9 +370,14 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
 
         for (int pitch : latchedNotes)
         {
-            processedMidi.addEvent (juce::MidiMessage::noteOff (activeCh, pitch), 0);
+            processedMidi.addEvent (activeCh, pitch, 0, 0);
         }
         latchedNotes.clear();
+        
+        // Release ADSR envelope on latch disable [3]
+        voice1.releaseNote();
+        voice2.releaseNote();
+
         isFirstNoteOfNewChord = true;
     }
     wasLatchActive = isLatchActive;
@@ -383,6 +395,11 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
             }
         } else if (msg.isNoteOff() && !isFreezeActive) {
             int note = msg.getNoteNumber(); activeHeldNotes.erase (std::remove (activeHeldNotes.begin(), activeHeldNotes.end(), note), activeHeldNotes.end());
+            
+            // Call ADSR note-off release dynamically [3]
+            voice1.releaseNote();
+            voice2.releaseNote();
+
             if (activeHeldNotes.empty()) isFirstNoteOfNewChord = true;
         }
     }
@@ -477,7 +494,7 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
                 morphedFaders[i] = (sceneA.faders[i] * (1.0f - morphVal)) + (sceneB.faders[i] * morphVal);
             }
 
-            // Real-time 3-Zone Note Density (Fill) Calculation
+            // Real-Time 3-Zone Note Density (Fill) Calculation
             float rawProb = isFreezeActive ? frozenFaders[localStep] : morphedFaders[localStep];
             float density = masterVelocityPtr->load(); // Note Density parameter (0.0 to 1.0)
             float faderProb = rawProb;
@@ -529,7 +546,6 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
                 int rangeShift = isFreezeActive ? frozenOctavesVal : activeOctavesVal;
                 int octaveShiftCount = (rangeShift > 0) ? ((localStep / 2) % (rangeShift + 1)) : ((rangeShift < 0) ? -((localStep / 2) % (std::abs(rangeShift) + 1)) : 0);
                 float currentChaos = isFreezeActive ? frozenChaos : modChaos;
-                float currentLegato = isFreezeActive ? frozenLegato : modLegato;
 
                 // Equal-Power Volume crossfade scales computed strictly based on morph slider value
                 float morphFactor = morphPtr->load();
@@ -550,11 +566,11 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
                     if (velA > 0) processedMidi.addEvent (juce::MidiMessage::noteOn (outChA, targetPitch, velA), 0);
                     if (velB > 0) processedMidi.addEvent (juce::MidiMessage::noteOn (outChB, targetPitch, velB), 0);
 
-                    mLastNotePlayed = targetPitch; mNoteOffTime = static_cast<int>(stepSamples * currentLegato); scheduleNoteOff (processedMidi, targetPitch, mNoteOffTime);
+                    mLastNotePlayed = targetPitch; mNoteOffTime = static_cast<int>(stepSamples * 0.95f); scheduleNoteOff (processedMidi, targetPitch, mNoteOffTime);
 
                     // Real-Time Note triggers on our local dual audio synthesizers [3]
-                    voice1.triggerNote (targetPitch, voice1DecayPtr->load());
-                    voice2.triggerNote (targetPitch, voice2DecayPtr->load());
+                    voice1.triggerNote (targetPitch);
+                    voice2.triggerNote (targetPitch);
                 }
             }
         }
@@ -577,11 +593,15 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
     float reverbSend1 = voice1ReverbPtr->load();
     float reverbSend2 = voice2ReverbPtr->load();
 
+    // Volume controllers scaled per voice [3]
+    float v1Vol = voice1GainPtr->load();
+    float v2Vol = voice2GainPtr->load();
+
     for (int sampleIdx = 0; sampleIdx < numSamples; ++sampleIdx)
     {
-        // Render raw synthesis samples
-        float s1 = voice1.process (static_cast<int> (voice1SynthPtr->load()), voice1TimbrePtr->load());
-        float s2 = voice2.process (static_cast<int> (voice2SynthPtr->load()), voice2TimbrePtr->load());
+        // Render raw synthesis samples (Volume controlled per voice) [3]
+        float s1 = voice1.process (static_cast<int> (voice1SynthPtr->load()), voice1TimbrePtr->load()) * v1Vol;
+        float s2 = voice2.process (static_cast<int> (voice2SynthPtr->load()), voice2TimbrePtr->load()) * v2Vol;
 
         float drySample = 0.0f;
         float wetInput = 0.0f;
@@ -785,6 +805,17 @@ void PluginProcessor::getStateInformation (juce::MemoryBlock& destData)
         xml->setAttribute ("hasSceneA", hasSceneA);
         xml->setAttribute ("hasSceneB", hasSceneB);
 
+        // Serialize Voice ADSR details
+        xml->setAttribute ("v1Attack", voice1.attack);
+        xml->setAttribute ("v1Decay", voice1.decay);
+        xml->setAttribute ("v1Sustain", voice1.sustain);
+        xml->setAttribute ("v1Release", voice1.release);
+
+        xml->setAttribute ("v2Attack", voice2.attack);
+        xml->setAttribute ("v2Decay", voice2.decay);
+        xml->setAttribute ("v2Sustain", voice2.sustain);
+        xml->setAttribute ("v2Release", voice2.release);
+
         // 2. Serialize current active Scene A profile
         auto* activeSceneANode = xml->createNewChildElement ("CURRENT_SCENE_A");
         if (activeSceneANode != nullptr)
@@ -906,7 +937,7 @@ void PluginProcessor::getStateInformation (juce::MemoryBlock& destData)
             }
         }
 
-        // 6. Serialize standalone custom MIDI CC mapping tables [3]
+        // 6. Serialize standalone custom MIDI CC mapping tables
         auto* mappingsNode = xml->createNewChildElement ("MIDI_CC_MAPPINGS");
         if (mappingsNode != nullptr)
         {
@@ -930,6 +961,17 @@ void PluginProcessor::setStateInformation (const void* data, int sizeInBytes)
         isSceneBActiveAnchor.store (xmlState->getBoolAttribute ("isSceneBActiveAnchor", false));
         hasSceneA = xmlState->getBoolAttribute ("hasSceneA", false);
         hasSceneB = xmlState->getBoolAttribute ("hasSceneB", false);
+
+        // Deserialization of ADSR variables
+        voice1.attack = static_cast<float> (xmlState->getDoubleAttribute ("v1Attack", 0.01));
+        voice1.decay = static_cast<float> (xmlState->getDoubleAttribute ("v1Decay", 0.5));
+        voice1.sustain = static_cast<float> (xmlState->getDoubleAttribute ("v1Sustain", 0.7));
+        voice1.release = static_cast<float> (xmlState->getDoubleAttribute ("v1Release", 0.3));
+
+        voice2.attack = static_cast<float> (xmlState->getDoubleAttribute ("v2Attack", 0.01));
+        voice2.decay = static_cast<float> (xmlState->getDoubleAttribute ("v2Decay", 0.5));
+        voice2.sustain = static_cast<float> (xmlState->getDoubleAttribute ("v2Sustain", 0.7));
+        voice2.release = static_cast<float> (xmlState->getDoubleAttribute ("v2Release", 0.3));
 
         // 2. Deserialization of current active Scene A state
         if (auto* activeSceneANode = xmlState->getChildByName ("CURRENT_SCENE_A"))
@@ -1043,7 +1085,7 @@ void PluginProcessor::setStateInformation (const void* data, int sizeInBytes)
             }
         }
 
-        // 6. Deserialization of standalone custom MIDI CC mappings [3]
+        // 6. Deserialization of standalone custom MIDI CC mappings
         if (auto* mappingsNode = xmlState->getChildByName ("MIDI_CC_MAPPINGS"))
         {
             for (int i = 0; i < 18; ++i)
@@ -1090,15 +1132,21 @@ juce::AudioProcessorValueTreeState::ParameterLayout PluginProcessor::createParam
     // Register Left Panel Sound Parameters [3]
     params.push_back (std::make_unique<juce::AudioParameterChoice> (IDs::midiInChannel, "MIDI In Channel", juce::StringArray { "Omni", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16" }, 0));
     params.push_back (std::make_unique<juce::AudioParameterChoice> (IDs::midiOutChannel, "MIDI Out Channel", juce::StringArray { "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16" }, 0));
-    params.push_back (std::make_unique<juce::AudioParameterChoice> (IDs::voice1Synth, "Voice 1 Synth", juce::StringArray { "Analog", "FM", "Resonator" }, 0));
-    params.push_back (std::make_unique<juce::AudioParameterFloat> (IDs::voice1Decay, "Voice 1 Decay", 0.05f, 2.0f, 0.5f));
+    
+    // Choice items updated to reflect the new 4 tactile button options [3]
+    params.push_back (std::make_unique<juce::AudioParameterChoice> (IDs::voice1Synth, "Voice 1 Synth", juce::StringArray { "Analog", "FM", "Resonator", "Pulse" }, 0));
+    params.push_back (std::make_unique<juce::AudioParameterFloat> (IDs::voice1Decay, "Voice 1 Decay", 0.01f, 2.0f, 0.5f));
     params.push_back (std::make_unique<juce::AudioParameterFloat> (IDs::voice1Timbre, "Voice 1 Timbre", 0.0f, 1.0f, 0.5f));
     params.push_back (std::make_unique<juce::AudioParameterFloat> (IDs::voice1Reverb, "Voice 1 Reverb", 0.0f, 1.0f, 0.15f));
-    params.push_back (std::make_unique<juce::AudioParameterChoice> (IDs::voice2Synth, "Voice 2 Synth", juce::StringArray { "Analog", "FM", "Resonator" }, 2));
-    params.push_back (std::make_unique<juce::AudioParameterFloat> (IDs::voice2Decay, "Voice 2 Decay", 0.05f, 2.0f, 0.8f));
+    params.push_back (std::make_unique<juce::AudioParameterChoice> (IDs::voice2Synth, "Voice 2 Synth", juce::StringArray { "Analog", "FM", "Resonator", "Pulse" }, 2));
+    params.push_back (std::make_unique<juce::AudioParameterFloat> (IDs::voice2Decay, "Voice 2 Decay", 0.01f, 2.0f, 0.8f));
     params.push_back (std::make_unique<juce::AudioParameterFloat> (IDs::voice2Timbre, "Voice 2 Timbre", 0.0f, 1.0f, 0.2f));
     params.push_back (std::make_unique<juce::AudioParameterFloat> (IDs::voice2Reverb, "Voice 2 Reverb", 0.0f, 1.0f, 0.3f));
     params.push_back (std::make_unique<juce::AudioParameterChoice> (IDs::audioRouting, "Audio Routing", juce::StringArray { "Split A->1 / B->2", "Layered (Voice 1)", "External Out Only" }, 0));
+
+    // Register Volume fader parameter per voice [3]
+    params.push_back (std::make_unique<juce::AudioParameterFloat> (IDs::voice1Gain, "Voice 1 Volume", 0.0f, 1.0f, 0.70f));
+    params.push_back (std::make_unique<juce::AudioParameterFloat> (IDs::voice2Gain, "Voice 2 Volume", 0.0f, 1.0f, 0.70f));
 
     auto regLfo = [&](juce::ParameterID rId, juce::ParameterID dId, juce::String nm) {
         params.push_back (std::make_unique<juce::AudioParameterChoice> (rId, nm + " LFO Speed", juce::StringArray { "Off", "1/4", "1/8", "1/16", "1/32" }, 0));
