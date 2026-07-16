@@ -54,7 +54,7 @@ namespace IDs
     inline const juce::ParameterID voice1Release      { "voice1Release", 1 };
     inline const juce::ParameterID voice1Timbre       { "voice1Timbre", 1 };
     inline const juce::ParameterID voice1Reverb       { "voice1Reverb", 1 };
-    inline const juce::ParameterID voice1Delay        { "voice1Delay", 1 }; // New [3]
+    inline const juce::ParameterID voice1Delay        { "voice1Delay", 1 }; // Delay [3]
     
     // Voice 2 Multi-Select Instrument Parameter IDs [3]
     inline const juce::ParameterID voice2Analog       { "voice2Analog", 1 };
@@ -68,7 +68,7 @@ namespace IDs
     inline const juce::ParameterID voice2Release      { "voice2Release", 1 };
     inline const juce::ParameterID voice2Timbre       { "voice2Timbre", 1 };
     inline const juce::ParameterID voice2Reverb       { "voice2Reverb", 1 };
-    inline const juce::ParameterID voice2Delay        { "voice2Delay", 1 }; // New [3]
+    inline const juce::ParameterID voice2Delay        { "voice2Delay", 1 }; // Delay [3]
     
     inline const juce::ParameterID audioRouting       { "audioRouting", 1 };
     inline const juce::ParameterID voice1Gain         { "voice1Gain", 1 };
@@ -143,15 +143,22 @@ struct SynthVoice
     float releaseLevel = 0.0f;
     double stateTime = 0.0;
 
+    int activeNoteCount = 0; // Reference counter for concurrent, layered ADSR notes [3]
+
     void triggerNote (int pitch)
     {
         float freq = 440.0f * std::pow (2.0f, (pitch - 69.0f) / 12.0f);
         phaseIncrement = freq / static_cast<float> (sampleRate);
         
-        // Symmetrical ADSR trigger initialization
-        envState = EnvState::Attack;
-        stateTime = 0.0;
-        envVal = 0.0f;
+        // Symmetrical ADSR trigger initialization only on the first active note [3]
+        if (activeNoteCount == 0)
+        {
+            envState = EnvState::Attack;
+            stateTime = 0.0;
+            envVal = 0.0f;
+        }
+        
+        activeNoteCount++;
         
         // Feed the physical model noise generator impulse
         noiseImpulse = 1.0f;
@@ -160,11 +167,20 @@ struct SynthVoice
 
     void releaseNote()
     {
-        if (envState != EnvState::Idle && envState != EnvState::Release)
+        if (activeNoteCount > 0)
         {
-            envState = EnvState::Release;
-            releaseLevel = envVal;
-            stateTime = 0.0;
+            activeNoteCount--;
+        }
+
+        // Only release the envelope phase if all layered active pitches are completed [3]
+        if (activeNoteCount == 0)
+        {
+            if (envState != EnvState::Idle && envState != EnvState::Release)
+            {
+                envState = EnvState::Release;
+                releaseLevel = envVal;
+                stateTime = 0.0;
+            }
         }
     }
 
@@ -502,7 +518,7 @@ public:
     std::atomic<float>* voice1ReleasePtr { nullptr };
     std::atomic<float>* voice1TimbrePtr { nullptr };
     std::atomic<float>* voice1ReverbPtr { nullptr };
-    std::atomic<float>* voice1DelayPtr { nullptr }; // New [3]
+    std::atomic<float>* voice1DelayPtr { nullptr }; // Delay [3]
     
     // Voice 2 Multi-Select instrument cache pointers [3]
     std::atomic<float>* voice2AnalogPtr { nullptr };
@@ -516,7 +532,7 @@ public:
     std::atomic<float>* voice2ReleasePtr { nullptr };
     std::atomic<float>* voice2TimbrePtr { nullptr };
     std::atomic<float>* voice2ReverbPtr { nullptr };
-    std::atomic<float>* voice2DelayPtr { nullptr }; // New [3]
+    std::atomic<float>* voice2DelayPtr { nullptr }; // Delay [3]
     
     std::atomic<float>* audioRoutingPtr { nullptr };
     std::atomic<float>* voice1GainPtr { nullptr };

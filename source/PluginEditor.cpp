@@ -902,24 +902,24 @@ void PluginEditor::paint (juce::Graphics& g)
         g.setFont (juce::FontOptions ("Courier New", 10.0f, juce::Font::bold));
 
         // Voice 1 text labels centered above the pots [3.0.1]
-        g.drawText ("A",   35,  285, 12, 10, juce::Justification::centred);
-        g.drawText ("D",   100, 285, 12, 10, juce::Justification::centred);
-        g.drawText ("S",   165, 285, 12, 10, juce::Justification::centred);
-        g.drawText ("R",   230, 285, 12, 10, juce::Justification::centred);
-        g.drawText ("TIMB", 23,  335, 36, 10, juce::Justification::centred);
-        g.drawText ("DEL",  88,  335, 36, 10, juce::Justification::centred);
-        g.drawText ("REVB", 153, 335, 36, 10, juce::Justification::centred);
-        g.drawText ("VOL",  221, 335, 30, 10, juce::Justification::centred);
+        g.drawText ("A",    15,  285, 42, 10, juce::Justification::centred);
+        g.drawText ("D",    80,  285, 42, 10, juce::Justification::centred);
+        g.drawText ("S",    145, 285, 42, 10, juce::Justification::centred);
+        g.drawText ("R",    210, 285, 42, 10, juce::Justification::centred);
+        g.drawText ("TIMB", 15,  335, 42, 10, juce::Justification::centred);
+        g.drawText ("DEL",  80,  335, 42, 10, juce::Justification::centred);
+        g.drawText ("REVB", 145, 335, 42, 10, juce::Justification::centred);
+        g.drawText ("VOL",  210, 335, 42, 10, juce::Justification::centred);
 
         // Voice 2 text labels centered above the pots [3.0.1]
-        g.drawText ("A",   35,  485, 12, 10, juce::Justification::centred);
-        g.drawText ("D",   100, 485, 12, 10, juce::Justification::centred);
-        g.drawText ("S",   165, 485, 12, 10, juce::Justification::centred);
-        g.drawText ("R",   230, 485, 12, 10, juce::Justification::centred);
-        g.drawText ("TIMB", 23,  535, 36, 10, juce::Justification::centred);
-        g.drawText ("DEL",  88,  535, 36, 10, juce::Justification::centred);
-        g.drawText ("REVB", 153, 535, 36, 10, juce::Justification::centred);
-        g.drawText ("VOL",  221, 535, 30, 10, juce::Justification::centred);
+        g.drawText ("A",    15,  485, 42, 10, juce::Justification::centred);
+        g.drawText ("D",    80,  485, 42, 10, juce::Justification::centred);
+        g.drawText ("S",    145, 485, 42, 10, juce::Justification::centred);
+        g.drawText ("R",    210, 485, 42, 10, juce::Justification::centred);
+        g.drawText ("TIMB", 15,  535, 42, 10, juce::Justification::centred);
+        g.drawText ("DEL",  80,  535, 42, 10, juce::Justification::centred);
+        g.drawText ("REVB", 145, 535, 42, 10, juce::Justification::centred);
+        g.drawText ("VOL",  210, 535, 42, 10, juce::Justification::centred);
     }
 
     // =====================================================================

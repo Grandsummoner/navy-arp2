@@ -108,6 +108,10 @@ void PluginProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     voice1.sampleRate = sampleRate;
     voice2.sampleRate = sampleRate;
 
+    // Reset voice note count metrics to ensure clean ADSR triggers on play [3]
+    voice1.activeNoteCount = 0;
+    voice2.activeNoteCount = 0;
+
     // Clear wet reverb feedback delay lines
     std::fill (std::begin (delayBufferL), std::end (delayBufferL), 0.0f);
     std::fill (std::begin (delayBufferR), std::end (delayBufferR), 0.0f);
@@ -595,7 +599,26 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
                 }
             }
         }
-    } else { if (mLastStep != -1) { if (mLastNotePlayed != -1) { scheduleNoteOff (processedMidi, mLastNotePlayed, 0); mLastNotePlayed = -1; } mLastStep = -1; } currentStep.store (0); }
+    } else { 
+        if (mLastStep != -1) { 
+            if (mLastNotePlayed != -1) { 
+                scheduleNoteOff (processedMidi, mLastNotePlayed, 0); 
+                mLastNotePlayed = -1; 
+            } 
+            mLastStep = -1; 
+        } 
+        currentStep.store (0); 
+    }
+
+    // Safely force release ADSR envelope states when the arpeggiator goes completely silent [3]
+    if (notesToPlay.empty() && !isFreezeActive)
+    {
+        voice1.activeNoteCount = 0;
+        voice1.releaseNote();
+        voice2.activeNoteCount = 0;
+        voice2.releaseNote();
+    }
+
     midiMessages.swapWith (processedMidi);
 
     // =====================================================================
