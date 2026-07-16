@@ -60,6 +60,7 @@ PluginProcessor::PluginProcessor()
     voice1ReleasePtr = apvts.getRawParameterValue (IDs::voice1Release.getParamID());
     voice1TimbrePtr  = apvts.getRawParameterValue (IDs::voice1Timbre.getParamID());
     voice1ReverbPtr  = apvts.getRawParameterValue (IDs::voice1Reverb.getParamID());
+    voice1DelayPtr   = apvts.getRawParameterValue (IDs::voice1Delay.getParamID());
     
     // Voice 2 Multi-Select instrument cache pointers
     voice2AnalogPtr  = apvts.getRawParameterValue (IDs::voice2Analog.getParamID());
@@ -73,6 +74,7 @@ PluginProcessor::PluginProcessor()
     voice2ReleasePtr = apvts.getRawParameterValue (IDs::voice2Release.getParamID());
     voice2TimbrePtr  = apvts.getRawParameterValue (IDs::voice2Timbre.getParamID());
     voice2ReverbPtr  = apvts.getRawParameterValue (IDs::voice2Reverb.getParamID());
+    voice2DelayPtr   = apvts.getRawParameterValue (IDs::voice2Delay.getParamID());
     
     audioRoutingPtr   = apvts.getRawParameterValue (IDs::audioRouting.getParamID());
     voice1GainPtr     = apvts.getRawParameterValue (IDs::voice1Gain.getParamID());
@@ -638,6 +640,10 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
     bool v2String = voice2StringPtr->load() > 0.5f;
     bool v2Pulse  = voice2PulsePtr->load() > 0.5f;
 
+    // Load independent delay send parameters [3]
+    float delaySend1 = voice1DelayPtr->load();
+    float delaySend2 = voice2DelayPtr->load();
+
     for (int sampleIdx = 0; sampleIdx < numSamples; ++sampleIdx)
     {
         // Render raw synthesis samples (Volume controlled and layered per voice) [3]
@@ -646,16 +652,19 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
 
         float drySample = 0.0f;
         float wetInput = 0.0f;
+        float delayInput = 0.0f; // Symmetrical independent delay sends [3]
 
         if (routeChoice == 0) // Split A->1 / B->2
         {
-            drySample = (s1 * vA) + (s2 * vB);
-            wetInput  = (s1 * vA * reverbSend1) + (s2 * vB * reverbSend2);
+            drySample  = (s1 * vA) + (s2 * vB);
+            wetInput   = (s1 * vA * reverbSend1) + (s2 * vB * reverbSend2);
+            delayInput = (s1 * vA * delaySend1) + (s2 * vB * delaySend2);
         }
         else if (routeChoice == 1) // Layered (Voice 1)
         {
-            drySample = s1;
-            wetInput  = s1 * reverbSend1;
+            drySample  = s1;
+            wetInput   = s1 * reverbSend1;
+            delayInput = s1 * delaySend1;
         }
         // RouteChoice 2 (External Out Only) remains 0.0f (Muted) saving CPU
 
@@ -671,8 +680,9 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
         float delayOutL = delayBufferL[readIdxL];
         float delayOutR = delayBufferR[readIdxR];
 
-        delayBufferL[delayWriteIdx] = wetInput + (delayOutL * 0.45f);
-        delayBufferR[delayWriteIdx] = wetInput + (delayOutR * 0.45f);
+        // Feed independent, user-controllable delay input fader paths [3]
+        delayBufferL[delayWriteIdx] = delayInput + (delayOutL * 0.45f);
+        delayBufferR[delayWriteIdx] = delayInput + (delayOutR * 0.45f);
 
         delayWriteIdx = (delayWriteIdx + 1) % 44100;
 
@@ -850,12 +860,12 @@ void PluginProcessor::getStateInformation (juce::MemoryBlock& destData)
     
     if (xml != nullptr)
     {
-        // Serialize active workspace focus and presence flags
+        // 1. Serialize active workspace focus and presence flags
         xml->setAttribute ("isSceneBActiveAnchor", isSceneBActiveAnchor.load());
         xml->setAttribute ("hasSceneA", hasSceneA);
         xml->setAttribute ("hasSceneB", hasSceneB);
 
-        // Serialize current active Scene A profile
+        // 2. Serialize current active Scene A profile
         auto* activeSceneANode = xml->createNewChildElement ("CURRENT_SCENE_A");
         if (activeSceneANode != nullptr)
         {
@@ -875,7 +885,7 @@ void PluginProcessor::getStateInformation (juce::MemoryBlock& destData)
             }
         }
 
-        // Serialize current active Scene B profile
+        // 3. Serialize current active Scene B profile
         auto* activeSceneBNode = xml->createNewChildElement ("CURRENT_SCENE_B");
         if (activeSceneBNode != nullptr)
         {
@@ -895,7 +905,7 @@ void PluginProcessor::getStateInformation (juce::MemoryBlock& destData)
             }
         }
 
-        // Serialize scene presets (Slot matrices)
+        // 4. Serialize scene presets (Slot matrices)
         auto* presetsNodeA = xml->createNewChildElement ("SCENE_A_PRESETS");
         auto* presetsNodeB = xml->createNewChildElement ("SCENE_B_PRESETS");
         
@@ -948,7 +958,7 @@ void PluginProcessor::getStateInformation (juce::MemoryBlock& destData)
             }
         }
         
-        // Serialize global performance preset recall banks
+        // 5. Serialize global performance preset recall banks
         auto* banksNode = xml->createNewChildElement ("GLOBAL_BANKS");
         if (banksNode != nullptr)
         {
@@ -976,7 +986,7 @@ void PluginProcessor::getStateInformation (juce::MemoryBlock& destData)
             }
         }
 
-        // Serialize standalone custom MIDI CC mapping tables
+        // 6. Serialize standalone custom MIDI CC mapping tables
         auto* mappingsNode = xml->createNewChildElement ("MIDI_CC_MAPPINGS");
         if (mappingsNode != nullptr)
         {
@@ -1161,7 +1171,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout PluginProcessor::createParam
     params.push_back (std::make_unique<juce::AudioParameterChoice> (IDs::midiInChannel, "MIDI In Channel", juce::StringArray { "Omni", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16" }, 0));
     params.push_back (std::make_unique<juce::AudioParameterChoice> (IDs::midiOutChannel, "MIDI Out Channel", juce::StringArray { "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16" }, 0));
     
-    // Choice items updated to reflect the new 4 tactile button options [3]
+    // Symmetrical layerable multi-select instrument options [3]
     params.push_back (std::make_unique<juce::AudioParameterBool> (IDs::voice1Analog, "Voice 1 Analog Engine", true));
     params.push_back (std::make_unique<juce::AudioParameterBool> (IDs::voice1Fm, "Voice 1 FM Engine", false));
     params.push_back (std::make_unique<juce::AudioParameterBool> (IDs::voice1String, "Voice 1 Resonator Engine", false));
@@ -1173,6 +1183,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout PluginProcessor::createParam
     params.push_back (std::make_unique<juce::AudioParameterFloat> (IDs::voice1Release, "Voice 1 Release", 0.01f, 3.0f, 0.25f));
     params.push_back (std::make_unique<juce::AudioParameterFloat> (IDs::voice1Timbre, "Voice 1 Timbre", 0.0f, 1.0f, 0.5f));
     params.push_back (std::make_unique<juce::AudioParameterFloat> (IDs::voice1Reverb, "Voice 1 Reverb", 0.0f, 1.0f, 0.15f));
+    params.push_back (std::make_unique<juce::AudioParameterFloat> (IDs::voice1Delay, "Voice 1 Delay Send", 0.0f, 1.0f, 0.30f)); // Delay [3]
     
     params.push_back (std::make_unique<juce::AudioParameterBool> (IDs::voice2Analog, "Voice 2 Analog Engine", false));
     params.push_back (std::make_unique<juce::AudioParameterBool> (IDs::voice2Fm, "Voice 2 FM Engine", false));
@@ -1185,6 +1196,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout PluginProcessor::createParam
     params.push_back (std::make_unique<juce::AudioParameterFloat> (IDs::voice2Release, "Voice 2 Release", 0.01f, 3.0f, 0.25f));
     params.push_back (std::make_unique<juce::AudioParameterFloat> (IDs::voice2Timbre, "Voice 2 Timbre", 0.0f, 1.0f, 0.2f));
     params.push_back (std::make_unique<juce::AudioParameterFloat> (IDs::voice2Reverb, "Voice 2 Reverb", 0.0f, 1.0f, 0.3f));
+    params.push_back (std::make_unique<juce::AudioParameterFloat> (IDs::voice2Delay, "Voice 2 Delay Send", 0.0f, 1.0f, 0.30f)); // Delay [3]
     
     params.push_back (std::make_unique<juce::AudioParameterChoice> (IDs::audioRouting, "Audio Routing", juce::StringArray { "Split A->1 / B->2", "Layered (Voice 1)", "External Out Only" }, 0));
 

@@ -83,12 +83,12 @@ public:
     juce::TextButton v1AnalogBtn, v1FmBtn, v1StringBtn, v1PulseBtn;
     juce::TextButton v2AnalogBtn, v2FmBtn, v2StringBtn, v2PulseBtn;
 
-    // Symmetrical Rotary Knobs for ADSR, Timbre, Reverb, and Volume (No more faders) [3]
+    // Symmetrical Rotary Knobs for ADSR, Timbre, Delay, Reverb, and Volume [3]
     juce::Slider v1AttackKnob, v1DecayKnob, v1SustainKnob, v1ReleaseKnob;
-    juce::Slider v1TimbreKnob, v1ReverbKnob, v1VolumeKnob;
+    juce::Slider v1TimbreKnob, v1DelayKnob, v1ReverbKnob, v1VolumeKnob;
 
     juce::Slider v2AttackKnob, v2DecayKnob, v2SustainKnob, v2ReleaseKnob;
-    juce::Slider v2TimbreKnob, v2ReverbKnob, v2VolumeKnob;
+    juce::Slider v2TimbreKnob, v2DelayKnob, v2ReverbKnob, v2VolumeKnob;
 
     juce::Label midiInLabel, midiOutLabel;
     juce::Label voice1SynthLabel, voice1DecayLabel, voice1TimbreLabel, voice1ReverbLabel;
@@ -140,10 +140,10 @@ private:
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> v2AnalogAttachment, v2FmAttachment, v2StringAttachment, v2PulseAttachment;
 
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> v1AttackAttachment, v1DecayAttachment, v1SustainAttachment, v1ReleaseAttachment;
-    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> v1TimbreAttachment, v1ReverbAttachment, v1VolumeAttachment;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> v1TimbreAttachment, v1DelayAttachment, v1ReverbAttachment, v1VolumeAttachment;
     
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> v2AttackAttachment, v2DecayAttachment, v2SustainAttachment, v2ReleaseAttachment;
-    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> v2TimbreAttachment, v2ReverbAttachment, v2VolumeAttachment;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> v2TimbreAttachment, v2DelayAttachment, v2ReverbAttachment, v2VolumeAttachment;
 
     // Timing States
     std::uint32_t presetPressStartTime[8] { 0 };

@@ -54,6 +54,7 @@ namespace IDs
     inline const juce::ParameterID voice1Release      { "voice1Release", 1 };
     inline const juce::ParameterID voice1Timbre       { "voice1Timbre", 1 };
     inline const juce::ParameterID voice1Reverb       { "voice1Reverb", 1 };
+    inline const juce::ParameterID voice1Delay        { "voice1Delay", 1 }; // New [3]
     
     // Voice 2 Multi-Select Instrument Parameter IDs [3]
     inline const juce::ParameterID voice2Analog       { "voice2Analog", 1 };
@@ -67,6 +68,7 @@ namespace IDs
     inline const juce::ParameterID voice2Release      { "voice2Release", 1 };
     inline const juce::ParameterID voice2Timbre       { "voice2Timbre", 1 };
     inline const juce::ParameterID voice2Reverb       { "voice2Reverb", 1 };
+    inline const juce::ParameterID voice2Delay        { "voice2Delay", 1 }; // New [3]
     
     inline const juce::ParameterID audioRouting       { "audioRouting", 1 };
     inline const juce::ParameterID voice1Gain         { "voice1Gain", 1 };
@@ -500,6 +502,7 @@ public:
     std::atomic<float>* voice1ReleasePtr { nullptr };
     std::atomic<float>* voice1TimbrePtr { nullptr };
     std::atomic<float>* voice1ReverbPtr { nullptr };
+    std::atomic<float>* voice1DelayPtr { nullptr }; // New [3]
     
     // Voice 2 Multi-Select instrument cache pointers [3]
     std::atomic<float>* voice2AnalogPtr { nullptr };
@@ -513,6 +516,7 @@ public:
     std::atomic<float>* voice2ReleasePtr { nullptr };
     std::atomic<float>* voice2TimbrePtr { nullptr };
     std::atomic<float>* voice2ReverbPtr { nullptr };
+    std::atomic<float>* voice2DelayPtr { nullptr }; // New [3]
     
     std::atomic<float>* audioRoutingPtr { nullptr };
     std::atomic<float>* voice1GainPtr { nullptr };
