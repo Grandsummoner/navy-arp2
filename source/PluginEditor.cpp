@@ -340,14 +340,15 @@ PluginEditor::PluginEditor (PluginProcessor& p)
     soundButton.setColour (juce::TextButton::textColourOnId, juce::Colours::white);
 
     // ComboBox Setup
-    juce::ComboBox* boxes[] = { &midiInBox, &midiOutBox, &audioRoutingBox };
-    for (auto* b : boxes)
+    juce::ComboBox* bxs[] = { &midiInBox, &midiOutBox1, &midiOutBox2, &audioRoutingBox };
+    for (auto* b : bxs)
     {
         addAndMakeVisible (b);
         b->setLookAndFeel (&chromaLookAndFeel);
     }
     midiInBox.addItemList (juce::StringArray { "Omni", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16" }, 1);
-    midiOutBox.addItemList (juce::StringArray { "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16" }, 1);
+    midiOutBox1.addItemList (juce::StringArray { "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16" }, 1);
+    midiOutBox2.addItemList (juce::StringArray { "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16" }, 1);
     audioRoutingBox.addItemList (juce::StringArray { "Split A->1 / B->2", "Layered (Voice 1)", "External Out Only" }, 1);
 
     // Symmetrical Tab selection setup for Voice 1 (Multi-select layout) [3]
@@ -357,10 +358,10 @@ PluginEditor::PluginEditor (PluginProcessor& p)
         btn.setClickingTogglesState (true);
         btn.setLookAndFeel (&chromaLookAndFeel);
     };
-    setupSynthTab1 (v1AnalogBtn, "ANALOG");
+    setupSynthTab1 (v1AnalogBtn, "Analog");
     setupSynthTab1 (v1FmBtn, "FM");
-    setupSynthTab1 (v1StringBtn, "STRING");
-    setupSynthTab1 (v1PulseBtn, "PULSE");
+    setupSynthTab1 (v1StringBtn, "String");
+    setupSynthTab1 (v1PulseBtn, "Pulse");
 
     v1AnalogAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (processor.apvts, IDs::voice1Analog.getParamID(), v1AnalogBtn);
     v1FmAttachment     = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (processor.apvts, IDs::voice1Fm.getParamID(), v1FmBtn);
@@ -374,10 +375,10 @@ PluginEditor::PluginEditor (PluginProcessor& p)
         btn.setClickingTogglesState (true);
         btn.setLookAndFeel (&chromaLookAndFeel);
     };
-    setupSynthTab2 (v2AnalogBtn, "ANALOG");
+    setupSynthTab2 (v2AnalogBtn, "Analog");
     setupSynthTab2 (v2FmBtn, "FM");
-    setupSynthTab2 (v2StringBtn, "STRING");
-    setupSynthTab2 (v2PulseBtn, "PULSE");
+    setupSynthTab2 (v2StringBtn, "String");
+    setupSynthTab2 (v2PulseBtn, "Pulse");
 
     v2AnalogAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (processor.apvts, IDs::voice2Analog.getParamID(), v2AnalogBtn);
     v2FmAttachment     = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (processor.apvts, IDs::voice2Fm.getParamID(), v2FmBtn);
@@ -406,7 +407,8 @@ PluginEditor::PluginEditor (PluginProcessor& p)
 
     // Attachments Setup for 16 individual Symmetrical Voice parameters [3]
     midiInAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment> (processor.apvts, IDs::midiInChannel.getParamID(), midiInBox);
-    midiOutAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment> (processor.apvts, IDs::midiOutChannel.getParamID(), midiOutBox);
+    midiOutAttachment1 = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment> (processor.apvts, IDs::midiOutChannel1.getParamID(), midiOutBox1);
+    midiOutAttachment2 = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment> (processor.apvts, IDs::midiOutChannel2.getParamID(), midiOutBox2);
     audioRoutingAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment> (processor.apvts, IDs::audioRouting.getParamID(), audioRoutingBox);
 
     v1AttackAttachment  = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (processor.apvts, IDs::voice1Attack.getParamID(), v1AttackKnob);
@@ -516,7 +518,7 @@ PluginEditor::~PluginEditor()
     sceneAButton.removeMouseListener (this); sceneBButton.removeMouseListener (this);
 
     // Left Panel component de-registrations [3]
-    juce::ComboBox* boxes[] = { &midiInBox, &midiOutBox, &audioRoutingBox };
+    juce::ComboBox* boxes[] = { &midiInBox, &midiOutBox1, &midiOutBox2, &audioRoutingBox };
     for (auto* b : boxes) b->setLookAndFeel (nullptr);
 
     // Dynamic clean up of property-wrapped syncButton [1.2.3]
@@ -760,6 +762,9 @@ void PluginEditor::paint (juce::Graphics& g)
     if (themeIdx == 1)      themeColor = juce::Colour (0xFFECEFF1); 
     else if (themeIdx == 2) themeColor = juce::Colour (0xFF00FF66); 
 
+    // Standardised proportional typeface name mapped to Ableton styles [3]
+    juce::String fontName = juce::Font::getDefaultSansSerifFontName();
+
     // =====================================================================
     // SYMMETRICAL LEFT SIDEBAR DRAWING (SOUND CONTROL PANEL) [3]
     // =====================================================================
@@ -772,25 +777,25 @@ void PluginEditor::paint (juce::Graphics& g)
         g.setColour (themeColor.withAlpha (0.4f));
         g.drawVerticalLine (sidebarW, 0.0f, static_cast<float> (getHeight()));
 
-        // Subtle blueprint guidelines behind control rows to enhance visual aesthetic [3.0.1]
+        // Subtle blueprint guidelines behind control rows to enhance visual aesthetic
         g.setColour (themeColor.withAlpha (0.015f));
         for (int gx = 25; gx < sidebarW; gx += 25)
             g.drawVerticalLine (gx, 45.0f, static_cast<float> (getHeight() - 15));
         for (int gy = 55; gy < getHeight(); gy += 25)
             g.drawHorizontalLine (gy, 15.0f, static_cast<float> (sidebarW - 15));
 
-        // Horizontal blueprint separator lines between sections [3.0.1]
+        // Horizontal blueprint separator lines between sections
         g.setColour (juce::Colour (0xFF13171F));
         g.drawHorizontalLine (180, 15.0f, static_cast<float> (sidebarW - 15));
         g.drawHorizontalLine (380, 15.0f, static_cast<float> (sidebarW - 15));
         g.drawHorizontalLine (580, 15.0f, static_cast<float> (sidebarW - 15));
 
-        // Document Title [3.0.1]
+        // Document Title - Standardised clean sentence case sans-serif typography [3]
         g.setColour (juce::Colours::white);
-        g.setFont (juce::FontOptions ("Courier New", 12.0f, juce::Font::bold));
-        g.drawText ("[ AUDIO & MIDI ROUTING ]", 15, 25, sidebarW - 30, 20, juce::Justification::centredLeft);
+        g.setFont (juce::Font (fontName, 12.0f, juce::Font::bold));
+        g.drawText ("Audio & MIDI routing", 15, 25, sidebarW - 30, 20, juce::Justification::centredLeft);
 
-        // Define structural section details for the 4 island pills [3.0.1]
+        // Define structural section details for the 4 island pills
         struct HelpSection {
             juce::String title;
             juce::Colour pillColor;
@@ -798,10 +803,10 @@ void PluginEditor::paint (juce::Graphics& g)
         };
 
         std::vector<HelpSection> sections = {
-            { "01 // SYSTEM MIDI ROUTING", juce::Colour (0xFF00E5FF), 65 },  
-            { "02 // VOICE 1 (SCENE A TARGET)", juce::Colour (0xFFFF3366), 185 },  
-            { "03 // VOICE 2 (SCENE B TARGET)", juce::Colour (0xFFD500F9), 385 },  
-            { "04 // SYNTH AUDIO ROUTING", juce::Colour (0xFFFFB300), 585 }   
+            { "01 // System MIDI routing", juce::Colour (0xFF00E5FF), 65 },  
+            { "02 // Voice 1 (Scene A target)", juce::Colour (0xFFFF3366), 185 },  
+            { "03 // Voice 2 (Scene B target)", juce::Colour (0xFFD500F9), 385 },  
+            { "04 // Synth audio routing", juce::Colour (0xFFFFB300), 585 }   
         };
 
         for (const auto& sec : sections)
@@ -811,27 +816,28 @@ void PluginEditor::paint (juce::Graphics& g)
             int rw = sidebarW - 30; // 270px
             int rh = 22;
 
-            // Render Rounded "Island Pill" Header container [3.0.1]
+            // Render Rounded "Island Pill" Header container
             g.setColour (sec.pillColor.withAlpha (0.12f));
             g.fillRoundedRectangle (static_cast<float> (rx), static_cast<float> (ry), static_cast<float> (rw), static_cast<float> (rh), 4.0f);
             
             g.setColour (sec.pillColor.withAlpha (0.80f));
             g.drawRoundedRectangle (static_cast<float> (rx), static_cast<float> (ry), static_cast<float> (rw), static_cast<float> (rh), 4.0f, 1.0f);
 
-            // Print monospace text inside pill (High contrast white) [3.0.1]
+            // Print monospace text inside pill (High contrast white)
             g.setColour (juce::Colours::white);
-            g.setFont (juce::FontOptions ("Courier New", 12.0f, juce::Font::bold));
+            g.setFont (juce::Font (fontName, 12.0f, juce::Font::bold));
             g.drawText (sec.title, rx + 10, ry, rw - 20, rh, juce::Justification::centredLeft);
         }
 
-        // Render micro sliders parameter text tags on Eurorack single-line blueprint positions [3.0.1]
+        // Render micro sliders parameter text tags on Eurorack single-line blueprint positions
         g.setColour (juce::Colour (0xFFA0A5B0));
-        g.setFont (juce::FontOptions ("Courier New", 10.0f, juce::Font::bold));
+        g.setFont (juce::Font (fontName, 10.0f, juce::Font::bold));
         
-        g.drawText ("MIDI IN:", 15, 95, 80, 16, juce::Justification::centredLeft);
-        g.drawText ("MIDI OUT:", 15, 145, 80, 16, juce::Justification::centredLeft);
+        g.drawText ("MIDI In:", 15, 95, 80, 16, juce::Justification::centredLeft);
+        g.drawText ("MIDI Out 1:", 15, 125, 80, 16, juce::Justification::centredLeft);
+        g.drawText ("MIDI Out 2:", 15, 155, 80, 16, juce::Justification::centredLeft);
 
-        g.drawText ("SIGNAL FLOW:", 15, 615, 150, 16, juce::Justification::centredLeft);
+        g.drawText ("Signal flow:", 15, 615, 150, 16, juce::Justification::centredLeft);
 
         // Fetch ADSR values dynamically [3]
         float v1A = processor.voice1AttackPtr->load();
@@ -857,7 +863,7 @@ void PluginEditor::paint (juce::Graphics& g)
 
         // Draw Interactive Blueprint ADSR Graphs contained inside the screen box [3]
         auto drawAdsrGraph = [&](int sx, int sy, int sw, int sh, float a, float d, float s, float r, juce::Colour col) {
-            // Background subtle gridlines inside screen [3.0.1]
+            // Background subtle gridlines inside screen
             g.setColour (col.withAlpha (0.04f));
             for (int gx = sx + 10; gx < sx + sw; gx += 15)
                 g.drawVerticalLine (gx, sy + 1, sy + sh - 1);
@@ -897,29 +903,29 @@ void PluginEditor::paint (juce::Graphics& g)
         drawAdsrGraph (15, 240, 270, 42, v1A, v1D, v1S, v1R, juce::Colour (0xFFFF3366)); // Voice 1 Pink
         drawAdsrGraph (15, 440, 270, 42, v2A, v2D, v2S, v2R, juce::Colour (0xFFD500F9)); // Voice 2 Purple
 
-        // Render micro labels above rotary knobs (Attack, Decay, Sustain, Release, Timbre, Delay, Reverb, Volume) [3.0.1]
+        // Render micro labels above rotary knobs (Attack, Decay, Sustain, Release, Timbre, Delay, Reverb, Volume)
         g.setColour (juce::Colour (0xFFA0A5B0));
-        g.setFont (juce::FontOptions ("Courier New", 10.0f, juce::Font::bold));
+        g.setFont (juce::Font (fontName, 10.0f, juce::Font::bold));
 
-        // Voice 1 text labels centered above the pots [3.0.1]
+        // Voice 1 text labels centered above the pots
         g.drawText ("A",    15,  285, 42, 10, juce::Justification::centred);
         g.drawText ("D",    80,  285, 42, 10, juce::Justification::centred);
         g.drawText ("S",    145, 285, 42, 10, juce::Justification::centred);
         g.drawText ("R",    210, 285, 42, 10, juce::Justification::centred);
-        g.drawText ("TIMB", 15,  335, 42, 10, juce::Justification::centred);
-        g.drawText ("DEL",  80,  335, 42, 10, juce::Justification::centred);
-        g.drawText ("REVB", 145, 335, 42, 10, juce::Justification::centred);
-        g.drawText ("VOL",  210, 335, 42, 10, juce::Justification::centred);
+        g.drawText ("Timb", 15,  335, 42, 10, juce::Justification::centred);
+        g.drawText ("Delay", 80,  335, 42, 10, juce::Justification::centred);
+        g.drawText ("Revb", 145, 335, 42, 10, juce::Justification::centred);
+        g.drawText ("Vol",  210, 335, 42, 10, juce::Justification::centred);
 
-        // Voice 2 text labels centered above the pots [3.0.1]
+        // Voice 2 text labels centered above the pots
         g.drawText ("A",    15,  485, 42, 10, juce::Justification::centred);
         g.drawText ("D",    80,  485, 42, 10, juce::Justification::centred);
         g.drawText ("S",    145, 485, 42, 10, juce::Justification::centred);
         g.drawText ("R",    210, 485, 42, 10, juce::Justification::centred);
-        g.drawText ("TIMB", 15,  535, 42, 10, juce::Justification::centred);
-        g.drawText ("DEL",  80,  535, 42, 10, juce::Justification::centred);
-        g.drawText ("REVB", 145, 535, 42, 10, juce::Justification::centred);
-        g.drawText ("VOL",  210, 535, 42, 10, juce::Justification::centred);
+        g.drawText ("Timb", 15,  535, 42, 10, juce::Justification::centred);
+        g.drawText ("Delay", 80,  535, 42, 10, juce::Justification::centred);
+        g.drawText ("Revb", 145, 535, 42, 10, juce::Justification::centred);
+        g.drawText ("Vol",  210, 535, 42, 10, juce::Justification::centred);
     }
 
     // =====================================================================
@@ -937,12 +943,12 @@ void PluginEditor::paint (juce::Graphics& g)
         g.setColour (themeColor.withAlpha (0.4f));
         g.drawVerticalLine (sidebarX, 0.0f, static_cast<float> (getHeight()));
 
-        // Document Title [3.0.1]
+        // Document Title
         g.setColour (juce::Colours::white);
-        g.setFont (juce::FontOptions ("Courier New", 12.0f, juce::Font::bold));
-        g.drawText ("[ QUICK-START CHEAT SHEET ]", sidebarX + 15, 25, sidebarW - 30, 20, juce::Justification::centredLeft);
+        g.setFont (juce::Font (fontName, 12.0f, juce::Font::bold));
+        g.drawText ("Quick-start cheat sheet", sidebarX + 15, 25, sidebarW - 30, 20, juce::Justification::centredLeft);
 
-        // Section descriptors for the 4 island pills [3.0.1]
+        // Section descriptors for the 4 island pills
         struct HelpSection {
             juce::String title;
             juce::String body;
@@ -952,25 +958,25 @@ void PluginEditor::paint (juce::Graphics& g)
 
         std::vector<HelpSection> sections = {
             { 
-                "01 // SNAPSHOT MORPHING", 
+                "01 // Snapshot morphing", 
                 "- Select snap [A] or [B] deck focus.\n- Tweaks/dice write only to active deck.\n- Drag CROSSFADER to morph the DSP.", 
                 juce::Colour (0xFFFF3366), 
                 60 
             },
             { 
-                "02 // SATELLITE LFO ROUTING", 
+                "02 // Satellite LFO routing", 
                 "- Right-click small dials for LFO setup.\n- Rate & depth show on backlit Corona.\n- Pulse = Speed; Brightness = LFO Depth.", 
                 juce::Colour (0xFFD500F9), 
                 205 
             },
             { 
-                "03 // NOTE DENSITY (DEN)", 
+                "03 // Note density (DEN)", 
                 "- Global modifier on bottom-left.\n- Below 50%: reduces note probabilities.\n- Above 50%: fills empty steps.", 
                 juce::Colour (0xFF00E5FF), 
                 350 
             },
             { 
-                "04 // PERFORMANCE PRESETS", 
+                "04 // Performance presets", 
                 "- Click SAVE + slots 1-8 to record.\n- Click RECALL to latch preset surf.\n- Double-click dials to reset to center.", 
                 juce::Colour (0xFFFFB300), 
                 495 
@@ -984,21 +990,21 @@ void PluginEditor::paint (juce::Graphics& g)
             int rw = sidebarW - 30; // 270px
             int rh = 22;
 
-            // Render Rounded "Island Pill" Header container [3.0.1]
+            // Render Rounded "Island Pill" Header container
             g.setColour (sec.pillColor.withAlpha (0.12f));
             g.fillRoundedRectangle (static_cast<float> (rx), static_cast<float> (ry), static_cast<float> (rw), static_cast<float> (rh), 4.0f);
             
             g.setColour (sec.pillColor.withAlpha (0.80f));
             g.drawRoundedRectangle (static_cast<float> (rx), static_cast<float> (ry), static_cast<float> (rw), static_cast<float> (rh), 4.0f, 1.0f);
 
-            // Print monospace text inside pill (High contrast white) [3.0.1]
+            // Print monospace text inside pill (High contrast white)
             g.setColour (juce::Colours::white);
-            g.setFont (juce::FontOptions ("Courier New", 12.0f, juce::Font::bold));
+            g.setFont (juce::Font (fontName, 12.0f, juce::Font::bold));
             g.drawText (sec.title, rx + 10, ry, rw - 20, rh, juce::Justification::centredLeft);
 
-            // Section body bulleted texts below pill [3.0.1]
+            // Section body bulleted texts below pill
             g.setColour (juce::Colour (0xFFA0A5B0));
-            g.setFont (juce::FontOptions ("Courier New", 10.0f, juce::Font::plain));
+            g.setFont (juce::Font (fontName, 10.0f, juce::Font::plain));
             g.drawFittedText (sec.body, rx + 5, ry + rh + 8, rw - 10, 100, juce::Justification::topLeft, 4);
         }
     }
@@ -1012,6 +1018,8 @@ void PluginEditor::paintOverChildren (juce::Graphics& g)
     if (themeIdx == 1)      themeColor = juce::Colour (0xFFECEFF1); // Theme 1 (Monochrome): White/Silver
     else if (themeIdx == 2) themeColor = juce::Colour (0xFF00FF66); // Theme 2 (Matrix): Neon Green
 
+    juce::String fontName = juce::Font::getDefaultSansSerifFontName();
+
     if (DRAW_DIAGNOSTIC_GRID)
     {
         const int width = getWidth();
@@ -1023,7 +1031,7 @@ void PluginEditor::paintOverChildren (juce::Graphics& g)
             g.drawVerticalLine (x, 0.0f, static_cast<float> (height));
             
             g.setColour (juce::Colour (0xBB00E1FF));
-            g.setFont (juce::FontOptions (9.0f));
+            g.setFont (juce::Font (fontName, 9.0f, juce::Font::plain));
             g.drawText (juce::String (x), x - 12, height - 12, 24, 10, juce::Justification::centred);
         }
 
@@ -1033,7 +1041,7 @@ void PluginEditor::paintOverChildren (juce::Graphics& g)
             g.drawHorizontalLine (y, 0.0f, static_cast<float> (width));
             
             g.setColour (juce::Colour (0xBBFF3366));
-            g.setFont (juce::FontOptions (9.0f));
+            g.setFont (juce::Font (fontName, 9.0f, juce::Font::plain));
             g.drawText (juce::String (y), 4, y - 5, 24, 10, juce::Justification::left);
         }
 
@@ -1049,7 +1057,7 @@ void PluginEditor::paintOverChildren (juce::Graphics& g)
             
             g.setColour (juce::Colours::yellow);
             g.drawRoundedRectangle (static_cast<float> (mousePos.x) + 12.0f, static_cast<float> (mousePos.y) + 12.0f, 65.0f, 20.0f, 3.0f, 1.0f);
-            g.setFont (juce::FontOptions (10.0f, juce::Font::bold));
+            g.setFont (juce::Font (fontName, 10.0f, juce::Font::bold));
             
             juce::String coordStr = juce::String (mousePos.x) + ", " + juce::String (mousePos.y);
             g.drawText (coordStr, mousePos.x + 12, mousePos.y + 12, 65, 20, juce::Justification::centred);
@@ -1071,14 +1079,14 @@ void PluginEditor::paintOverChildren (juce::Graphics& g)
             g.setColour (juce::Colour (0xFF05070A));
             g.fillRoundedRectangle (pillBounds.toFloat(), 3.0f);
 
-            // Soft glow outline (Red on active MIDI Learn, Theme Accent on mapped) [3.0.1]
+            // Soft glow outline (Red on active MIDI Learn, Theme Accent on mapped)
             juce::Colour pillOutline = isLearning ? juce::Colours::red : themeColor.withAlpha (0.75f);
             g.setColour (pillOutline);
             g.drawRoundedRectangle (pillBounds.toFloat().reduced (0.5f), 3.0f, 1.0f);
 
             juce::String text = isLearning ? "LRN" : ((mappedCc >= 0) ? "C" + juce::String (mappedCc) : "MAP");
             g.setColour (isLearning ? juce::Colours::red : juce::Colours::white);
-            g.setFont (juce::FontOptions ("Courier New", 8.5f, juce::Font::bold)); // Small standardised scale [3.0.1]
+            g.setFont (juce::Font (fontName, 8.5f, juce::Font::bold)); // Symmetrical small readout [3.0.1]
             g.drawText (text, pillBounds, juce::Justification::centred, false);
         }
     }
@@ -1100,7 +1108,7 @@ void PluginEditor::paintOverChildren (juce::Graphics& g)
         g.fillRect (boxX, boxY, boxW, boxH);
 
         g.setColour (themeColor.withAlpha (0.75f));
-        g.setFont (juce::FontOptions (8.5f, juce::Font::bold));
+        g.setFont (juce::Font (fontName, 8.5f, juce::Font::bold));
         g.drawFittedText (smallLabels[i], boxX, boxY, boxW, boxH, juce::Justification::centred, 1);
     }
 
@@ -1113,7 +1121,7 @@ void PluginEditor::paintOverChildren (juce::Graphics& g)
     g.drawRoundedRectangle (denBox.toFloat(), 2.0f, 1.0f);
 
     g.setColour (themeColor); 
-    g.setFont (juce::FontOptions (9.5f, juce::Font::bold));
+    g.setFont (juce::Font (fontName, 9.5f, juce::Font::bold));
     juce::String denText = "DEN: " + juce::String (static_cast<int> (std::round (masterVelocityKnob.getValue() * 100.0f))) + "%";
     g.drawFittedText (denText, denBox, juce::Justification::centred, 1);
 
@@ -1125,19 +1133,19 @@ void PluginEditor::paintOverChildren (juce::Graphics& g)
     g.drawRoundedRectangle (swgBox.toFloat(), 2.0f, 1.0f);
 
     g.setColour (themeColor); 
-    g.setFont (juce::FontOptions (9.5f, juce::Font::bold));
+    g.setFont (juce::Font (fontName, 9.5f, juce::Font::bold));
     juce::String swgText = "SWG: " + juce::String (static_cast<int> (std::round (masterSwingKnob.getValue() * 100.0f))) + "%";
     g.drawFittedText (swgText, swgBox, juce::Justification::centred, 1);
 
-    // 3. Draw static, high-contrast white "MEMORY SLOTS" label spaced out under buttons 3 to 6 [1.2.3] [3.0.1]
+    // 3. Draw static, high-contrast white "MEMORY SLOTS" label spaced out under buttons 3 to 6 [1.2.3]
     g.setColour (juce::Colours::white);
-    g.setFont (juce::FontOptions ("Courier New", 12.0f, juce::Font::bold));
-    g.drawText ("M  E  M  O  R  Y     S  L  O  T  S", xOffset + 326, 552, 344, 16, juce::Justification::centred);
+    g.setFont (juce::Font (fontName, 12.0f, juce::Font::bold));
+    g.drawText ("Memory slots", xOffset + 326, 552, 344, 16, juce::Justification::centred);
 
-    // 4. Draw static "NAVY-ARP MONITOR" stamped onto physical panel with enhanced presence [1.2.3] [3.0.1]
+    // 4. Draw static "NAVY-ARP MONITOR" stamped onto physical panel with enhanced presence [1.2.3]
     g.setColour (themeColor.withAlpha (0.85f));
-    g.setFont (juce::FontOptions ("Courier New", 12.0f, juce::Font::bold));
-    g.drawText ("NAVY-ARP MONITOR", xOffset + 157, 381, 680, 15, juce::Justification::centred, true);
+    g.setFont (juce::Font (fontName, 12.0f, juce::Font::bold));
+    g.drawText ("Navy-arp monitor", xOffset + 157, 381, 680, 15, juce::Justification::centred, true);
 }
 
 void PluginEditor::mouseMove (const juce::MouseEvent& event)
@@ -1233,7 +1241,8 @@ void PluginEditor::resized()
     if (isLeftPanelOpen)
     {
         midiInBox.setBounds (85, 95, 200, 20);
-        midiOutBox.setBounds (85, 135, 200, 20);
+        midiOutBox1.setBounds (85, 125, 200, 20); // Voice 1 MIDI [3]
+        midiOutBox2.setBounds (85, 155, 200, 20); // Voice 2 MIDI [3]
 
         // Voice 1 Symmetrical layerable tactile instrument tabs [3]
         v1AnalogBtn.setBounds (15, 215, 63, 18);

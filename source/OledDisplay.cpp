@@ -99,6 +99,9 @@ void OledDisplay::paint (juce::Graphics& g)
     // Capture system high-res timer to compute independent decay time steps
     double timeMs = juce::Time::getMillisecondCounterHiRes();
 
+    // Standardised proportional typeface name mapped to Ableton styles [3]
+    juce::String fontName = juce::Font::getDefaultSansSerifFontName();
+
     // =====================================================================
     // 1. DYNAMIC VIEWPORT (UPPER REGION: y = 0 to 225)
     // =====================================================================
@@ -146,19 +149,19 @@ void OledDisplay::paint (juce::Graphics& g)
         g.setColour (themeColor.withAlpha (0.4f));
         g.drawHorizontalLine (static_cast<int> (startY + 18.0f), displayArea.getX(), displayArea.getRight());
         
-        // Enlarged parameter header text for legibility [3]
+        // Parameter overlay headers [3.0.1]
         g.setColour (themeColor.withAlpha (0.8f));
-        g.setFont (juce::FontOptions ("Courier New", 11.0f, juce::Font::bold));
-        g.drawText ("PARAMETER OVERLAY", displayArea.getX(), startY, 180, 18, juce::Justification::left);
-        g.drawText ("SYSTEM MONITOR // ACTIVE", displayArea.getX(), startY, displayArea.getWidth(), 18, juce::Justification::right);
+        g.setFont (juce::Font (fontName, 12.0f, juce::Font::bold));
+        g.drawText ("Parameter overlay", displayArea.getX(), startY, 180, 18, juce::Justification::left);
+        g.drawText ("System monitor // active", displayArea.getX(), startY, displayArea.getWidth(), 18, juce::Justification::right);
 
         // Render Large Parameter Title and Oversized Readout with custom string formatting
         float contentY = startY + 26.0f;
         g.setColour (juce::Colours::white);
         
-        // Enlarged parameter name font [3]
-        g.setFont (juce::FontOptions (18.0f, juce::Font::bold));
-        g.drawText (activeParamName.toUpperCase(), displayArea.getX() + 10, contentY, 300, 24, juce::Justification::left);
+        // Standardised proportional label fonts [3.0.1]
+        g.setFont (juce::Font (fontName, 12.0f, juce::Font::bold));
+        g.drawText (activeParamName, displayArea.getX() + 10, contentY, 300, 24, juce::Justification::left);
 
         // Format continuous inputs based on parameter ranges
         juce::String valStr = "";
@@ -170,34 +173,34 @@ void OledDisplay::paint (juce::Graphics& g)
             {
                 int rateIdx = juce::jlimit (0, 3, static_cast<int> (std::round (activeParamValue * 3.0f)));
                 juce::StringArray rates { "1/4", "1/8", "1/16", "1/32" };
-                valStr = rates[rateIdx]; // Synced fraction display [1.2.3]
+                valStr = rates[rateIdx]; 
             }
             else
             {
                 int manualBpm = static_cast<int> (std::round (40.0f + activeParamValue * 200.0f));
-                valStr = juce::String (manualBpm) + " BPM"; // Free-running BPM numerical display [1.2.3]
+                valStr = juce::String (manualBpm) + " BPM"; 
             }
         }
         else if (activeParamName == "Octaves")
         {
             int octVal = static_cast<int> (std::round (activeParamValue * 6.0f - 3.0f));
-            valStr = (octVal >= 0 ? "+" : "") + juce::String (octVal); // Signed integer display [1.2.3]
+            valStr = (octVal >= 0 ? "+" : "") + juce::String (octVal); 
         }
         else
         {
-            valStr = juce::String (static_cast<int> (std::round (activeParamValue * 100.0f))) + "%"; // Standard percentage
+            valStr = juce::String (static_cast<int> (std::round (activeParamValue * 100.0f))) + "%"; 
         }
         
-        // Enlarged technical measurement readout text [3]
+        // Standardised large readout fonts [3.0.1]
         g.setColour (themeColor);
-        g.setFont (juce::FontOptions ("Courier New", 32.0f, juce::Font::bold));
+        g.setFont (juce::Font (fontName, 12.0f, juce::Font::bold));
         g.drawText (valStr, displayArea.getX(), contentY - 8.0f, displayArea.getWidth() - 10.0f, 36, juce::Justification::right);
 
-        // Render Dual Horizontal Segmented LED Bars with enlarged spacing and labels [3]
+        // Render Dual Horizontal Segmented LED Bars with enlarged spacing and labels
         float baseBarY = contentY + 36.0f;
         g.setColour (juce::Colours::white.withAlpha (0.45f));
-        g.setFont (juce::FontOptions ("Courier New", 12.0f, juce::Font::bold));
-        g.drawText ("[BASE]", displayArea.getX() + 10, baseBarY, 60, 16, juce::Justification::left);
+        g.setFont (juce::Font (fontName, 10.0f, juce::Font::bold));
+        g.drawText ("[Base]", displayArea.getX() + 10, baseBarY, 60, 16, juce::Justification::left);
 
         float barStartX = displayArea.getX() + 70.0f;
         int numSegs = 45;
@@ -222,7 +225,7 @@ void OledDisplay::paint (juce::Graphics& g)
         // Render bottom LFO segment bar
         float lfoBarY = baseBarY + 20.0f;
         g.setColour (juce::Colours::white.withAlpha (0.45f));
-        g.setFont (juce::FontOptions ("Courier New", 12.0f, juce::Font::bold));
+        g.setFont (juce::Font (fontName, 10.0f, juce::Font::bold));
         g.drawText ("[LFO ]", displayArea.getX() + 10, lfoBarY, 60, 16, juce::Justification::left);
 
         // If LFO is disabled (activeLfoVibe == "Off"), litSegsLfo is 0 and bottom bar reads completely empty
@@ -251,10 +254,10 @@ void OledDisplay::paint (juce::Graphics& g)
         g.drawRoundedRectangle (boxA, 2.0f, 1.0f);
         
         g.setColour (juce::Colours::white.withAlpha (0.80f));
-        g.setFont (juce::FontOptions ("Courier New", 11.0f, juce::Font::bold)); // Enlarged box labels
-        juce::String sideText = processor.isSceneBActiveAnchor.load() ? "SCENE B (FOCUSED)" : "SCENE A (FOCUSED)";
-        g.drawText (" TARGET SNAP : " + sideText, boxA.getX() + 8.0f, boxA.getY() + 5.0f, boxA.getWidth() - 16.0f, 14, juce::Justification::left);
-        g.drawText (" INPUT DRAG  : USER CAPTURE ACTIVE", boxA.getX() + 8.0f, boxA.getY() + 21.0f, boxA.getWidth() - 16.0f, 14, juce::Justification::left);
+        g.setFont (juce::Font (fontName, 10.0f, juce::Font::bold)); // Symmetrical body scale [3.0.1]
+        juce::String sideText = processor.isSceneBActiveAnchor.load() ? "Scene B (focused)" : "Scene A (focused)";
+        g.drawText (" Target snap: " + sideText, boxA.getX() + 8.0f, boxA.getY() + 5.0f, boxA.getWidth() - 16.0f, 14, juce::Justification::left);
+        g.drawText (" Input drag: User capture active", boxA.getX() + 8.0f, boxA.getY() + 21.0f, boxA.getWidth() - 16.0f, 14, juce::Justification::left);
 
         // Box B: Sat LFO metrics
         juce::Rectangle<float> boxB (displayArea.getX() + 300.0f, frameY, displayArea.getWidth() - 310.0f, frameH);
@@ -263,9 +266,9 @@ void OledDisplay::paint (juce::Graphics& g)
         g.setColour (themeColor.withAlpha (0.35f));
         g.drawRoundedRectangle (boxB, 2.0f, 1.0f);
         
-        juce::String lfoStatusText = (activeLfoVibe == "Off") ? "ROUTING INACTIVE" : "SATELLITE LFO SYNCED";
-        g.drawText (" LFO ROUTING : " + lfoStatusText, boxB.getX() + 8.0f, boxB.getY() + 5.0f, boxB.getWidth() - 16.0f, 14, juce::Justification::left);
-        g.drawText (" TEMPO RATE  : " + activeLfoVibe, boxB.getX() + 8.0f, boxB.getY() + 21.0f, boxB.getWidth() - 16.0f, 14, juce::Justification::left);
+        juce::String lfoStatusText = (activeLfoVibe == "Off") ? "Routing inactive" : "Satellite LFO synced";
+        g.drawText (" LFO routing: " + lfoStatusText, boxB.getX() + 8.0f, boxB.getY() + 5.0f, boxB.getWidth() - 16.0f, 14, juce::Justification::left);
+        g.drawText (" Tempo rate: " + activeLfoVibe, boxB.getX() + 8.0f, boxB.getY() + 21.0f, boxB.getWidth() - 16.0f, 14, juce::Justification::left);
 
         // Draw clean high-tech corner brackets around the overlay viewport boundaries
         g.setColour (themeColor.withAlpha (0.5f));
@@ -295,17 +298,17 @@ void OledDisplay::paint (juce::Graphics& g)
 
         bool isPolyActive = *processor.apvts.getRawParameterValue (IDs::poly.getParamID()) > 0.5f;
         float currentHarmony = *processor.apvts.getRawParameterValue (IDs::harmony.getParamID());
-        juce::String voiceStr = "MONO";
+        juce::String voiceStr = "Mono";
         if (isPolyActive)
         {
-            if (currentHarmony >= 0.25f && currentHarmony < 0.5f) voiceStr = "DUO";
-            else if (currentHarmony >= 0.5f) voiceStr = "TRIAD";
-            else voiceStr = "MONO";
+            if (currentHarmony >= 0.25f && currentHarmony < 0.5f) voiceStr = "Duo";
+            else if (currentHarmony >= 0.5f) voiceStr = "Triad";
+            else voiceStr = "Mono";
         }
 
-        // Continuous Float Rate dial dynamically evaluated inside metadata bar [1.2.3]
-        float rawRateVal = *processor.apvts.getRawParameterValue (IDs::rate.getParamID());
-        int rateIdx = juce::jlimit (0, 3, static_cast<int> (std::round (rawRateVal * 3.0f)));
+        // Continuous Float Rate dial dynamically evaluated inside metadata bar
+        float rawRate = *processor.apvts.getRawParameterValue (IDs::rate.getParamID());
+        int rateIdx = juce::jlimit (0, 3, static_cast<int> (std::round (rawRate * 3.0f)));
         juce::StringArray rates { "1/4", "1/8", "1/16", "1/32" };
         juce::String rateStr = rates[rateIdx];
 
@@ -315,13 +318,14 @@ void OledDisplay::paint (juce::Graphics& g)
         // Check active tempo source sync mode [1.2.3]
         auto* syncPtr = processor.apvts.getRawParameterValue ("sync");
         bool syncActive = (syncPtr != nullptr && syncPtr->load() > 0.5f);
-        juce::String tempoSourceText = syncActive ? "SYNC (" + rateStr + ")" : "FREE RUN";
+        juce::String tempoSourceText = syncActive ? "Sync (" + rateStr + ")" : "Free run";
 
-        juce::String metaText = "SYSTEM STATUS: ACTIVE | KEY: " + keyStr + " | SCALE: " + scaleStr.toUpperCase() + " | TEMPO: " + tempoSourceText + " | VOICING: " + voiceStr;
+        // Sentence-case formatted system status text [3.0.1]
+        juce::String metaText = "System status: active | Key: " + keyStr + " | Scale: " + scaleStr + " | Tempo: " + tempoSourceText + " | Voicing: " + voiceStr;
 
-        // Metadata bar dynamically follows the selected color theme and is enlarged for legibility [3]
+        // Metadata bar dynamically follows the selected color theme and is scaled cleanly [3]
         g.setColour (themeColor.withAlpha (0.85f)); 
-        g.setFont (juce::FontOptions (12.0f, juce::Font::bold)); 
+        g.setFont (juce::Font (fontName, 10.0f, juce::Font::bold)); // Symmetrical body scale [3.0.1]
         g.drawText (metaText, displayArea.withY (displayArea.getY() + 8.0f).withHeight (18.0f), juce::Justification::centred, true);
 
         struct Point3D { float x, y, z; };

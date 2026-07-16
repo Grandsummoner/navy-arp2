@@ -166,9 +166,10 @@ void ChromaCapsLookAndFeel::drawButtonText (juce::Graphics& g, juce::TextButton&
     const bool isDiceButton = (text == "Melo" || text == "Arti" || text == "Time" || text == "Navy");
     const bool isPresetButton = (text == "1" || text == "2" || text == "3" || text == "4" || text == "5" || text == "6" || text == "7" || text == "8");
     const bool isStaticTopButton = (text == "Latch" || text == "Poly" || text == "Freeze" || text == "Seq" || text == "SEQ" || text == "Arp" || text == "ARP");
-    const bool isInstrumentButton = (text == "ANALOG" || text == "FM" || text == "STRING" || text == "PULSE");
+    const bool isInstrumentButton = (text == "Analog" || text == "FM" || text == "String" || text == "Pulse");
 
     int themeIdx = static_cast<int> (processor.apvts.getRawParameterValue ("panelTheme")->load());
+    juce::String fontName = juce::Font::getDefaultSansSerifFontName();
 
     // Intercept Sync circular text drawing to keep it clean and unprinted [1.2.3]
     if (text == "Sync")
@@ -184,7 +185,7 @@ void ChromaCapsLookAndFeel::drawButtonText (juce::Graphics& g, juce::TextButton&
         else
             g.setColour (juce::Colour (0xFFA0A5B0));
 
-        g.setFont (juce::FontOptions ("Courier New", 9.5f, juce::Font::bold));
+        g.setFont (juce::Font (fontName, 10.0f, juce::Font::bold)); // Standardised scale [3.0.1]
         g.drawFittedText (text, button.getLocalBounds(), juce::Justification::centred, 1);
         return;
     }
@@ -200,7 +201,7 @@ void ChromaCapsLookAndFeel::drawButtonText (juce::Graphics& g, juce::TextButton&
         else
             g.setColour (juce::Colour (0xFF757575)); // Dim white/grey when inactive
 
-        g.setFont (juce::FontOptions (22.0f, juce::Font::bold));
+        g.setFont (juce::Font (fontName, 12.0f, juce::Font::bold)); // Standardised scale [3.0.1]
         g.drawFittedText (text, button.getLocalBounds(), juce::Justification::centred, 1);
         return; 
     }
@@ -251,7 +252,7 @@ void ChromaCapsLookAndFeel::drawButtonText (juce::Graphics& g, juce::TextButton&
         }
 
         g.setColour (textCol);
-        g.setFont (juce::FontOptions (18.0f, juce::Font::bold));
+        g.setFont (juce::Font (fontName, 12.0f, juce::Font::bold)); // Standardised scale [3.0.1]
         g.drawFittedText (text, button.getLocalBounds(), juce::Justification::centred, 1);
         return;
     }
@@ -262,7 +263,7 @@ void ChromaCapsLookAndFeel::drawButtonText (juce::Graphics& g, juce::TextButton&
         auto textRect = bounds.withTrimmedTop (6.0f); 
 
         g.setColour (button.getToggleState() || button.isDown() || button.isMouseOver() ? juce::Colours::white : juce::Colour (0xFF757575));
-        g.setFont (juce::FontOptions (9.0f, juce::Font::bold));
+        g.setFont (juce::Font (fontName, 10.0f, juce::Font::bold)); // Standardised scale [3.0.1]
         g.drawFittedText (text, textRect.toNearestInt(), juce::Justification::centred, 1);
     }
     else if (isStaticTopButton)
@@ -278,7 +279,7 @@ void ChromaCapsLookAndFeel::drawButtonText (juce::Graphics& g, juce::TextButton&
         else
             g.setColour (juce::Colour (0xFFA0A5B0));
 
-        g.setFont (juce::FontOptions (10.0f, juce::Font::bold));
+        g.setFont (juce::Font (fontName, 10.0f, juce::Font::bold)); // Standardised scale [3.0.1]
         g.drawFittedText (text, bounds.toNearestInt(), juce::Justification::centred, 1);
     }
 }
@@ -292,7 +293,7 @@ void ChromaCapsLookAndFeel::drawButtonBackground (juce::Graphics& g, juce::Butto
     const bool isDiceButton = (text == "Melo" || text == "Arti" || text == "Time" || text == "Navy");
     const bool isStaticTopButton = (text == "Latch" || text == "Poly" || text == "Freeze" || text == "Seq" || text == "SEQ" || text == "Arp" || text == "ARP");
     const bool isPresetButton = (text == "1" || text == "2" || text == "3" || text == "4" || text == "5" || text == "6" || text == "7" || text == "8");
-    const bool isInstrumentButton = (text == "ANALOG" || text == "FM" || text == "STRING" || text == "PULSE");
+    const bool isInstrumentButton = (text == "Analog" || text == "FM" || text == "String" || text == "Pulse");
 
     int themeIdx = static_cast<int> (processor.apvts.getRawParameterValue ("panelTheme")->load());
 
@@ -686,7 +687,10 @@ void ChromaCapsLookAndFeel::drawLabel (juce::Graphics& g, juce::Label& label)
 {
     g.fillAll (label.findColour (juce::Label::backgroundColourId));
 
-    g.setFont (label.getFont());
+    // Standardised proportional typeface name mapped to Ableton styles [3]
+    juce::String fontName = juce::Font::getDefaultSansSerifFontName();
+
+    g.setFont (juce::Font (fontName, label.getFont().getHeight(), label.getFont().getStyleFlags()));
     g.setColour (label.findColour (juce::Label::textColourId));
     
     auto textArea = label.getBorderSize().subtractedFrom (label.getLocalBounds());

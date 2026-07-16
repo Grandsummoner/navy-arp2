@@ -40,7 +40,8 @@ namespace IDs
 
     // Left Panel Sound Engine Parameter IDs
     inline const juce::ParameterID midiInChannel      { "midiInChannel", 1 };
-    inline const juce::ParameterID midiOutChannel     { "midiOutChannel", 1 };
+    inline const juce::ParameterID midiOutChannel1    { "midiOutChannel1", 1 }; // Split Voice 1 MIDI Out [3]
+    inline const juce::ParameterID midiOutChannel2    { "midiOutChannel2", 1 }; // Split Voice 2 MIDI Out [3]
     
     // Voice 1 Multi-Select Instrument Parameter IDs [3]
     inline const juce::ParameterID voice1Analog       { "voice1Analog", 1 };
@@ -365,6 +366,7 @@ public:
     double getTailLengthSeconds() const override { return 0.0; }
 
     //==============================================================================
+    int getNumRuns() { return 1; }
     int getNumPrograms() override { return 1; }
     int getCurrentProgram() override { return 0; }
     void setCurrentProgram (int index) override { juce::ignoreUnused (index); }
@@ -504,7 +506,8 @@ public:
 
     // Left Panel Sound Engine cached atomic pointers
     std::atomic<float>* midiInChannelPtr { nullptr };
-    std::atomic<float>* midiOutChannelPtr { nullptr };
+    std::atomic<float>* midiOutChannel1Ptr { nullptr }; // Voice 1 MIDI Out [3]
+    std::atomic<float>* midiOutChannel2Ptr { nullptr }; // Voice 2 MIDI Out [3]
     
     // Voice 1 Multi-Select instrument cache pointers [3]
     std::atomic<float>* voice1AnalogPtr { nullptr };
@@ -550,6 +553,8 @@ public:
     // Internal Symmetrical Polyphonic/Monophonic Audio Synths
     SynthVoice voice1;
     SynthVoice voice2;
+
+    bool lastFreezeState = false;
 
 private:
     juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
@@ -598,7 +603,6 @@ private:
     int frozenRateIdx = 0;
     int frozenOctavesVal = 0;
     float frozenFaders[8] { 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f };
-    bool lastFreezeState = false;
 
     float accumulatedPitchOffset = 0.0f;
 

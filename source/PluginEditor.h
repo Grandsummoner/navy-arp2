@@ -76,7 +76,7 @@ public:
     void toggleLeftPanel();
 
     // Symmetrical Left Panel Sound Engine UI Controls [3]
-    juce::ComboBox midiInBox, midiOutBox;
+    juce::ComboBox midiInBox, midiOutBox1, midiOutBox2; // Two MIDI Out dropdowns [3]
     juce::ComboBox audioRoutingBox;
 
     // Symmetrical Button Picks for Synthesis Models (Layerable toggles) [3]
@@ -93,6 +93,7 @@ public:
     juce::Label midiInLabel, midiOutLabel;
     juce::Label voice1SynthLabel, voice1DecayLabel, voice1TimbreLabel, voice1ReverbLabel;
     juce::Label voice2SynthLabel, voice2DecayLabel, voice2TimbreLabel, voice2ReverbLabel;
+    g_labelText midiInText, midiOutText1, midiOutText2; // Standardised label labels
     juce::Label audioRoutingLabel;
 
     // Public Flash Timers for LookAndFeel Animation Access
@@ -132,7 +133,7 @@ private:
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> rootKeyAttachment, scaleTypeAttachment, cycleLengthAttachment, panelThemeAttachment;
 
     // Symmetrical Left Panel Parameter Attachments
-    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> midiInAttachment, midiOutAttachment;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> midiInAttachment, midiOutAttachment1, midiOutAttachment2; // Split MIDI Out [3]
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> audioRoutingAttachment;
 
     // Multi-Select Layerable Instrument attachments [3]

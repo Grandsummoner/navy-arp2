@@ -45,8 +45,9 @@ PluginProcessor::PluginProcessor()
     masterSwingPtr    = apvts.getRawParameterValue (IDs::masterSwing.getParamID());
 
     // Cache Left Panel Sound parameters [3]
-    midiInChannelPtr  = apvts.getRawParameterValue (IDs::midiInChannel.getParamID());
-    midiOutChannelPtr = apvts.getRawParameterValue (IDs::midiOutChannel.getParamID());
+    midiInChannelPtr   = apvts.getRawParameterValue (IDs::midiInChannel.getParamID());
+    midiOutChannel1Ptr = apvts.getRawParameterValue (IDs::midiOutChannel1.getParamID()); // Voice 1 Out [3]
+    midiOutChannel2Ptr = apvts.getRawParameterValue (IDs::midiOutChannel2.getParamID()); // Voice 2 Out [3]
     
     // Voice 1 Multi-Select instrument cache pointers
     voice1AnalogPtr  = apvts.getRawParameterValue (IDs::voice1Analog.getParamID());
@@ -122,9 +123,9 @@ void PluginProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 
 void PluginProcessor::scheduleNoteOff (juce::MidiBuffer& midi, int pitch, int delaySamples)
 {
-    // Retrieve correct MIDI out channel configured for active step note
-    int outChA = sceneMidiOutChannels[0];
-    int outChB = sceneMidiOutChannels[1];
+    // Retrieve correct MIDI out channel configured for active step note [3]
+    int outChA = static_cast<int> (midiOutChannel1Ptr->load()) + 1;
+    int outChB = static_cast<int> (midiOutChannel2Ptr->load()) + 1;
     float morphVal = morphPtr->load();
     int activeMidiCh = (morphVal >= 0.5f) ? outChB : outChA;
 
@@ -140,7 +141,7 @@ void PluginProcessor::setActiveAnchor (bool useSceneB)
     // Cache the MIDI In/Out settings of the active scene we are leaving
     int leavingIndex = useSceneB ? 0 : 1;
     sceneMidiInChannels[leavingIndex]  = static_cast<int> (midiInChannelPtr->load());
-    sceneMidiOutChannels[leavingIndex] = static_cast<int> (midiOutChannelPtr->load()) + 1;
+    sceneMidiOutChannels[leavingIndex] = static_cast<int> (midiOutChannel1Ptr->load()) + 1; // Maps Voice 1 [3]
 
     isSceneBActiveAnchor.store (useSceneB); lastSceneBActiveState = useSceneB;
     
@@ -159,7 +160,7 @@ void PluginProcessor::setActiveAnchor (bool useSceneB)
     // Restore the MIDI In/Out settings of the active scene we are entering
     int enteringIndex = useSceneB ? 1 : 0;
     apvts.getParameter (IDs::midiInChannel.getParamID())->setValueNotifyingHost (static_cast<float> (sceneMidiInChannels[enteringIndex]) / 16.0f);
-    apvts.getParameter (IDs::midiOutChannel.getParamID())->setValueNotifyingHost (static_cast<float> (sceneMidiOutChannels[enteringIndex] - 1) / 15.0f);
+    apvts.getParameter (IDs::midiOutChannel1.getParamID())->setValueNotifyingHost (static_cast<float> (sceneMidiOutChannels[enteringIndex] - 1) / 15.0f);
 }
 
 void PluginProcessor::captureActiveParametersToActiveScene()
@@ -321,7 +322,7 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
 #endif
     int numSamples = buffer.getNumSamples(); 
 
-    // Synchronize LFO and sequencer clock based on Sync Mode toggle
+    // Synchronize LFO and sequencer clock based on Sync Mode toggle [1.2.3]
     auto* syncPtr = apvts.getRawParameterValue ("sync");
     bool syncActive = (syncPtr != nullptr && syncPtr->load() > 0.5f);
     
@@ -329,7 +330,7 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
     if (syncActive) {
         activeBpm = hostBpm;
     } else {
-        // Map continuous Float rate parameter (0.0 to 1.0) to smooth free-run BPM: 40 to 240
+        // Map continuous Float rate parameter (0.0 to 1.0) to smooth free-run BPM: 40 to 240 [1.2.3]
         activeBpm = 40.0 + (ratePtr->load() * 200.0); 
     }
 
@@ -369,8 +370,9 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
     for (auto it = scheduledNoteOffs.begin(); it != scheduledNoteOffs.end();) {
         it->second -= numSamples;
         if (it->second <= 0) {
-            int outChA = sceneMidiOutChannels[0];
-            int outChB = sceneMidiOutChannels[1];
+            // Symmetrical Voice MIDI Out routes [3]
+            int outChA = static_cast<int> (midiOutChannel1Ptr->load()) + 1;
+            int outChB = static_cast<int> (midiOutChannel2Ptr->load()) + 1;
             float mVal = morphPtr->load();
             int activeCh = (mVal >= 0.5f) ? outChB : outChA;
 
@@ -388,8 +390,8 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
     static bool wasLatchActive = false;
     if (wasLatchActive && !isLatchActive)
     {
-        int outChA = sceneMidiOutChannels[0];
-        int outChB = sceneMidiOutChannels[1];
+        int outChA = static_cast<int> (midiOutChannel1Ptr->load()) + 1;
+        int outChB = static_cast<int> (midiOutChannel2Ptr->load()) + 1;
         float mVal = morphPtr->load();
         int activeCh = (mVal >= 0.5f) ? outChB : outChA;
 
@@ -560,26 +562,11 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
                 }
 
                 for (auto& pitch : pitchList) {
-                    int noteOffset = (pitch - rootKeyIdx) % 12, octBase = ((pitch - rootKeyIdx) / 12) * 12 + rootKeyIdx, nearestVal = scaleOffsets[0], minDiff = 12;
-                    for (int offset : scaleOffsets) { int diff = std::abs (offset - noteOffset); if (diff < minDiff) { minDiff = diff; nearestVal = offset; } }
-                    pitch = octBase + nearestVal;
-                }
-
-                int rangeShift = isFreezeActive ? frozenOctavesVal : activeOctavesVal;
-                int octaveShiftCount = (rangeShift > 0) ? ((localStep / 2) % (rangeShift + 1)) : ((rangeShift < 0) ? -((localStep / 2) % (std::abs(rangeShift) + 1)) : 0);
-                float currentChaos = isFreezeActive ? frozenChaos : modChaos;
-
-                // Equal-Power Volume crossfade scales computed strictly based on morph slider value
-                float morphFactor = morphPtr->load();
-                float vA = std::cos (morphFactor * juce::MathConstants<float>::halfPi);
-                float vB = std::sin (morphFactor * juce::MathConstants<float>::halfPi);
-
-                for (auto pitch : pitchList) {
                     int targetPitch = juce::jlimit(0, 127, pitch + (octaveShiftCount * 12) + ((currentChaos > 0.2f && juce::Random::getSystemRandom().nextFloat() <= currentChaos) ? (juce::Random::getSystemRandom().nextBool() ? 12 : -12) : 0));
                     
-                    // Fetch symmetric multi-timbral output channels
-                    int outChA = sceneMidiOutChannels[0];
-                    int outChB = sceneMidiOutChannels[1];
+                    // Symmetrical Voice MIDI Out routes [3]
+                    int outChA = static_cast<int> (midiOutChannel1Ptr->load()) + 1;
+                    int outChB = static_cast<int> (midiOutChannel2Ptr->load()) + 1;
 
                     // Strike on separate channels scaled dynamically by equal-power morph factors [3]
                     juce::uint8 velA = static_cast<juce::uint8> (juce::jlimit (0.0f, 127.0f, 100.0f * vA));
@@ -1184,12 +1171,15 @@ juce::AudioProcessorValueTreeState::ParameterLayout PluginProcessor::createParam
     params.push_back (std::make_unique<juce::AudioParameterFloat> (IDs::masterVelocity, "Note Density", 0.0f, 1.0f, 0.5f));
     params.push_back (std::make_unique<juce::AudioParameterFloat> (IDs::masterSwing, "Master Swing", 0.0f, 1.0f, 0.0f));
 
-    // Register Sync Toggle Parameter
+    // Register Sync Toggle Parameter [1.2.3]
     params.push_back (std::make_unique<juce::AudioParameterBool> (juce::ParameterID ("sync", 1), "Sync Mode", true));
 
     // Register Left Panel Sound Parameters [3]
     params.push_back (std::make_unique<juce::AudioParameterChoice> (IDs::midiInChannel, "MIDI In Channel", juce::StringArray { "Omni", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16" }, 0));
-    params.push_back (std::make_unique<juce::AudioParameterChoice> (IDs::midiOutChannel, "MIDI Out Channel", juce::StringArray { "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16" }, 0));
+    
+    // Dual symmetrical hardware MIDI Out channels [3]
+    params.push_back (std::make_unique<juce::AudioParameterChoice> (IDs::midiOutChannel1, "MIDI Out Channel 1", juce::StringArray { "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16" }, 0));
+    params.push_back (std::make_unique<juce::AudioParameterChoice> (IDs::midiOutChannel2, "MIDI Out Channel 2", juce::StringArray { "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16" }, 1)); // Default Ch 2
     
     // Symmetrical layerable multi-select instrument options [3]
     params.push_back (std::make_unique<juce::AudioParameterBool> (IDs::voice1Analog, "Voice 1 Analog Engine", true));
