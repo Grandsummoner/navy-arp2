@@ -770,7 +770,7 @@ void PluginProcessor::savePreset (int slotIndex)
         
         for (int i = 0; i < 8; ++i) { 
             presets[slotIndex].lfoRates[i] = static_cast<int> (lfoRatePtrs[i]->load()); 
-            presets[slotIndex].lfoDepths[i] = lfoDepths[i]; // Load directly to avoid memory loop
+            presets[slotIndex].lfoDepths[i] = lfoDepthPtrs[i]->load(); 
         }
         presetSlotsSaved[slotIndex] = true; activePresetIndex.store (slotIndex); 
     } 
