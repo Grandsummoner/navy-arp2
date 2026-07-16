@@ -276,17 +276,17 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
                     {
                         float normVal = static_cast<float> (ccValue) / 127.0f;
                         
-                        // Map physical index throw directly to targeted APVTS parameters
-                        if (i >= 0 && i < 8) // Faders 1-8
-                            apvts.getParameter ("fader" + juce::String (i + 1))->setValueNotifyingHost (normVal);
-                        else if (i == 8)  apvts.getParameter (IDs::rhythmMorph.getParamID())->setValueNotifyingHost (normVal);
-                        else if (i == 9)  apvts.getParameter (IDs::rest.getParamID())->setValueNotifyingHost (normVal);
-                        else if (i == 10) apvts.getParameter (IDs::legato.getParamID())->setValueNotifyingHost (normVal);
-                        else if (i == 11) apvts.getParameter (IDs::rate.getParamID())->setValueNotifyingHost (normVal);
-                        else if (i == 12) apvts.getParameter (IDs::entropy.getParamID())->setValueNotifyingHost ((normVal * 2.0f) - 1.0f);
-                        else if (i == 13) apvts.getParameter (IDs::harmony.getParamID())->setValueNotifyingHost (normVal);
-                        else if (i == 14) apvts.getParameter (IDs::chaos.getParamID())->setValueNotifyingHost (normVal);
-                        else if (i == 15) apvts.getParameter (IDs::octaves.getParamID())->setValueNotifyingHost ((normVal * 6.0f) - 3.0f);
+                        // Map physical index directly to targeted APVTS parameters using GUI-aligned indices [3]
+                        if (i == 0)      apvts.getParameter (IDs::rhythmMorph.getParamID())->setValueNotifyingHost (normVal);
+                        else if (i == 1) apvts.getParameter (IDs::rest.getParamID())->setValueNotifyingHost (normVal);
+                        else if (i == 2) apvts.getParameter (IDs::legato.getParamID())->setValueNotifyingHost (normVal);
+                        else if (i == 3) apvts.getParameter (IDs::rate.getParamID())->setValueNotifyingHost (normVal);
+                        else if (i == 4) apvts.getParameter (IDs::entropy.getParamID())->setValueNotifyingHost ((normVal * 2.0f) - 1.0f);
+                        else if (i == 5) apvts.getParameter (IDs::harmony.getParamID())->setValueNotifyingHost (normVal);
+                        else if (i == 6) apvts.getParameter (IDs::chaos.getParamID())->setValueNotifyingHost (normVal);
+                        else if (i == 7) apvts.getParameter (IDs::octaves.getParamID())->setValueNotifyingHost ((normVal * 6.0f) - 3.0f);
+                        else if (i >= 8 && i < 16) // Step faders 1-8
+                            apvts.getParameter ("fader" + juce::String (i - 7))->setValueNotifyingHost (normVal);
                         else if (i == 16) apvts.getParameter (IDs::masterVelocity.getParamID())->setValueNotifyingHost (normVal);
                         else if (i == 17) apvts.getParameter (IDs::masterSwing.getParamID())->setValueNotifyingHost (normVal);
                     }
