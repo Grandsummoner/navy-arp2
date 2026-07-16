@@ -83,16 +83,12 @@ public:
     juce::TextButton v1AnalogBtn, v1FmBtn, v1StringBtn, v1PulseBtn;
     juce::TextButton v2AnalogBtn, v2FmBtn, v2StringBtn, v2PulseBtn;
 
-    // Mini ADSR Envelope selectors and Volume control faders [3]
-    juce::TextButton v1EnvA, v1EnvD, v1EnvS, v1EnvR;
-    juce::TextButton v2EnvA, v2EnvD, v2EnvS, v2EnvR;
-    juce::Slider v1GainSlider, v2GainSlider;
+    // Symmetrical Rotary Knobs for ADSR, Timbre, Reverb, and Volume (No more faders) [3]
+    juce::Slider v1AttackKnob, v1DecayKnob, v1SustainKnob, v1ReleaseKnob;
+    juce::Slider v1TimbreKnob, v1ReverbKnob, v1VolumeKnob;
 
-    int v1ActiveEnvStage = 1; // 0=Attack, 1=Decay, 2=Sustain, 3=Release
-    int v2ActiveEnvStage = 1;
-
-    juce::Slider v1DecaySlider, v1TimbreSlider, v1ReverbSlider;
-    juce::Slider v2DecaySlider, v2TimbreSlider, v2ReverbSlider;
+    juce::Slider v2AttackKnob, v2DecayKnob, v2SustainKnob, v2ReleaseKnob;
+    juce::Slider v2TimbreKnob, v2ReverbKnob, v2VolumeKnob;
 
     juce::Label midiInLabel, midiOutLabel;
     juce::Label voice1SynthLabel, voice1DecayLabel, voice1TimbreLabel, voice1ReverbLabel;
@@ -139,9 +135,10 @@ private:
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> midiInAttachment, midiOutAttachment;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> audioRoutingAttachment;
 
-    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> v1TimbreAttachment, v1ReverbAttachment;
-    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> v2TimbreAttachment, v2ReverbAttachment;
-    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> v1GainAttachment, v2GainAttachment;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> v1AttackAttachment, v1DecayAttachment, v1SustainAttachment, v1ReleaseAttachment;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> v1TimbreAttachment, v1ReverbAttachment, v1VolumeAttachment;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> v2AttackAttachment, v2DecayAttachment, v2SustainAttachment, v2ReleaseAttachment;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> v2TimbreAttachment, v2ReverbAttachment, v2VolumeAttachment;
 
     // Timing States
     std::uint32_t presetPressStartTime[8] { 0 };

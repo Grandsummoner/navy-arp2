@@ -42,11 +42,17 @@ namespace IDs
     inline const juce::ParameterID midiInChannel      { "midiInChannel", 1 };
     inline const juce::ParameterID midiOutChannel     { "midiOutChannel", 1 };
     inline const juce::ParameterID voice1Synth        { "voice1Synth", 1 };
+    inline const juce::ParameterID voice1Attack       { "voice1Attack", 1 };
     inline const juce::ParameterID voice1Decay        { "voice1Decay", 1 };
+    inline const juce::ParameterID voice1Sustain      { "voice1Sustain", 1 };
+    inline const juce::ParameterID voice1Release      { "voice1Release", 1 };
     inline const juce::ParameterID voice1Timbre       { "voice1Timbre", 1 };
     inline const juce::ParameterID voice1Reverb       { "voice1Reverb", 1 };
     inline const juce::ParameterID voice2Synth        { "voice2Synth", 1 };
+    inline const juce::ParameterID voice2Attack       { "voice2Attack", 1 };
     inline const juce::ParameterID voice2Decay        { "voice2Decay", 1 };
+    inline const juce::ParameterID voice2Sustain      { "voice2Sustain", 1 };
+    inline const juce::ParameterID voice2Release      { "voice2Release", 1 };
     inline const juce::ParameterID voice2Timbre       { "voice2Timbre", 1 };
     inline const juce::ParameterID voice2Reverb       { "voice2Reverb", 1 };
     inline const juce::ParameterID audioRouting       { "audioRouting", 1 };
@@ -456,14 +462,23 @@ public:
     // Left Panel Sound Engine cached atomic pointers
     std::atomic<float>* midiInChannelPtr { nullptr };
     std::atomic<float>* midiOutChannelPtr { nullptr };
+    
     std::atomic<float>* voice1SynthPtr { nullptr };
+    std::atomic<float>* voice1AttackPtr { nullptr };
     std::atomic<float>* voice1DecayPtr { nullptr };
+    std::atomic<float>* voice1SustainPtr { nullptr };
+    std::atomic<float>* voice1ReleasePtr { nullptr };
     std::atomic<float>* voice1TimbrePtr { nullptr };
     std::atomic<float>* voice1ReverbPtr { nullptr };
+    
     std::atomic<float>* voice2SynthPtr { nullptr };
+    std::atomic<float>* voice2AttackPtr { nullptr };
     std::atomic<float>* voice2DecayPtr { nullptr };
+    std::atomic<float>* voice2SustainPtr { nullptr };
+    std::atomic<float>* voice2ReleasePtr { nullptr };
     std::atomic<float>* voice2TimbrePtr { nullptr };
     std::atomic<float>* voice2ReverbPtr { nullptr };
+    
     std::atomic<float>* audioRoutingPtr { nullptr };
     std::atomic<float>* voice1GainPtr { nullptr };
     std::atomic<float>* voice2GainPtr { nullptr };

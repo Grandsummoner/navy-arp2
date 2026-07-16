@@ -386,75 +386,46 @@ PluginEditor::PluginEditor (PluginProcessor& p)
     v2StringBtn.onClick = [this] { if (v2StringBtn.getToggleState()) processor.apvts.getParameter (IDs::voice2Synth.getParamID())->setValueNotifyingHost (2.0f / 3.0f); };
     v2PulseBtn.onClick  = [this] { if (v2PulseBtn.getToggleState())  processor.apvts.getParameter (IDs::voice2Synth.getParamID())->setValueNotifyingHost (1.0f); };
 
-    // Setup tactile ADSR envelope stage selector toggles [3]
-    auto setupEnvBtn = [&](juce::TextButton& btn, juce::String text, int radioId) {
-        addAndMakeVisible (btn);
-        btn.setButtonText (text);
-        btn.setClickingTogglesState (true);
-        btn.setRadioGroupId (radioId);
-        btn.setLookAndFeel (&chromaLookAndFeel);
+    // Rotary Knob Setup for Voice Envelopes and Volume gains (No more faders) [3]
+    juce::Slider* sls[] = {
+        &v1AttackKnob, &v1DecayKnob, &v1SustainKnob, &v1ReleaseKnob, &v1TimbreKnob, &v1ReverbKnob, &v1VolumeKnob,
+        &v2AttackKnob, &v2DecayKnob, &v2SustainKnob, &v2ReleaseKnob, &v2TimbreKnob, &v2ReverbKnob, &v2VolumeKnob
     };
-    setupEnvBtn (v1EnvA, "A", 2001);
-    setupEnvBtn (v1EnvD, "D", 2001);
-    setupEnvBtn (v1EnvS, "S", 2001);
-    setupEnvBtn (v1EnvR, "R", 2001);
+    juce::String sliderIDs[] = {
+        "v1Attack", "v1Decay", "v1Sustain", "v1Release", "v1Timbre", "v1Reverb", "v1Volume",
+        "v2Attack", "v2Decay", "v2Sustain", "v2Release", "v2Timbre", "v2Reverb", "v2Volume"
+    };
 
-    v1EnvD.setToggleState (true, juce::dontSendNotification); // Default decay focus [3]
-    v1EnvA.onClick = [this] { v1ActiveEnvStage = 0; };
-    v1EnvD.onClick = [this] { v1ActiveEnvStage = 1; };
-    v1EnvS.onClick = [this] { v1ActiveEnvStage = 2; };
-    v1EnvR.onClick = [this] { v1ActiveEnvStage = 3; };
-
-    setupEnvBtn (v2EnvA, "A", 2002);
-    setupEnvBtn (v2EnvD, "D", 2002);
-    setupEnvBtn (v2EnvS, "S", 2002);
-    setupEnvBtn (v2EnvR, "R", 2002);
-
-    v2EnvD.setToggleState (true, juce::dontSendNotification); // Default decay focus [3]
-    v2EnvA.onClick = [this] { v2ActiveEnvStage = 0; };
-    v2EnvD.onClick = [this] { v2ActiveEnvStage = 1; };
-    v2EnvS.onClick = [this] { v2ActiveEnvStage = 2; };
-    v2EnvR.onClick = [this] { v2ActiveEnvStage = 3; };
-
-    // Slider Setup for Voice Envelopes and Volume gains [3]
-    juce::Slider* sls[] = { &v1DecaySlider, &v1TimbreSlider, &v1ReverbSlider, &v2DecaySlider, &v2TimbreSlider, &v2ReverbSlider, &v1GainSlider, &v2GainSlider };
-    for (auto* s : sls)
+    for (int i = 0; i < 14; ++i)
     {
-        addAndMakeVisible (s);
-        s->setSliderStyle (juce::Slider::LinearHorizontal);
-        s->setTextBoxStyle (juce::Slider::NoTextBox, false, 0, 0);
-        s->setLookAndFeel (&chromaLookAndFeel);
+        addAndMakeVisible (sls[i]);
+        sls[i]->setSliderStyle (juce::Slider::RotaryHorizontalVerticalDrag);
+        sls[i]->setTextBoxStyle (juce::Slider::NoTextBox, false, 0, 0);
+        sls[i]->setLookAndFeel (&chromaLookAndFeel);
+        sls[i]->setComponentID (sliderIDs[i]);
+        sls[i]->addMouseListener (this, false);
     }
-    v1DecaySlider.setRange (0.005f, 3.0f);
-    v2DecaySlider.setRange (0.005f, 3.0f);
 
-    v1DecaySlider.onValueChange = [this] {
-        float val = static_cast<float> (v1DecaySlider.getValue());
-        if (v1ActiveEnvStage == 0)      processor.voice1.attack = val;
-        else if (v1ActiveEnvStage == 1) processor.voice1.decay = val;
-        else if (v1ActiveEnvStage == 2) processor.voice1.sustain = val;
-        else if (v1ActiveEnvStage == 3) processor.voice1.release = val;
-    };
-
-    v2DecaySlider.onValueChange = [this] {
-        float val = static_cast<float> (v2DecaySlider.getValue());
-        if (v2ActiveEnvStage == 0)      processor.voice2.attack = val;
-        else if (v2ActiveEnvStage == 1) processor.voice2.decay = val;
-        else if (v2ActiveEnvStage == 2) processor.voice2.sustain = val;
-        else if (v2ActiveEnvStage == 3) processor.voice2.release = val;
-    };
-
-    // Attachments Setup
+    // Attachments Setup for 14 individual Voice parameters [3]
     midiInAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment> (processor.apvts, IDs::midiInChannel.getParamID(), midiInBox);
     midiOutAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment> (processor.apvts, IDs::midiOutChannel.getParamID(), midiOutBox);
     audioRoutingAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment> (processor.apvts, IDs::audioRouting.getParamID(), audioRoutingBox);
 
-    v1TimbreAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (processor.apvts, IDs::voice1Timbre.getParamID(), v1TimbreSlider);
-    v1ReverbAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (processor.apvts, IDs::voice1Reverb.getParamID(), v1ReverbSlider);
-    v2TimbreAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (processor.apvts, IDs::voice2Timbre.getParamID(), v2TimbreSlider);
-    v2ReverbAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (processor.apvts, IDs::voice2Reverb.getParamID(), v2ReverbSlider);
-    v1GainAttachment   = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (processor.apvts, IDs::voice1Gain.getParamID(), v1GainSlider);
-    v2GainAttachment   = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (processor.apvts, IDs::voice2Gain.getParamID(), v2GainSlider);
+    v1AttackAttachment  = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (processor.apvts, IDs::voice1Attack.getParamID(), v1AttackKnob);
+    v1DecayAttachment   = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (processor.apvts, IDs::voice1Decay.getParamID(), v1DecayKnob);
+    v1SustainAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (processor.apvts, IDs::voice1Sustain.getParamID(), v1SustainKnob);
+    v1ReleaseAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (processor.apvts, IDs::voice1Release.getParamID(), v1ReleaseKnob);
+    v1TimbreAttachment  = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (processor.apvts, IDs::voice1Timbre.getParamID(), v1TimbreKnob);
+    v1ReverbAttachment  = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (processor.apvts, IDs::voice1Reverb.getParamID(), v1ReverbKnob);
+    v1VolumeAttachment  = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (processor.apvts, IDs::voice1Gain.getParamID(), v1VolumeKnob);
+
+    v2AttackAttachment  = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (processor.apvts, IDs::voice2Attack.getParamID(), v2AttackKnob);
+    v2DecayAttachment   = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (processor.apvts, IDs::voice2Decay.getParamID(), v2DecayKnob);
+    v2SustainAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (processor.apvts, IDs::voice2Sustain.getParamID(), v2SustainKnob);
+    v2ReleaseAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (processor.apvts, IDs::voice2Release.getParamID(), v2ReleaseKnob);
+    v2TimbreAttachment  = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (processor.apvts, IDs::voice2Timbre.getParamID(), v2TimbreKnob);
+    v2ReverbAttachment  = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (processor.apvts, IDs::voice2Reverb.getParamID(), v2ReverbKnob);
+    v2VolumeAttachment  = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (processor.apvts, IDs::voice2Gain.getParamID(), v2VolumeKnob);
 
     updateSliderTextBoxThemeColors();
 
@@ -513,7 +484,9 @@ PluginEditor::PluginEditor (PluginProcessor& p)
         &fader1, &fader2, &fader3, &fader4, &fader5, &fader6, &fader7, &fader8,
         &rhythmMorphKnob, &restKnob, &legatoKnob, &rateKnob,
         &entropyKnob, &harmonyKnob, &chaosKnob, &octavesKnob,
-        &masterVelocityKnob, &masterSwingKnob, &morphCrossfader, &v1GainSlider, &v2GainSlider
+        &masterVelocityKnob, &masterSwingKnob, &morphCrossfader,
+        &v1AttackKnob, &v1DecayKnob, &v1SustainKnob, &v1ReleaseKnob, &v1TimbreKnob, &v1ReverbKnob, &v1VolumeKnob,
+        &v2AttackKnob, &v2DecayKnob, &v2SustainKnob, &v2ReleaseKnob, &v2TimbreKnob, &v2ReverbKnob, &v2VolumeKnob
     };
     for (auto* s : allSliders) {
         s->toFront (false);
@@ -528,7 +501,11 @@ PluginEditor::PluginEditor (PluginProcessor& p)
 PluginEditor::~PluginEditor() 
 { 
     stopTimer(); processor.apvts.removeParameterListener ("panelTheme", this);
-    juce::Slider* sliders[] = { &rhythmMorphKnob, &restKnob, &legatoKnob, &rateKnob, &entropyKnob, &harmonyKnob, &chaosKnob, &octavesKnob, &masterVelocityKnob, &masterSwingKnob, &fader1, &fader2, &fader3, &fader4, &fader5, &fader6, &fader7, &fader8, &morphCrossfader, &v1GainSlider, &v2GainSlider };
+    juce::Slider* sliders[] = { 
+        &rhythmMorphKnob, &restKnob, &legatoKnob, &rateKnob, &entropyKnob, &harmonyKnob, &chaosKnob, &octavesKnob, &masterVelocityKnob, &masterSwingKnob, &fader1, &fader2, &fader3, &fader4, &fader5, &fader6, &fader7, &fader8, &morphCrossfader,
+        &v1AttackKnob, &v1DecayKnob, &v1SustainKnob, &v1ReleaseKnob, &v1TimbreKnob, &v1ReverbKnob, &v1VolumeKnob,
+        &v2AttackKnob, &v2DecayKnob, &v2SustainKnob, &v2ReleaseKnob, &v2TimbreKnob, &v2ReverbKnob, &v2VolumeKnob
+    };
     for (auto* s : sliders) s->setLookAndFeel (nullptr);
     
     // Explicitly sized array definition to bypass MSVC range-based template confusion [1.2.3]
@@ -541,8 +518,6 @@ PluginEditor::~PluginEditor()
     // Left Panel component de-registrations [3]
     juce::ComboBox* boxes[] = { &midiInBox, &midiOutBox, &audioRoutingBox };
     for (auto* b : boxes) b->setLookAndFeel (nullptr);
-    juce::Slider* sls[] = { &v1DecaySlider, &v1TimbreSlider, &v1ReverbSlider, &v2DecaySlider, &v2TimbreSlider, &v2ReverbSlider };
-    for (auto* s : sls) s->setLookAndFeel (nullptr);
 
     // Dynamic clean up of property-wrapped syncButton [1.2.3]
     getProperties().remove ("syncWrapper");
@@ -856,28 +831,20 @@ void PluginEditor::paint (juce::Graphics& g)
         g.drawText ("MIDI IN:", 15, 95, 80, 16, juce::Justification::centredLeft);
         g.drawText ("MIDI OUT:", 15, 145, 80, 16, juce::Justification::centredLeft);
 
-        g.drawText ("DECAY", 15, 272, 65, 16, juce::Justification::centredLeft);
-        g.drawText ("TIMBRE", 15, 302, 65, 16, juce::Justification::centredLeft);
-        g.drawText ("REVERB", 15, 332, 65, 16, juce::Justification::centredLeft);
-        g.drawText ("VOL", 15, 362, 65, 16, juce::Justification::centredLeft);
-
-        g.drawText ("DECAY", 15, 472, 65, 16, juce::Justification::centredLeft);
-        g.drawText ("TIMBRE", 15, 502, 65, 16, juce::Justification::centredLeft);
-        g.drawText ("REVERB", 15, 532, 65, 16, juce::Justification::centredLeft);
-        g.drawText ("VOL", 15, 562, 65, 16, juce::Justification::centredLeft);
-
         g.drawText ("SIGNAL FLOW:", 15, 615, 150, 16, juce::Justification::centredLeft);
 
-        // Fetch voice parameters to draw real-time interactive blueprint graphs
-        float v1DecayVal = static_cast<float> (v1DecaySlider.getValue());
-        float v1TimbreVal = static_cast<float> (v1TimbreSlider.getValue());
-        float v1ReverbVal = static_cast<float> (v1ReverbSlider.getValue());
-        
-        float v2DecayVal = static_cast<float> (v2DecaySlider.getValue());
-        float v2TimbreVal = static_cast<float> (v2TimbreSlider.getValue());
-        float v2ReverbVal = static_cast<float> (v2ReverbSlider.getValue());
+        // Fetch ADSR values dynamically [3]
+        float v1A = processor.voice1AttackPtr->load();
+        float v1D = processor.voice1DecayPtr->load();
+        float v1S = processor.voice1SustainPtr->load();
+        float v1R = processor.voice1ReleasePtr->load();
 
-        // Contained Dark Glossy Screens behind each dynamic graph column [3]
+        float v2A = processor.voice2AttackPtr->load();
+        float v2D = processor.voice2DecayPtr->load();
+        float v2S = processor.voice2SustainPtr->load();
+        float v2R = processor.voice2ReleasePtr->load();
+
+        // Contained Dark Glossy Screens behind each dynamic ADSR visualizer [3]
         auto drawDisplayScreen = [&](int sx, int sy, int sw, int sh, juce::Colour col) {
             g.setColour (juce::Colour (0xFF020406));
             g.fillRoundedRectangle (static_cast<float> (sx), static_cast<float> (sy), static_cast<float> (sw), static_cast<float> (sh), 3.0f);
@@ -885,62 +852,72 @@ void PluginEditor::paint (juce::Graphics& g)
             g.drawRoundedRectangle (static_cast<float> (sx), static_cast<float> (sy), static_cast<float> (sw), static_cast<float> (sh), 3.0f, 1.0f);
         };
 
-        drawDisplayScreen (233, 270, 54, 20, juce::Colour (0xFFFF3366));
-        drawDisplayScreen (233, 300, 54, 20, juce::Colour (0xFFFF3366));
-        drawDisplayScreen (233, 330, 54, 20, juce::Colour (0xFFFF3366));
+        drawDisplayScreen (15, 240, 270, 42, juce::Colour (0xFFFF3366));
+        drawDisplayScreen (15, 440, 270, 42, juce::Colour (0xFFD500F9));
 
-        drawDisplayScreen (233, 470, 54, 20, juce::Colour (0xFFD500F9));
-        drawDisplayScreen (233, 500, 54, 20, juce::Colour (0xFFD500F9));
-        drawDisplayScreen (233, 530, 54, 20, juce::Colour (0xFFD500F9));
+        // Draw Interactive Blueprint ADSR Graphs contained inside the screen box [3]
+        auto drawAdsrGraph = [&](int sx, int sy, int sw, int sh, float a, float d, float s, float r, juce::Colour col) {
+            // Background subtle gridlines inside screen
+            g.setColour (col.withAlpha (0.04f));
+            for (int gx = sx + 10; gx < sx + sw; gx += 15)
+                g.drawVerticalLine (gx, sy + 1, sy + sh - 1);
+            for (int gy = sy + 5; gy < sy + sh; gy += 8)
+                g.drawHorizontalLine (gy, sx + 1, sx + sw - 1);
 
-        // Dynamic vector drawing lambdas to create glowing oscilloscopes
-        auto drawDecayGraph = [&](int gx, int gy, float val, juce::Colour col) {
             juce::Path p;
-            p.startNewSubPath (gx, gy + 13);
-            p.lineTo (gx + 5, gy + 3);
-            float decayX = gx + 5 + val * 35.0f;
-            p.lineTo (decayX, gy + 3);
-            p.lineTo (gx + 45, gy + 13);
-            g.setColour (col.withAlpha (0.10f));
+            float total = std::max (0.1f, a + d + r);
+            
+            float startX = sx + 8.0f;
+            float endX = sx + sw - 8.0f;
+            float graphW = endX - startX;
+            
+            // Linear scale ADSR parameters dynamically to look like real-time screen [3]
+            float attackX = startX + (a / 2.0f) * (graphW * 0.22f);
+            float decayX = attackX + (d / 3.0f) * (graphW * 0.22f);
+            float sustainX = decayX + (graphW * 0.30f);
+            float releaseX = sustainX + (r / 3.0f) * (graphW * 0.22f);
+
+            float bottomY = sy + sh - 3.0f;
+            float topY = sy + 3.0f;
+            float sustainY = bottomY - s * (bottomY - topY);
+
+            p.startNewSubPath (startX, bottomY);
+            p.lineTo (attackX, topY);
+            p.lineTo (decayX, sustainY);
+            p.lineTo (sustainX, sustainY);
+            p.lineTo (releaseX, bottomY);
+
+            g.setColour (col.withAlpha (0.08f));
             g.fillPath (p);
-            g.setColour (col.withAlpha (0.75f));
-            g.strokePath (p, juce::PathStrokeType (1.25f));
+
+            g.setColour (col.withAlpha (0.85f));
+            g.strokePath (p, juce::PathStrokeType (1.50f));
         };
 
-        auto drawTimbreGraph = [&](int gx, int gy, float val, juce::Colour col) {
-            juce::Path p;
-            p.startNewSubPath (gx, gy + 13);
-            float cutoffX = gx + 5 + val * 30.0f;
-            p.lineTo (cutoffX - 4, gy + 13);
-            p.quadraticTo (cutoffX, gy + 2, cutoffX + 4, gy + 13); // resonance bump
-            p.lineTo (gx + 45, gy + 13);
-            g.setColour (col.withAlpha (0.10f));
-            g.fillPath (p);
-            g.setColour (col.withAlpha (0.75f));
-            g.strokePath (p, juce::PathStrokeType (1.25f));
-        };
+        drawAdsrGraph (15, 240, 270, 42, v1A, v1D, v1S, v1R, juce::Colour (0xFFFF3366)); // Voice 1 Pink
+        drawAdsrGraph (15, 440, 270, 42, v2A, v2D, v2S, v2R, juce::Colour (0xFFD500F9)); // Voice 2 Purple
 
-        auto drawReverbGraph = [&](int gx, int gy, float val, juce::Colour col) {
-            g.setColour (col.withAlpha (0.75f));
-            int numTaps = 4 + static_cast<int> (val * 8.0f);
-            for (int tap = 0; tap < numTaps; ++tap)
-            {
-                float progress = static_cast<float> (tap) / static_cast<float> (numTaps);
-                float tx = gx + 2.0f + progress * 40.0f;
-                float th = (10.0f - progress * 7.0f) * (0.3f + val * 0.7f);
-                g.drawVerticalLine (static_cast<int> (tx), gy + 13.0f - th, gy + 13.0f);
-            }
-        };
+        // Render micro labels above rotary knobs (Attack, Decay, Sustain, Release, Timbre, Reverb, Volume)
+        g.setColour (juce::Colour (0xFFA0A5B0));
+        g.setFont (juce::FontOptions ("Courier New", 9.0f, juce::Font::bold));
 
-        // Draw Interactive Blueprint Graphs (Symmetrically matched to voice header colors)
-        int graphX = 235;
-        drawDecayGraph  (graphX, 272, v1DecayVal, juce::Colour (0xFFFF3366)); // Voice 1 Pink
-        drawTimbreGraph (graphX, 302, v1TimbreVal, juce::Colour (0xFFFF3366));
-        drawReverbGraph (graphX, 332, v1ReverbVal, juce::Colour (0xFFFF3366));
+        // Voice 1 text labels centered above the pots
+        g.drawText ("A",   38,  285, 12, 10, juce::Justification::centred);
+        g.drawText ("D",   103, 285, 12, 10, juce::Justification::centred);
+        g.drawText ("S",   168, 285, 12, 10, juce::Justification::centred);
+        g.drawText ("R",   233, 285, 12, 10, juce::Justification::centred);
+        g.drawText ("TIMB", 41,  335, 36, 10, juce::Justification::centred);
+        g.drawText ("REVB", 121, 335, 36, 10, juce::Justification::centred);
+        g.drawText ("VOL",  204, 335, 30, 10, juce::Justification::centred);
 
-        drawDecayGraph  (graphX, 472, v2DecayVal, juce::Colour (0xFFD500F9)); // Voice 2 Purple
-        drawTimbreGraph (graphX, 502, v2TimbreVal, juce::Colour (0xFFD500F9));
-        drawReverbGraph (graphX, 532, v2ReverbVal, juce::Colour (0xFFD500F9));
+        // Voice 2 text labels centered above the pots
+        g.drawText ("A",   38,  485, 12, 10, juce::Justification::centred);
+        g.drawText ("D",   103, 485, 12, 10, juce::Justification::centred);
+        g.drawText ("S",   168, 485, 12, 10, juce::Justification::centred);
+        g.drawText ("R",   233, 485, 12, 10, juce::Justification::centred);
+        g.drawText ("TIMB", 41,  535, 36, 10, juce::Justification::centred);
+        g.drawText ("REVB", 121, 535, 36, 10, juce::Justification::centred);
+        g.drawText ("VOL",  204, 535, 30, 10, juce::Justification::centred);
     }
 
     // =====================================================================
@@ -1262,16 +1239,15 @@ void PluginEditor::resized()
         v1StringBtn.setBounds (147, 215, 63, 18);
         v1PulseBtn.setBounds (213, 215, 63, 18);
 
-        // Voice 1 single-line compact Euro-rack layout [3]
-        v1EnvA.setBounds (45, 272, 16, 16);
-        v1EnvD.setBounds (63, 272, 16, 16);
-        v1EnvS.setBounds (81, 272, 16, 16);
-        v1EnvR.setBounds (99, 272, 16, 16);
-        v1DecaySlider.setBounds (120, 272, 105, 16);
+        // Voice 1 tactile independent ADSR / Timbre / Reverb / Volume knobs
+        v1AttackKnob.setBounds  (20,  295, 42, 42);
+        v1DecayKnob.setBounds   (85,  295, 42, 42);
+        v1SustainKnob.setBounds (150, 295, 42, 42);
+        v1ReleaseKnob.setBounds (215, 295, 42, 42);
 
-        v1TimbreSlider.setBounds (85, 302, 140, 16);
-        v1ReverbSlider.setBounds (85, 332, 140, 16);
-        v1GainSlider.setBounds (85, 362, 140, 16);
+        v1TimbreKnob.setBounds  (35,  345, 42, 42);
+        v1ReverbKnob.setBounds  (115, 345, 42, 42);
+        v1VolumeKnob.setBounds  (195, 345, 42, 42);
 
         // Voice 2 Symmetrical tactile instrument tabs [3]
         v2AnalogBtn.setBounds (15, 415, 63, 18);
@@ -1279,16 +1255,15 @@ void PluginEditor::resized()
         v2StringBtn.setBounds (147, 415, 63, 18);
         v2PulseBtn.setBounds (213, 415, 63, 18);
 
-        // Voice 2 single-line compact Euro-rack layout [3]
-        v2EnvA.setBounds (45, 472, 16, 16);
-        v2EnvD.setBounds (63, 472, 16, 16);
-        v2EnvS.setBounds (81, 472, 16, 16);
-        v2EnvR.setBounds (99, 472, 16, 16);
-        v2DecaySlider.setBounds (120, 472, 105, 16);
+        // Voice 2 tactile independent ADSR / Timbre / Reverb / Volume knobs
+        v2AttackKnob.setBounds  (20,  495, 42, 42);
+        v2DecayKnob.setBounds   (85,  495, 42, 42);
+        v2SustainKnob.setBounds (150, 495, 42, 42);
+        v2ReleaseKnob.setBounds (215, 495, 42, 42);
 
-        v2TimbreSlider.setBounds (85, 502, 140, 16);
-        v2ReverbSlider.setBounds (85, 532, 140, 16);
-        v2GainSlider.setBounds (85, 562, 140, 16);
+        v2TimbreKnob.setBounds  (35,  545, 42, 42);
+        v2ReverbKnob.setBounds  (115, 545, 42, 42);
+        v2VolumeKnob.setBounds  (195, 545, 42, 42);
 
         audioRoutingBox.setBounds (85, 615, 200, 20);
     }
@@ -1395,51 +1370,6 @@ void PluginEditor::timerCallback()
         v2FmBtn.setToggleState (v2SynthVal == 1, juce::dontSendNotification);
         v2StringBtn.setToggleState (v2SynthVal == 2, juce::dontSendNotification);
         v2PulseBtn.setToggleState (v2SynthVal == 3, juce::dontSendNotification);
-
-        // Symmetrical ADSR Stage Select Highlight Synchronization [3]
-        v1EnvA.setToggleState (v1ActiveEnvStage == 0, juce::dontSendNotification);
-        v1EnvD.setToggleState (v1ActiveEnvStage == 1, juce::dontSendNotification);
-        v1EnvS.setToggleState (v1ActiveEnvStage == 2, juce::dontSendNotification);
-        v1EnvR.setToggleState (v1ActiveEnvStage == 3, juce::dontSendNotification);
-
-        v2EnvA.setToggleState (v2ActiveEnvStage == 0, juce::dontSendNotification);
-        v2EnvD.setToggleState (v2ActiveEnvStage == 1, juce::dontSendNotification);
-        v2EnvS.setToggleState (v2ActiveEnvStage == 2, juce::dontSendNotification);
-        v2EnvR.setToggleState (v2ActiveEnvStage == 3, juce::dontSendNotification);
-
-        // Dynamically adjust slider ranges based on active sub-stage focus
-        if (v1ActiveEnvStage == 2) {
-            if (v1DecaySlider.getMaximum() != 1.0f) v1DecaySlider.setRange (0.0f, 1.0f);
-        } else {
-            if (v1DecaySlider.getMaximum() != 3.0f) v1DecaySlider.setRange (0.005f, 3.0f);
-        }
-
-        if (v2ActiveEnvStage == 2) {
-            if (v2DecaySlider.getMaximum() != 1.0f) v2DecaySlider.setRange (0.0f, 1.0f);
-        } else {
-            if (v2DecaySlider.getMaximum() != 3.0f) v2DecaySlider.setRange (0.005f, 3.0f);
-        }
-
-        // Read active ADSR variables when sliders are not being grabbed
-        if (v1DecaySlider.getThumbBeingDragged() < 0)
-        {
-            float targetVal = 0.0f;
-            if (v1ActiveEnvStage == 0)      targetVal = processor.voice1.attack;
-            else if (v1ActiveEnvStage == 1) targetVal = processor.voice1.decay;
-            else if (v1ActiveEnvStage == 2) targetVal = processor.voice1.sustain;
-            else if (v1ActiveEnvStage == 3) targetVal = processor.voice1.release;
-            v1DecaySlider.setValue (targetVal, juce::dontSendNotification);
-        }
-
-        if (v2DecaySlider.getThumbBeingDragged() < 0)
-        {
-            float targetVal = 0.0f;
-            if (v2ActiveEnvStage == 0)      targetVal = processor.voice2.attack;
-            else if (v2ActiveEnvStage == 1) targetVal = processor.voice2.decay;
-            else if (v2ActiveEnvStage == 2) targetVal = processor.voice2.sustain;
-            else if (v2ActiveEnvStage == 3) targetVal = processor.voice2.release;
-            v2DecaySlider.setValue (targetVal, juce::dontSendNotification);
-        }
     }
 
     getProperties().set ("isUpdatingProgrammatically", false);

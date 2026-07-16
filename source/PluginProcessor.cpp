@@ -47,14 +47,25 @@ PluginProcessor::PluginProcessor()
     // Cache Left Panel Sound parameters [3]
     midiInChannelPtr  = apvts.getRawParameterValue (IDs::midiInChannel.getParamID());
     midiOutChannelPtr = apvts.getRawParameterValue (IDs::midiOutChannel.getParamID());
+    
+    // Voice 1 parameters cached
     voice1SynthPtr    = apvts.getRawParameterValue (IDs::voice1Synth.getParamID());
+    voice1AttackPtr   = apvts.getRawParameterValue (IDs::voice1Attack.getParamID());
     voice1DecayPtr    = apvts.getRawParameterValue (IDs::voice1Decay.getParamID());
+    voice1SustainPtr  = apvts.getRawParameterValue (IDs::voice1Sustain.getParamID());
+    voice1ReleasePtr  = apvts.getRawParameterValue (IDs::voice1Release.getParamID());
     voice1TimbrePtr   = apvts.getRawParameterValue (IDs::voice1Timbre.getParamID());
     voice1ReverbPtr   = apvts.getRawParameterValue (IDs::voice1Reverb.getParamID());
+    
+    // Voice 2 parameters cached
     voice2SynthPtr    = apvts.getRawParameterValue (IDs::voice2Synth.getParamID());
+    voice2AttackPtr   = apvts.getRawParameterValue (IDs::voice2Attack.getParamID());
     voice2DecayPtr    = apvts.getRawParameterValue (IDs::voice2Decay.getParamID());
+    voice2SustainPtr  = apvts.getRawParameterValue (IDs::voice2Sustain.getParamID());
+    voice2ReleasePtr  = apvts.getRawParameterValue (IDs::voice2Release.getParamID());
     voice2TimbrePtr   = apvts.getRawParameterValue (IDs::voice2Timbre.getParamID());
     voice2ReverbPtr   = apvts.getRawParameterValue (IDs::voice2Reverb.getParamID());
+    
     audioRoutingPtr   = apvts.getRawParameterValue (IDs::audioRouting.getParamID());
     voice1GainPtr     = apvts.getRawParameterValue (IDs::voice1Gain.getParamID());
     voice2GainPtr     = apvts.getRawParameterValue (IDs::voice2Gain.getParamID());
@@ -597,6 +608,17 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
     float v1Vol = voice1GainPtr->load();
     float v2Vol = voice2GainPtr->load();
 
+    // Synchronize current parameter values to voice ADSR state engines [3]
+    voice1.attack  = voice1AttackPtr->load();
+    voice1.decay   = voice1DecayPtr->load();
+    voice1.sustain = voice1SustainPtr->load();
+    voice1.release = voice1ReleasePtr->load();
+
+    voice2.attack  = voice2AttackPtr->load();
+    voice2.decay   = voice2DecayPtr->load();
+    voice2.sustain = voice2SustainPtr->load();
+    voice2.release = voice2ReleasePtr->load();
+
     for (int sampleIdx = 0; sampleIdx < numSamples; ++sampleIdx)
     {
         // Render raw synthesis samples (Volume controlled per voice) [3]
@@ -805,17 +827,6 @@ void PluginProcessor::getStateInformation (juce::MemoryBlock& destData)
         xml->setAttribute ("hasSceneA", hasSceneA);
         xml->setAttribute ("hasSceneB", hasSceneB);
 
-        // Serialize Voice ADSR details
-        xml->setAttribute ("v1Attack", voice1.attack);
-        xml->setAttribute ("v1Decay", voice1.decay);
-        xml->setAttribute ("v1Sustain", voice1.sustain);
-        xml->setAttribute ("v1Release", voice1.release);
-
-        xml->setAttribute ("v2Attack", voice2.attack);
-        xml->setAttribute ("v2Decay", voice2.decay);
-        xml->setAttribute ("v2Sustain", voice2.sustain);
-        xml->setAttribute ("v2Release", voice2.release);
-
         // 2. Serialize current active Scene A profile
         auto* activeSceneANode = xml->createNewChildElement ("CURRENT_SCENE_A");
         if (activeSceneANode != nullptr)
@@ -961,17 +972,6 @@ void PluginProcessor::setStateInformation (const void* data, int sizeInBytes)
         isSceneBActiveAnchor.store (xmlState->getBoolAttribute ("isSceneBActiveAnchor", false));
         hasSceneA = xmlState->getBoolAttribute ("hasSceneA", false);
         hasSceneB = xmlState->getBoolAttribute ("hasSceneB", false);
-
-        // Deserialization of ADSR variables
-        voice1.attack = static_cast<float> (xmlState->getDoubleAttribute ("v1Attack", 0.01));
-        voice1.decay = static_cast<float> (xmlState->getDoubleAttribute ("v1Decay", 0.5));
-        voice1.sustain = static_cast<float> (xmlState->getDoubleAttribute ("v1Sustain", 0.7));
-        voice1.release = static_cast<float> (xmlState->getDoubleAttribute ("v1Release", 0.3));
-
-        voice2.attack = static_cast<float> (xmlState->getDoubleAttribute ("v2Attack", 0.01));
-        voice2.decay = static_cast<float> (xmlState->getDoubleAttribute ("v2Decay", 0.5));
-        voice2.sustain = static_cast<float> (xmlState->getDoubleAttribute ("v2Sustain", 0.7));
-        voice2.release = static_cast<float> (xmlState->getDoubleAttribute ("v2Release", 0.3));
 
         // 2. Deserialization of current active Scene A state
         if (auto* activeSceneANode = xmlState->getChildByName ("CURRENT_SCENE_A"))
@@ -1135,13 +1135,21 @@ juce::AudioProcessorValueTreeState::ParameterLayout PluginProcessor::createParam
     
     // Choice items updated to reflect the new 4 tactile button options [3]
     params.push_back (std::make_unique<juce::AudioParameterChoice> (IDs::voice1Synth, "Voice 1 Synth", juce::StringArray { "Analog", "FM", "Resonator", "Pulse" }, 0));
-    params.push_back (std::make_unique<juce::AudioParameterFloat> (IDs::voice1Decay, "Voice 1 Decay", 0.01f, 2.0f, 0.5f));
+    params.push_back (std::make_unique<juce::AudioParameterFloat> (IDs::voice1Attack, "Voice 1 Attack", 0.001f, 2.0f, 0.01f));
+    params.push_back (std::make_unique<juce::AudioParameterFloat> (IDs::voice1Decay, "Voice 1 Decay", 0.01f, 3.0f, 0.35f));
+    params.push_back (std::make_unique<juce::AudioParameterFloat> (IDs::voice1Sustain, "Voice 1 Sustain", 0.0f, 1.0f, 0.70f));
+    params.push_back (std::make_unique<juce::AudioParameterFloat> (IDs::voice1Release, "Voice 1 Release", 0.01f, 3.0f, 0.25f));
     params.push_back (std::make_unique<juce::AudioParameterFloat> (IDs::voice1Timbre, "Voice 1 Timbre", 0.0f, 1.0f, 0.5f));
     params.push_back (std::make_unique<juce::AudioParameterFloat> (IDs::voice1Reverb, "Voice 1 Reverb", 0.0f, 1.0f, 0.15f));
+    
     params.push_back (std::make_unique<juce::AudioParameterChoice> (IDs::voice2Synth, "Voice 2 Synth", juce::StringArray { "Analog", "FM", "Resonator", "Pulse" }, 2));
-    params.push_back (std::make_unique<juce::AudioParameterFloat> (IDs::voice2Decay, "Voice 2 Decay", 0.01f, 2.0f, 0.8f));
+    params.push_back (std::make_unique<juce::AudioParameterFloat> (IDs::voice2Attack, "Voice 2 Attack", 0.001f, 2.0f, 0.01f));
+    params.push_back (std::make_unique<juce::AudioParameterFloat> (IDs::voice2Decay, "Voice 2 Decay", 0.01f, 3.0f, 0.35f));
+    params.push_back (std::make_unique<juce::AudioParameterFloat> (IDs::voice2Sustain, "Voice 2 Sustain", 0.0f, 1.0f, 0.70f));
+    params.push_back (std::make_unique<juce::AudioParameterFloat> (IDs::voice2Release, "Voice 2 Release", 0.01f, 3.0f, 0.25f));
     params.push_back (std::make_unique<juce::AudioParameterFloat> (IDs::voice2Timbre, "Voice 2 Timbre", 0.0f, 1.0f, 0.2f));
     params.push_back (std::make_unique<juce::AudioParameterFloat> (IDs::voice2Reverb, "Voice 2 Reverb", 0.0f, 1.0f, 0.3f));
+    
     params.push_back (std::make_unique<juce::AudioParameterChoice> (IDs::audioRouting, "Audio Routing", juce::StringArray { "Split A->1 / B->2", "Layered (Voice 1)", "External Out Only" }, 0));
 
     // Register Volume fader parameter per voice [3]
