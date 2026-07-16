@@ -286,16 +286,17 @@ struct SynthVoice
             float filteredVal = 0.5f * (delayedVal + lastFilterOut);
             lastFilterOut = delayedVal;
 
-            // DC offset and low frequency drift blocker
-            filteredVal -= lastFilterOut * 0.005f; 
+            // DC offset and low frequency drift blocker (reduced to prevent excessive damping)
+            filteredVal -= lastFilterOut * 0.001f; 
             
-            float feedback = 0.85f + timbre * 0.11f; // Cap max feedback at 0.96f to prevent overloading
+            // Pluck decay feedback loop rate adjusted to ring naturally (0.990 - 0.998 range per sample)
+            float feedback = 0.990f + timbre * 0.008f; 
             float currentVal = excitation + filteredVal * feedback;
             
             resBuffer[resWriteIdx] = currentVal;
             resWriteIdx = (resWriteIdx + 1) % 2048;
             
-            totalOutput += currentVal * 1.00f; // Symmetrical pluck output volume scale (boosted from 0.22f)
+            totalOutput += currentVal * 1.00f; // Symmetrical pluck output volume scale
             activeCount++;
         }
 
