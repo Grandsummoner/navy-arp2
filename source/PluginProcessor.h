@@ -105,6 +105,7 @@ struct SynthVoice
     float resBuffer[2048] { 0.0f };
     int resWriteIdx = 0;
     float noiseImpulse = 0.0f;
+    float lastFilterOut = 0.0f; // Stable 1-pole state variable for noise damping
     
     // Subtractive resonant feedback lowpass filter states
     float s1 = 0.0f, s2 = 0.0f;
@@ -118,6 +119,7 @@ struct SynthVoice
         
         // Feed the physical model noise generator impulse
         noiseImpulse = 1.0f;
+        lastFilterOut = 0.0f; // Reset feedback state
     }
 
     float process (int synthType, float timbre)
@@ -183,14 +185,17 @@ struct SynthVoice
                 noiseImpulse *= 0.94f; // Clean, realistic strike decay
             }
             
-            float feedback = 0.95f + timbre * 0.045f; // String resonance tension scaling
-            float currentVal = excitation + delayedVal * feedback;
-            float filteredVal = 0.5f * (currentVal + resBuffer[(readIdx + 1) % 2048]);
+            // Symmetrical 1-pole feedback lowpass filtering
+            float filteredVal = 0.5f * (delayedVal + lastFilterOut);
+            lastFilterOut = delayedVal;
             
-            resBuffer[resWriteIdx] = filteredVal;
+            float feedback = 0.95f + timbre * 0.048f; // Resonance tension scaling up to 0.998f
+            float currentVal = excitation + filteredVal * feedback;
+            
+            resBuffer[resWriteIdx] = currentVal;
             resWriteIdx = (resWriteIdx + 1) % 2048;
             
-            output = filteredVal * env * 0.8f;
+            output = currentVal * env * 0.8f;
         }
         
         return output;
