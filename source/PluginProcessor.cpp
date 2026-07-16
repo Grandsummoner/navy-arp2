@@ -642,7 +642,7 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
     float reverbSend1 = voice1ReverbPtr->load();
     float reverbSend2 = voice2ReverbPtr->load();
 
-    // Volume controllers scaled per voice [3]
+    // Volume faders scaled per voice [3]
     float v1Vol = voice1GainPtr->load();
     float v2Vol = voice2GainPtr->load();
 
@@ -726,6 +726,9 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
     reverbEffect.processStereo (reverbBuffer.getWritePointer (0), reverbBuffer.getWritePointer (1), numSamples);
     buffer.addFrom (0, 0, reverbBuffer.getReadPointer (0), numSamples);
     buffer.addFrom (1, 0, reverbBuffer.getReadPointer (1), numSamples);
+
+    // DOWN Master Output volume level to exactly 60% of original levels [1.2.3]
+    buffer.applyGain (0.60f);
 }
 
 void PluginProcessor::triggerDiatonicChordPad (int padIndex)

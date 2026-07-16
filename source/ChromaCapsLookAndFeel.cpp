@@ -420,19 +420,23 @@ void ChromaCapsLookAndFeel::drawButtonBackground (juce::Graphics& g, juce::Butto
         if (text == "A") isLit = !processor.isSceneBActive();
         if (text == "B") isLit = processor.isSceneBActive();
 
+        // 1. Draw a completely solid base to mask the underlying letter on the console background image
+        g.setColour (juce::Colour (0xFF1A1D24));
+        g.fillRoundedRectangle (bounds, cornerSize);
+
+        // 2. Draw active glowing overlay or highlighted/inactive states
         if (isLit || shouldDrawButtonAsDown) {
-            // Distinct red glowing background & solid red border
-            g.setColour (juce::Colour (0xFFFF0000).withAlpha (0.15f));
+            g.setColour (juce::Colour (0xFFFF0000).withAlpha (0.25f)); // Boosted opacity for solid red backlit container
             g.fillRoundedRectangle (bounds, cornerSize);
-            g.setColour (juce::Colour (0xFFFF0000).withAlpha (0.8f));
+            g.setColour (juce::Colour (0xFFFF0000).withAlpha (0.85f));
             g.drawRoundedRectangle (bounds.reduced (0.5f), cornerSize, 1.5f);
         } else if (shouldDrawButtonAsHighlighted) {
-            g.setColour (juce::Colours::white.withAlpha (0.04f));
+            g.setColour (juce::Colours::white.withAlpha (0.05f));
             g.fillRoundedRectangle (bounds, cornerSize);
-            g.setColour (juce::Colour (0xFFFF0000).withAlpha (0.2f)); // Subtle red outline on hover
+            g.setColour (juce::Colour (0xFFFF0000).withAlpha (0.25f)); // Subtle red outline on hover
             g.drawRoundedRectangle (bounds.reduced (0.5f), cornerSize, 1.0f);
         } else {
-            g.setColour (juce::Colour (0xFF1F2229).withAlpha (0.4f));
+            g.setColour (juce::Colour (0xFF2F343F).withAlpha (0.5f)); // Prominent dark inactive bezel outline
             g.drawRoundedRectangle (bounds.reduced (0.5f), cornerSize, 1.0f);
         }
         return;
