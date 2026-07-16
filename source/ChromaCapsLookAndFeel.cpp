@@ -166,6 +166,7 @@ void ChromaCapsLookAndFeel::drawButtonText (juce::Graphics& g, juce::TextButton&
     const bool isDiceButton = (text == "Melo" || text == "Arti" || text == "Time" || text == "Navy");
     const bool isPresetButton = (text == "1" || text == "2" || text == "3" || text == "4" || text == "5" || text == "6" || text == "7" || text == "8");
     const bool isStaticTopButton = (text == "Latch" || text == "Poly" || text == "Freeze" || text == "Seq" || text == "SEQ" || text == "Arp" || text == "ARP");
+    const bool isInstrumentButton = (text == "ANALOG" || text == "FM" || text == "STRING" || text == "PULSE");
 
     int themeIdx = static_cast<int> (processor.apvts.getRawParameterValue ("panelTheme")->load());
 
@@ -173,6 +174,19 @@ void ChromaCapsLookAndFeel::drawButtonText (juce::Graphics& g, juce::TextButton&
     if (text == "Sync")
     {
         return; 
+    }
+
+    if (isInstrumentButton)
+    {
+        bool isToggled = button.getToggleState();
+        if (isToggled || button.isDown())
+            g.setColour (juce::Colours::white);
+        else
+            g.setColour (juce::Colour (0xFFA0A5B0));
+
+        g.setFont (juce::FontOptions ("Courier New", 9.5f, juce::Font::bold));
+        g.drawFittedText (text, button.getLocalBounds(), juce::Justification::centred, 1);
+        return;
     }
 
     if (text == "A" || text == "B")
@@ -278,6 +292,7 @@ void ChromaCapsLookAndFeel::drawButtonBackground (juce::Graphics& g, juce::Butto
     const bool isDiceButton = (text == "Melo" || text == "Arti" || text == "Time" || text == "Navy");
     const bool isStaticTopButton = (text == "Latch" || text == "Poly" || text == "Freeze" || text == "Seq" || text == "SEQ" || text == "Arp" || text == "ARP");
     const bool isPresetButton = (text == "1" || text == "2" || text == "3" || text == "4" || text == "5" || text == "6" || text == "7" || text == "8");
+    const bool isInstrumentButton = (text == "ANALOG" || text == "FM" || text == "STRING" || text == "PULSE");
 
     int themeIdx = static_cast<int> (processor.apvts.getRawParameterValue ("panelTheme")->load());
 
@@ -318,6 +333,28 @@ void ChromaCapsLookAndFeel::drawButtonBackground (juce::Graphics& g, juce::Butto
             float dotRadius = 2.5f;
             g.setColour (juce::Colour (0xFF4F525D));
             g.fillEllipse (bounds.getCentreX() - dotRadius, bounds.getCentreY() - dotRadius, dotRadius * 2.0f, dotRadius * 2.0f);
+        }
+        return;
+    }
+
+    if (isInstrumentButton)
+    {
+        bool isToggled = button.getToggleState();
+        if (isToggled)
+        {
+            // Sleek flat high-tech active button block [3]
+            g.setColour (activeColor.withAlpha (0.18f));
+            g.fillRoundedRectangle (bounds, 2.0f);
+            g.setColour (activeColor);
+            g.drawRoundedRectangle (bounds.reduced (0.5f), 2.0f, 1.25f);
+        }
+        else
+        {
+            // Sleek dark unselected button block [3]
+            g.setColour (juce::Colour (0xFF0E1116));
+            g.fillRoundedRectangle (bounds, 2.0f);
+            g.setColour (juce::Colour (0xFF1E2229));
+            g.drawRoundedRectangle (bounds.reduced (0.5f), 2.0f, 1.0f);
         }
         return;
     }
