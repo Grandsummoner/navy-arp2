@@ -93,7 +93,7 @@ public:
     juce::Label midiInLabel, midiOutLabel;
     juce::Label voice1SynthLabel, voice1DecayLabel, voice1TimbreLabel, voice1ReverbLabel;
     juce::Label voice2SynthLabel, voice2DecayLabel, voice2TimbreLabel, voice2ReverbLabel;
-    g_labelText midiInText, midiOutText1, midiOutText2; // Standardised label labels
+    juce::Label midiInText, midiOutText1, midiOutText2; // Standardised label labels
     juce::Label audioRoutingLabel;
 
     // Public Flash Timers for LookAndFeel Animation Access

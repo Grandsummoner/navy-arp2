@@ -436,6 +436,14 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
     // 3. STEP SEQUENCER CLOCK & NOTE TRIGGERING
     // =====================================================================
     if (!notesToPlay.empty() || isFreezeActive) {
+        // Resolve active or frozen parameters for pitch, octave shifts, chaos, and velocity scaling morph weights
+        int octaveShiftCount = isFreezeActive ? frozenOctavesVal : activeOctavesVal;
+        float currentChaos   = isFreezeActive ? frozenChaos      : modChaos;
+
+        float mVal_Seq = morphPtr->load();
+        float vA = std::cos (mVal_Seq * juce::MathConstants<float>::halfPi);
+        float vB = std::sin (mVal_Seq * juce::MathConstants<float>::halfPi);
+
         bool stepTriggered = false; double samplesPerBeat = mSampleRate * (60.0 / (activeBpm > 0 ? activeBpm : 120.0));
         
         // Synced subdivision triggers vs Free-Run grid timing
@@ -762,7 +770,7 @@ void PluginProcessor::savePreset (int slotIndex)
         
         for (int i = 0; i < 8; ++i) { 
             presets[slotIndex].lfoRates[i] = static_cast<int> (lfoRatePtrs[i]->load()); 
-            presets[slotIndex].lfoDepths[i] = lfoDepthPtrs[i]->load(); 
+            presets[slotIndex].lfoDepths[i] = lfoDepths[i]; // Load directly to avoid memory loop
         }
         presetSlotsSaved[slotIndex] = true; activePresetIndex.store (slotIndex); 
     } 
