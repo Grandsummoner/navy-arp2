@@ -33,7 +33,7 @@ public:
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> attachment;
 };
 
-// Symmetrical Standalone MIDI Learn bounds helper [3]
+// Symmetrical Standalone MIDI Learn bounds helper (Extended to 25 slots) [3]
 static juce::Rectangle<int> getCcPillBounds (int index, int xOffset)
 {
     int cx = 0, cy = 0;
@@ -62,6 +62,41 @@ static juce::Rectangle<int> getCcPillBounds (int index, int xOffset)
     {
         cx = 884 - 38;
         cy = 396 + 32;
+    }
+    else if (index == 18) // Crossfader (Morph)
+    {
+        cx = 480;
+        cy = 395;
+    }
+    else if (index == 19) // Scene A Button
+    {
+        cx = 230;
+        cy = 376;
+    }
+    else if (index == 20) // Scene B Button
+    {
+        cx = 730;
+        cy = 376;
+    }
+    else if (index == 21) // Dice Melo
+    {
+        cx = 888;
+        cy = 28;
+    }
+    else if (index == 22) // Dice Arti
+    {
+        cx = 930;
+        cy = 28;
+    }
+    else if (index == 23) // Dice Time
+    {
+        cx = 888;
+        cy = 116;
+    }
+    else if (index == 24) // Dice Navy
+    {
+        cx = 930;
+        cy = 116;
     }
 
     return { cx + xOffset, cy, 34, 15 };
@@ -499,6 +534,8 @@ PluginEditor::PluginEditor (PluginProcessor& p)
 
     updateLeftPanelVisibility(); // Initialise visibility of left panel components on startup [3]
 
+    setWantsKeyboardFocus (true); // Enable keyboard focus to allow computer key inputs [3]
+
     startTimerHz (30);
 }
 
@@ -589,20 +626,30 @@ void PluginEditor::parameterChanged (const juce::String& parameterID, float newV
 
 void PluginEditor::mouseDown (const juce::MouseEvent& event)
 {
-    // Standalone MIDI CC Mapping & Learn Pill Clicks Interception [3]
+    // Standalone MIDI CC Mapping & Learn Pill Clicks Interception (25 slots with clear handles) [3]
     if (isHelpPanelOpen)
     {
         int xOffset = isLeftPanelOpen ? 300 : 0;
         auto mousePos = getMouseXYRelative();
-        for (int i = 0; i < 18; ++i)
+        for (int i = 0; i < 25; ++i)
         {
             auto pillBounds = getCcPillBounds (i, xOffset);
             if (pillBounds.contains (mousePos))
             {
-                if (processor.activeMidiLearnIndex.load() == i)
+                if (event.mods.isRightButtonDown())
+                {
+                    // Right-click clears/unmaps the learned CC parameter [3]
+                    processor.midiCcMappings[i].store (-1);
                     processor.activeMidiLearnIndex.store (-1);
+                }
                 else
-                    processor.activeMidiLearnIndex.store (i);
+                {
+                    // Left-click toggles learn mode state
+                    if (processor.activeMidiLearnIndex.load() == i)
+                        processor.activeMidiLearnIndex.store (-1);
+                    else
+                        processor.activeMidiLearnIndex.store (i);
+                }
                 
                 repaint();
                 return; // Intercept click entirely to bypass knob adjustments
@@ -1073,7 +1120,7 @@ void PluginEditor::paintOverChildren (juce::Graphics& g)
     // =====================================================================
     if (isHelpPanelOpen)
     {
-        for (int i = 0; i < 18; ++i)
+        for (int i = 0; i < 25; ++i) // Extended to render all 25 map capsules [3]
         {
             auto pillBounds = getCcPillBounds (i, xOffset);
             int mappedCc = processor.midiCcMappings[i].load();
@@ -1502,5 +1549,72 @@ void PluginEditor::updateLeftPanelVisibility()
     for (auto* comp : leftPanelComponents)
     {
         comp->setVisible (isLeftPanelOpen);
+    }
+}
+
+// Standalone Computer Keyboard Raw Key Listeners [3]
+bool PluginEditor::keyPressed (const juce::KeyPress& key)
+{
+    int keyCode = key.getKeyCode();
+    int note = getMidiNoteForKey (keyCode);
+    
+    if (note != -1)
+    {
+        // Ignore duplicate auto-repeat key stroke events
+        if (activeKeysToMidiNotes.find (keyCode) == activeKeysToMidiNotes.end())
+        {
+            activeKeysToMidiNotes[keyCode] = note;
+            processor.injectKeyboardMidiMessage (juce::MidiMessage::noteOn (1, note, 0.8f));
+        }
+        return true;
+    }
+    return false;
+}
+
+bool PluginEditor::keyStateChanged (bool isKeyDown)
+{
+    juce::ignoreUnused (isKeyDown);
+    
+    // Evaluate and flush released keyboard note triggers safely
+    for (auto it = activeKeysToMidiNotes.begin(); it != activeKeysToMidiNotes.end();)
+    {
+        int keyCode = it->first;
+        int note = it->second;
+        
+        if (! juce::KeyPress::isKeyCurrentlyDown (keyCode))
+        {
+            processor.injectKeyboardMidiMessage (juce::MidiMessage::noteOff (1, note));
+            it = activeKeysToMidiNotes.erase (it);
+        }
+        else
+        {
+            ++it;
+        }
+    }
+    return true;
+}
+
+int PluginEditor::getMidiNoteForKey (int keyCode)
+{
+    switch (keyCode)
+    {
+        case 'a': case 'A': return 60; // C4
+        case 'w': case 'W': return 61; // C#4
+        case 's': case 'S': return 62; // D4
+        case 'e': case 'E': return 63; // D#4
+        case 'd': case 'D': return 64; // E4
+        case 'f': case 'F': return 65; // F4
+        case 't': case 'T': return 66; // F#4
+        case 'g': case 'G': return 67; // G4
+        case 'y': case 'Y': return 68; // G#4
+        case 'h': case 'H': return 69; // A4
+        case 'u': case 'U': return 70; // A#4
+        case 'j': case 'J': return 71; // B4
+        case 'k': case 'K': return 72; // C5
+        case 'o': case 'O': return 73; // C#5
+        case 'l': case 'L': return 74; // D5
+        case 'p': case 'P': return 75; // D#5
+        case ';':           return 76; // E5
+        default: return -1;
     }
 }

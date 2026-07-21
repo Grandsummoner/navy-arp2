@@ -1,6 +1,7 @@
 #pragma once
 
 #include <JuceHeader.h>
+#include <map>
 #include "PluginProcessor.h"
 #include "ChromaCapsLookAndFeel.h"
 #include "OledDisplay.h"
@@ -28,6 +29,10 @@ public:
     void parameterChanged (const juce::String& parameterID, float newValue) override;
     void mouseDown (const juce::MouseEvent& event) override;
     void mouseUp (const juce::MouseEvent& event) override;
+
+    // Override key press and state change handlers to support computer keyboard note inputs [3]
+    bool keyPressed (const juce::KeyPress& key) override;
+    bool keyStateChanged (bool isKeyDown) override;
 
     PluginProcessor& processor;
     OledDisplay oledDisplay;
@@ -114,6 +119,12 @@ private:
     void timerCallback() override;
     void updateSliderTextBoxThemeColors(); 
     void updateLeftPanelVisibility(); // Toggles visibility of left-panel components [3]
+
+    // Translates incoming raw key codes to standardized piano note values [3]
+    int getMidiNoteForKey (int keyCode);
+
+    // Dynamic state registry tracking active computer keycodes to prevent duplications [3]
+    std::map<int, int> activeKeysToMidiNotes;
 
     // Background Image Container
     juce::Image backgroundImage;

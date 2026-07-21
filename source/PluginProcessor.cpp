@@ -88,8 +88,8 @@ PluginProcessor::PluginProcessor()
         lfoDepthPtrs[i] = apvts.getRawParameterValue (depths[i].getParamID());
     }
 
-    // Initialize standalone MIDI CC mappings to unmapped state
-    for (int i = 0; i < 18; ++i)
+    // Initialize standalone MIDI CC mappings to unmapped state (Extended to 25 slots) [3]
+    for (int i = 0; i < 25; ++i)
         midiCcMappings[i].store (-1);
 }
 
@@ -126,6 +126,12 @@ void PluginProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     reverbParams.wetLevel = 0.35f;
     reverbParams.dryLevel = 0.0f; // Handled separately in the processing buffer
     reverbEffect.setParameters (reverbParams);
+
+    // Clear Standalone keyboard play queues
+    {
+        const juce::ScopedLock sl (keyboardMidiLock);
+        keyboardMidiBuffer.clear();
+    }
 
     juce::ignoreUnused (samplesPerBlock);
 }
@@ -243,8 +249,23 @@ void PluginProcessor::updateLfoModulations (int numSamples, double bpm)
     activeOctavesVal = juce::jlimit (-3, 3, static_cast<int> (std::round (rawOctaves)));
 }
 
+void PluginProcessor::injectKeyboardMidiMessage (const juce::MidiMessage& msg)
+{
+    const juce::ScopedLock sl (keyboardMidiLock);
+    keyboardMidiBuffer.addEvent (msg, 0);
+}
+
 void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)
 {
+    int numSamples = buffer.getNumSamples();
+
+    // Symmetrically merge Standalone raw keyboard MIDI inputs into main buffer queue [3]
+    {
+        const juce::ScopedLock sl (keyboardMidiLock);
+        midiMessages.addEvents (keyboardMidiBuffer, 0, numSamples, 0);
+        keyboardMidiBuffer.clear();
+    }
+
     // =====================================================================
     // 1. STANDALONE MIDI LEARN & CC ROUTING INTERCEPTOR [3]
     // =====================================================================
@@ -260,17 +281,23 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
             int ccNumber = msg.getControllerNumber();
             int ccValue  = msg.getControllerValue();
             
-            // Case A: Parameter MIDI Learn state is currently active
+            // Case A: Parameter MIDI Learn state is currently active (Extended to 25 slots) [3]
             int learnIndex = activeMidiLearnIndex.load();
-            if (learnIndex >= 0 && learnIndex < 18)
+            if (learnIndex >= 0 && learnIndex < 25)
             {
+                // Clear this CC from any other slot first to guarantee complete independence [3]
+                for (int slot = 0; slot < 25; ++slot)
+                {
+                    if (midiCcMappings[slot].load() == ccNumber)
+                        midiCcMappings[slot].store (-1);
+                }
                 midiCcMappings[learnIndex].store (ccNumber);
                 activeMidiLearnIndex.store (-1); // Clear active learning state
             }
-            // Case B: MIDI CC Mapping Trigger checks
+            // Case B: MIDI CC Mapping Trigger checks (25 slots aligned with GUI indices) [3]
             else
             {
-                for (int i = 0; i < 18; ++i)
+                for (int i = 0; i < 25; ++i)
                 {
                     if (midiCcMappings[i].load() == ccNumber)
                     {
@@ -289,6 +316,13 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
                             apvts.getParameter ("fader" + juce::String (i - 7))->setValueNotifyingHost (normVal);
                         else if (i == 16) apvts.getParameter (IDs::masterVelocity.getParamID())->setValueNotifyingHost (normVal);
                         else if (i == 17) apvts.getParameter (IDs::masterSwing.getParamID())->setValueNotifyingHost (normVal);
+                        else if (i == 18) apvts.getParameter (IDs::morph.getParamID())->setValueNotifyingHost (normVal);
+                        else if (i == 19 && ccValue >= 64) setActiveAnchor (false);
+                        else if (i == 20 && ccValue >= 64) setActiveAnchor (true);
+                        else if (i == 21 && ccValue >= 64) diceMelody();
+                        else if (i == 22 && ccValue >= 64) diceArticulation();
+                        else if (i == 23 && ccValue >= 64) diceTime();
+                        else if (i == 24 && ccValue >= 64) diceNavy();
                     }
                 }
             }
@@ -329,7 +363,6 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
 #else
     if (auto* playhead = getPlayHead()) { juce::AudioPlayHead::CurrentPositionInfo info; if (playhead->getCurrentPositionInfo (info)) { isPlaying = info.isPlaying; hostBpm = info.bpm; mSongPositionPPQ = info.ppqPosition; } }
 #endif
-    int numSamples = buffer.getNumSamples(); 
 
     // Create a temporary buffer to accumulate the wet reverb sends
     juce::AudioBuffer<float> reverbBuffer (2, numSamples);
@@ -1026,11 +1059,11 @@ void PluginProcessor::getStateInformation (juce::MemoryBlock& destData)
             }
         }
 
-        // 6. Serialize standalone custom MIDI CC mapping tables
+        // 6. Serialize standalone custom MIDI CC mapping tables (Extended to 25 slots) [3]
         auto* mappingsNode = xml->createNewChildElement ("MIDI_CC_MAPPINGS");
         if (mappingsNode != nullptr)
         {
-            for (int i = 0; i < 18; ++i)
+            for (int i = 0; i < 25; ++i)
             {
                 mappingsNode->setAttribute ("param_" + juce::String (i), midiCcMappings[i].load());
             }
@@ -1163,10 +1196,10 @@ void PluginProcessor::setStateInformation (const void* data, int sizeInBytes)
             }
         }
 
-        // Deserialization of standalone custom MIDI CC mappings
+        // Deserialization of standalone custom MIDI CC mappings (Extended to 25 slots) [3]
         if (auto* mappingsNode = xmlState->getChildByName ("MIDI_CC_MAPPINGS"))
         {
-            for (int i = 0; i < 18; ++i)
+            for (int i = 0; i < 25; ++i)
             {
                 midiCcMappings[i].store (mappingsNode->getIntAttribute ("param_" + juce::String (i), -1));
             }

@@ -375,7 +375,7 @@ public:
     void setStateInformation (const void* data, int sizeInBytes) override;
 
     //==============================================================================
-    // Generative Engine & Preset Utilities
+    // Generative Engine, Preset & Standalone Input Utilities
     //==============================================================================
     void scheduleNoteOff (juce::MidiBuffer& midi, int pitch, int delaySamples);
     void setActiveAnchor (bool useSceneB);
@@ -383,6 +383,9 @@ public:
     void updateLfoModulations (int numSamples, double bpm);
     void triggerDiatonicChordPad (int padIndex);
     
+    // Inject key events directly into the audio thread MIDI buffer [3]
+    void injectKeyboardMidiMessage (const juce::MidiMessage& msg);
+
     void savePreset (int slotIndex);
     void loadPreset (int slotIndex);
     void captureScene (int side);
@@ -543,9 +546,9 @@ public:
 
     double lfoPhases[8] { 0.0 };
 
-    // Thread-Safe Standalone MIDI CC Mapping & Learn Registers
-    std::atomic<int> midiCcMappings[18];        // Unmapped = -1. CC number = 0-127.
-    std::atomic<int> activeMidiLearnIndex { -1 }; // Listening index (0-17) or -1.
+    // Thread-Safe Standalone MIDI CC Mapping & Learn Registers (25 slots) [3]
+    std::atomic<int> midiCcMappings[25];        // Unmapped = -1. CC number = 0-127.
+    std::atomic<int> activeMidiLearnIndex { -1 }; // Listening index (0-24) or -1.
 
     // Internal Symmetrical Polyphonic/Monophonic Audio Synths
     SynthVoice voice1;
@@ -609,6 +612,10 @@ private:
     int delayWriteIdx = 0;
 
     juce::Reverb reverbEffect; // Active integrated reverb processor
+
+    // Standalone keyboard play queues [3]
+    juce::MidiBuffer keyboardMidiBuffer;
+    juce::CriticalSection keyboardMidiLock;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PluginProcessor)
 };
