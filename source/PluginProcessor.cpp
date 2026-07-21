@@ -88,8 +88,8 @@ PluginProcessor::PluginProcessor()
         lfoDepthPtrs[i] = apvts.getRawParameterValue (depths[i].getParamID());
     }
 
-    // Initialize standalone MIDI CC mappings to unmapped state (Extended to 25 slots) [3]
-    for (int i = 0; i < 25; ++i)
+    // Initialize standalone MIDI CC mappings to unmapped state (Extended to 29 slots) [3]
+    for (int i = 0; i < 29; ++i)
         midiCcMappings[i].store (-1);
 }
 
@@ -281,12 +281,12 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
             int ccNumber = msg.getControllerNumber();
             int ccValue  = msg.getControllerValue();
             
-            // Case A: Parameter MIDI Learn state is currently active (Extended to 25 slots) [3]
+            // Case A: Parameter MIDI Learn state is currently active (Extended to 29 slots) [3]
             int learnIndex = activeMidiLearnIndex.load();
-            if (learnIndex >= 0 && learnIndex < 25)
+            if (learnIndex >= 0 && learnIndex < 29)
             {
                 // Clear this CC from any other slot first to guarantee complete independence [3]
-                for (int slot = 0; slot < 25; ++slot)
+                for (int slot = 0; slot < 29; ++slot)
                 {
                     if (midiCcMappings[slot].load() == ccNumber)
                         midiCcMappings[slot].store (-1);
@@ -294,10 +294,10 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
                 midiCcMappings[learnIndex].store (ccNumber);
                 activeMidiLearnIndex.store (-1); // Clear active learning state
             }
-            // Case B: MIDI CC Mapping Trigger checks (25 slots aligned with GUI indices) [3]
+            // Case B: MIDI CC Mapping Trigger checks (29 slots aligned with GUI indices) [3]
             else
             {
-                for (int i = 0; i < 25; ++i)
+                for (int i = 0; i < 29; ++i)
                 {
                     if (midiCcMappings[i].load() == ccNumber)
                     {
@@ -323,6 +323,15 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
                         else if (i == 22 && ccValue >= 64) diceArticulation();
                         else if (i == 23 && ccValue >= 64) diceTime();
                         else if (i == 24 && ccValue >= 64) diceNavy();
+                        else if (i == 25 && ccValue >= 64) savePreset (activePresetIndex.load());
+                        else if (i == 26 && ccValue >= 64) loadPreset (activePresetIndex.load());
+                        else if (i == 27 && ccValue >= 64) { sceneB = sceneA; hasSceneB = hasSceneA; }
+                        else if (i == 28 && ccValue >= 64) {
+                            for (auto* param : getParameters()) {
+                                if (param != nullptr)
+                                    param->setValueNotifyingHost (param->getDefaultValue());
+                            }
+                        }
                     }
                 }
             }
@@ -1059,11 +1068,11 @@ void PluginProcessor::getStateInformation (juce::MemoryBlock& destData)
             }
         }
 
-        // 6. Serialize standalone custom MIDI CC mapping tables (Extended to 25 slots) [3]
+        // 6. Serialize standalone custom MIDI CC mapping tables (Extended to 29 slots) [3]
         auto* mappingsNode = xml->createNewChildElement ("MIDI_CC_MAPPINGS");
         if (mappingsNode != nullptr)
         {
-            for (int i = 0; i < 25; ++i)
+            for (int i = 0; i < 29; ++i)
             {
                 mappingsNode->setAttribute ("param_" + juce::String (i), midiCcMappings[i].load());
             }
@@ -1196,10 +1205,10 @@ void PluginProcessor::setStateInformation (const void* data, int sizeInBytes)
             }
         }
 
-        // Deserialization of standalone custom MIDI CC mappings (Extended to 25 slots) [3]
+        // Deserialization of standalone custom MIDI CC mappings (Extended to 29 slots) [3]
         if (auto* mappingsNode = xmlState->getChildByName ("MIDI_CC_MAPPINGS"))
         {
-            for (int i = 0; i < 25; ++i)
+            for (int i = 0; i < 29; ++i)
             {
                 midiCcMappings[i].store (mappingsNode->getIntAttribute ("param_" + juce::String (i), -1));
             }

@@ -546,9 +546,9 @@ public:
 
     double lfoPhases[8] { 0.0 };
 
-    // Thread-Safe Standalone MIDI CC Mapping & Learn Registers (25 slots) [3]
-    std::atomic<int> midiCcMappings[25];        // Unmapped = -1. CC number = 0-127.
-    std::atomic<int> activeMidiLearnIndex { -1 }; // Listening index (0-24) or -1.
+    // Thread-Safe Standalone MIDI CC Mapping & Learn Registers (expanded to 29 slots) [3]
+    std::atomic<int> midiCcMappings[29];        // Unmapped = -1. CC number = 0-127.
+    std::atomic<int> activeMidiLearnIndex { -1 }; // Listening index (0-28) or -1.
 
     // Internal Symmetrical Polyphonic/Monophonic Audio Synths
     SynthVoice voice1;

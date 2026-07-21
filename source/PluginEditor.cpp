@@ -33,7 +33,7 @@ public:
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> attachment;
 };
 
-// Symmetrical Standalone MIDI Learn bounds helper (Extended to 25 slots) [3]
+// Symmetrical Standalone MIDI Learn bounds helper (Extended to 29 slots) [3]
 static juce::Rectangle<int> getCcPillBounds (int index, int xOffset)
 {
     int cx = 0, cy = 0;
@@ -97,6 +97,26 @@ static juce::Rectangle<int> getCcPillBounds (int index, int xOffset)
     {
         cx = 930;
         cy = 116;
+    }
+    else if (index == 25) // Save
+    {
+        cx = 31;
+        cy = 29;
+    }
+    else if (index == 26) // Recall
+    {
+        cx = 73;
+        cy = 29;
+    }
+    else if (index == 27) // Copy
+    {
+        cx = 31;
+        cy = 115;
+    }
+    else if (index == 28) // Init
+    {
+        cx = 73;
+        cy = 115;
     }
 
     return { cx + xOffset, cy, 34, 15 };
@@ -626,12 +646,12 @@ void PluginEditor::parameterChanged (const juce::String& parameterID, float newV
 
 void PluginEditor::mouseDown (const juce::MouseEvent& event)
 {
-    // Standalone MIDI CC Mapping & Learn Pill Clicks Interception (25 slots with clear handles) [3]
+    // Standalone MIDI CC Mapping & Learn Pill Clicks Interception (29 slots with clear handles) [3]
     if (isHelpPanelOpen)
     {
         int xOffset = isLeftPanelOpen ? 300 : 0;
         auto mousePos = getMouseXYRelative();
-        for (int i = 0; i < 25; ++i)
+        for (int i = 0; i < 29; ++i)
         {
             auto pillBounds = getCcPillBounds (i, xOffset);
             if (pillBounds.contains (mousePos))
@@ -1120,7 +1140,7 @@ void PluginEditor::paintOverChildren (juce::Graphics& g)
     // =====================================================================
     if (isHelpPanelOpen)
     {
-        for (int i = 0; i < 25; ++i) // Extended to render all 25 map capsules [3]
+        for (int i = 0; i < 29; ++i) // Extended to render all 29 map capsules [3]
         {
             auto pillBounds = getCcPillBounds (i, xOffset);
             int mappedCc = processor.midiCcMappings[i].load();
@@ -1301,7 +1321,7 @@ void PluginEditor::resized()
         v1StringBtn.setBounds (147, 215, 63, 18);
         v1PulseBtn.setBounds (213, 215, 63, 18);
 
-        // Voice 1 tactile independent ADSR / Timbre / Delay / Reverb / Volume knobs (LPF controls!) [3]
+        // Voice 1 tactile independent ADSR / LPF / Delay / Reverb / Volume knobs (LPF controls!) [3]
         v1AttackKnob.setBounds  (15,  295, 42, 42);
         v1DecayKnob.setBounds   (80,  295, 42, 42);
         v1SustainKnob.setBounds (145, 295, 42, 42);
@@ -1318,7 +1338,7 @@ void PluginEditor::resized()
         v2StringBtn.setBounds (147, 415, 63, 18);
         v2PulseBtn.setBounds (213, 415, 63, 18);
 
-        // Voice 2 tactile independent ADSR / Timbre / Delay / Reverb / Volume knobs (LPF controls!) [3]
+        // Voice 2 tactile independent ADSR / LPF / Delay / Reverb / Volume knobs (LPF controls!) [3]
         v2AttackKnob.setBounds  (15,  495, 42, 42);
         v2DecayKnob.setBounds   (80,  495, 42, 42);
         v2SustainKnob.setBounds (145, 495, 42, 42);
